@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .result {
+            background: #f5f5f5;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .success {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Location Capture Test</h1>
+    
+    <button onclick="testGeolocation()">Test Browser Geolocation</button>
+    <button onclick="checkPermissions()">Check Permissions</button>
+    <button onclick="clearResults()">Clear Results</button>
+    
+    <div id="results"></div>
+
+    <script>
+        function addResult(message, type = 'result') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            results.appendChild(div);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function checkPermissions() {
+            try {
+                if (!navigator.permissions) {
+                    addResult('Permissions API not supported', 'error');
+                    return;
+                }
+
+                const permission = await navigator.permissions.query({name: 'geolocation'});
+                addResult(`Geolocation permission: ${permission.state}`, 
+                    permission.state === 'granted' ? 'success' : 'error');
+                
+                permission.addEventListener('change', () => {
+                    addResult(`Permission changed to: ${permission.state}`, 
+                        permission.state === 'granted' ? 'success' : 'error');
+                });
+            } catch (error) {
+                addResult(`Permission check error: ${error.message}`, 'error');
+            }
+        }
+
+        function testGeolocation() {
+            addResult('Testing geolocation...', 'result');
+            
+            if (!navigator.geolocation) {
+                addResult('Geolocation is not supported by this browser', 'error');
+                return;
+            }
+
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 60000
+            };
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const coords = position.coords;
+                    addResult(`Location captured successfully!<br>
+                        Latitude: ${coords.latitude}<br>
+                        Longitude: ${coords.longitude}<br>
+                        Accuracy: ${coords.accuracy}m<br>
+                        Timestamp: ${new Date(position.timestamp).toLocaleString()}`, 'success');
+                },
+                (error) => {
+                    let errorMessage = 'Geolocation error: ';
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage += 'Location access denied by user';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage += 'Location information unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage += 'Location request timed out';
+                            break;
+                        default:
+                            errorMessage += error.message;
+                    }
+                    addResult(errorMessage, 'error');
+                },
+                options
+            );
+        }
+
+        // Auto-check permissions on load
+        window.addEventListener('load', () => {
+            addResult('Page loaded. Click buttons to test location functionality.', 'result');
+            checkPermissions();
+        });
+    </script>
+</body>
+</html>

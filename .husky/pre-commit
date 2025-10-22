@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run Turborepo pre-commit checks
+echo "🔍 Running pre-commit checks..."
+
+# Run comprehensive checks
+echo "🔍 Running quality checks..."
+npm run check
+
+# Run tests if they exist
+if [ -f "jest.config.js" ] || [ -f "vitest.config.ts" ]; then
+  echo "🧪 Running tests..."
+  npm run test
+fi
+
+echo "✅ Pre-commit checks completed successfully!"

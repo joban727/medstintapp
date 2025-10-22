@@ -1,0 +1,627 @@
+@import "tailwindcss";
+@import "./custom.css";
+
+
+:root {
+  /* Modern MedStint Medical Theme - Light Mode */
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+  
+  /* Primary: Modern Medical Blue - Enhanced for better contrast */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  
+  /* Secondary: Soft Medical Gray */
+  --secondary: #f8fafc;
+  --secondary-foreground: #334155;
+  
+  /* Muted: Subtle background for better hierarchy */
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  
+  /* Accent: Healthcare Green - Enhanced vibrancy */
+  --accent: #059669;
+  --accent-foreground: #ffffff;
+  
+  /* Destructive: Medical Alert Red - Enhanced for accessibility */
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  
+  /* Borders: Softer for modern look */
+  --border: #e2e8f0;
+  --input: #f1f5f9;
+  --ring: #3b82f6;
+  
+  /* Enhanced Medical Color Palette */
+  --medical-primary: #2563eb;
+  --medical-primary-light: #3b82f6;
+  --medical-primary-dark: #1d4ed8;
+  --medical-primary-hover: #1d4ed8;
+  
+  --healthcare-green: #059669;
+  --healthcare-green-light: #10b981;
+  --healthcare-green-dark: #047857;
+  --healthcare-green-hover: #047857;
+  
+  --medical-teal: #0891b2;
+  --medical-teal-light: #06b6d4;
+  --medical-teal-dark: #0e7490;
+  
+  --medical-cyan: #0891b2;
+  --medical-cyan-light: #06b6d4;
+  --medical-cyan-dark: #0e7490;
+  
+  --professional-gray: #64748b;
+  --professional-gray-light: #94a3b8;
+  --professional-gray-dark: #475569;
+  
+  /* Status Colors - Enhanced for better visibility */
+  --success: #16a34a;
+  --success-light: #22c55e;
+  --success-dark: #15803d;
+  
+  --warning: #d97706;
+  --warning-light: #f59e0b;
+  --warning-dark: #b45309;
+  
+  --error: #dc2626;
+  --error-light: #ef4444;
+  --error-dark: #b91c1c;
+  
+  --info: #2563eb;
+  --info-light: #3b82f6;
+  --info-dark: #1d4ed8;
+  
+  /* Gradient Colors - Modern medical gradients */
+  --gradient-primary: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
+  --gradient-secondary: linear-gradient(135deg, #059669 0%, #0891b2 100%);
+  --gradient-accent: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+  --gradient-subtle: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  
+  /* Surface Colors - Enhanced depth */
+  --surface-1: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #f1f5f9;
+  --surface-4: #e2e8f0;
+  
+  /* Text Colors - Improved readability */
+  --text-primary: #1a1a1a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-subtle: #94a3b8;
+  
+  /* Interactive States */
+  --hover: #f8fafc;
+  --active: #f1f5f9;
+  --focus: #dbeafe;
+  --focus-ring: #3b82f6;
+  
+  /* Chart Colors - Enhanced for accessibility */
+  --chart-1: #2563eb;
+  --chart-2: #059669;
+  --chart-3: #0891b2;
+  --chart-4: #d97706;
+  --chart-5: #dc2626;
+  --chart-1: oklch(0.7049 0.1867 47.6044);
+  --chart-2: oklch(0.6231 0.1880 259.8145);
+  --chart-3: oklch(0.6271 0.1699 149.2138);
+  --chart-4: oklch(0.8606 0.1731 91.9357);
+  --chart-5: oklch(0.5575 0.2525 302.3212);
+  --sidebar: oklch(0.9699 0.0013 106.4238);
+  --sidebar-foreground: oklch(0.2161 0.0061 56.0434);
+  --sidebar-primary: oklch(0.7049 0.1867 47.6044);
+  --sidebar-primary-foreground: oklch(1.0000 0 0);
+  --sidebar-accent: oklch(0.8975 0.0042 91.4501);
+  --sidebar-accent-foreground: oklch(0.2161 0.0061 56.0434);
+  --sidebar-border: oklch(0.9232 0.0026 48.7171);
+  --sidebar-ring: oklch(0.6461 0.1943 41.1158);
+  /* Enhanced Typography System */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-serif: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  
+  /* Modern Typography Scale */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
+  --text-6xl: 3.75rem;
+  
+  /* Enhanced Line Heights */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.75;
+  
+  /* Modern Letter Spacing */
+  --tracking-tight: -0.025em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0.025em;
+  --tracking-wider: 0.05em;
+  
+  /* Enhanced Border Radius System */
+  --radius-none: 0px;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+  --radius-full: 9999px;
+  
+  /* Modern Shadow System */
+  --shadow-2xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-xs: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  
+  /* Enhanced Spacing Scale */
+  --spacing-0: 0px;
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-5: 1.25rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-10: 2.5rem;
+  --spacing-12: 3rem;
+  --spacing-16: 4rem;
+  --spacing-20: 5rem;
+  --spacing-24: 6rem;
+  --spacing-32: 8rem;
+  
+  /* Modern Animation Variables */
+  --animate-fade-in: fade-in 0.5s ease-out;
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-scale-in: scale-in 0.2s ease-out;
+  --animate-spin-slow: spin 3s linear infinite;
+  
+  /* Z-index Scale */
+  --z-0: 0;
+  --z-10: 10;
+  --z-20: 20;
+  --z-30: 30;
+  --z-40: 40;
+  --z-50: 50;
+  --z-auto: auto;
+}
+
+/* Modern Keyframe Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Theme Transition Animations */
+@keyframes theme-fade {
+  from {
+    opacity: 0.8;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes theme-scale {
+  from {
+    transform: scale(0.98);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Accessibility Enhancements */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Theme Transition Classes */
+.theme-transition {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.theme-transition-fast {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.theme-transition-slow {
+  transition: background-color 0.5s ease, color 0.5s ease, border-color 0.5s ease;
+}
+
+.theme-fade-in {
+  animation: theme-fade 0.3s ease-out;
+}
+
+.theme-scale-in {
+  animation: theme-scale 0.3s ease-out;
+}
+
+/* Focus Visible Enhancements */
+*:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  :root {
+    --border: #000000;
+    --ring: #000000;
+    --focus-ring: #000000;
+  }
+}
+
+/* Modern Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--professional-gray);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--professional-gray-dark);
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-track {
+  background: var(--surface-2);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: var(--professional-gray-dark);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: var(--professional-gray);
+}
+
+.dark {
+  /* Modern MedStint Medical Theme - Dark Mode */
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #121212;
+  --card-foreground: #fafafa;
+  --popover: #121212;
+  --popover-foreground: #fafafa;
+  
+  /* Primary: Enhanced Medical Blue for Dark Mode */
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  
+  /* Secondary: Deep Medical Gray */
+  --secondary: #1e1e1e;
+  --secondary-foreground: #f3f4f6;
+  
+  /* Muted: Subtle dark backgrounds */
+  --muted: #18181b;
+  --muted-foreground: #a1a1aa;
+  
+  /* Accent: Vibrant Healthcare Green for Dark Mode */
+  --accent: #10b981;
+  --accent-foreground: #ffffff;
+  
+  /* Destructive: Medical Alert Red - Enhanced for Dark Mode */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  
+  /* Borders: Softer dark borders */
+  --border: #27272a;
+  --input: #18181b;
+  --ring: #3b82f6;
+  
+  /* Enhanced Medical Color Palette - Dark Mode */
+  --medical-primary: #60a5fa;
+  --medical-primary-light: #93c5fd;
+  --medical-primary-dark: #3b82f6;
+  --medical-primary-hover: #3b82f6;
+  
+  --healthcare-green: #34d399;
+  --healthcare-green-light: #6ee7b7;
+  --healthcare-green-dark: #10b981;
+  --healthcare-green-hover: #10b981;
+  
+  --medical-teal: #2dd4bf;
+  --medical-teal-light: #5eead4;
+  --medical-teal-dark: #14b8a6;
+  
+  --medical-cyan: #22d3ee;
+  --medical-cyan-light: #67e8f9;
+  --medical-cyan-dark: #06b6d4;
+  
+  --professional-gray: #a1a1aa;
+  --professional-gray-light: #d4d4d8;
+  --professional-gray-dark: #71717a;
+  
+  /* Status Colors - Enhanced for Dark Mode visibility */
+  --success: #22c55e;
+  --success-light: #4ade80;
+  --success-dark: #16a34a;
+  
+  --warning: #f59e0b;
+  --warning-light: #fbbf24;
+  --warning-dark: #d97706;
+  
+  --error: #f87171;
+  --error-light: #fca5a5;
+  --error-dark: #ef4444;
+  
+  --info: #60a5fa;
+  --info-light: #93c5fd;
+  --info-dark: #3b82f6;
+  
+  /* Gradient Colors - Modern medical gradients for Dark Mode */
+  --gradient-primary: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+  --gradient-secondary: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+  --gradient-accent: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%);
+  --gradient-subtle: linear-gradient(135deg, #121212 0%, #18181b 100%);
+  
+  /* Surface Colors - Enhanced depth for Dark Mode */
+  --surface-1: #121212;
+  --surface-2: #18181b;
+  --surface-3: #1e1e1e;
+  --surface-4: #27272a;
+  
+  /* Text Colors - Improved readability for Dark Mode */
+  --text-primary: #fafafa;
+  --text-secondary: #f3f4f6;
+  --text-muted: #d1d5db;
+  --text-subtle: #a1a1aa;
+  
+  /* Interactive States - Enhanced for Dark Mode */
+  --hover: #18181b;
+  --active: #27272a;
+  --focus: #1e3a8a;
+  --focus-ring: #3b82f6;
+  
+  /* Chart Colors - Enhanced for Dark Mode accessibility */
+  --chart-1: #3b82f6;
+  --chart-2: #10b981;
+  --chart-3: #06b6d4;
+  --chart-4: #f59e0b;
+  --chart-5: #ef4444;
+  --chart-1: oklch(0.7049 0.1867 47.6044);
+  --chart-2: oklch(0.6231 0.1880 259.8145);
+  --chart-3: oklch(0.6271 0.1699 149.2138);
+  --chart-4: oklch(0.8606 0.1731 91.9357);
+  --chart-5: oklch(0.5575 0.2525 302.3212);
+  --sidebar: oklch(0.1928 0.0051 67.5172);
+  --sidebar-foreground: oklch(0.9232 0.0026 48.7171);
+  --sidebar-primary: oklch(0.7576 0.1590 55.9344);
+  --sidebar-primary-foreground: oklch(0.2161 0.0061 56.0434);
+  --sidebar-accent: oklch(0.2686 0 0);
+  --sidebar-accent-foreground: oklch(0.9699 0.0013 106.4238);
+  --sidebar-border: oklch(0.2685 0.0063 34.2976);
+  --sidebar-ring: oklch(0.7576 0.1590 55.9344);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-serif: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --radius: 0.75rem;
+  --shadow-2xs: 0px 2px 5px 0px hsl(0 0% 0% / 0.30);
+  --shadow-xs: 0px 2px 5px 0px hsl(0 0% 0% / 0.30);
+  --shadow-sm: 0px 2px 5px 0px hsl(0 0% 0% / 0.60), 0px 1px 2px -1px hsl(0 0% 0% / 0.60);
+  --shadow: 0px 2px 5px 0px hsl(0 0% 0% / 0.60), 0px 1px 2px -1px hsl(0 0% 0% / 0.60);
+  --shadow-md: 0px 2px 5px 0px hsl(0 0% 0% / 0.60), 0px 2px 4px -1px hsl(0 0% 0% / 0.60);
+  --shadow-lg: 0px 2px 5px 0px hsl(0 0% 0% / 0.60), 0px 4px 6px -1px hsl(0 0% 0% / 0.60);
+  --shadow-xl: 0px 2px 5px 0px hsl(0 0% 0% / 0.60), 0px 8px 10px -1px hsl(0 0% 0% / 0.60);
+  --shadow-2xl: 0px 2px 5px 0px hsl(0 0% 0% / 1.50);
+}
+
+@theme inline {
+  /* Core Colors */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Enhanced Medical Color Palette */
+  --color-medical-primary: var(--medical-primary);
+  --color-medical-primary-light: var(--medical-primary-light);
+  --color-medical-primary-dark: var(--medical-primary-dark);
+  --color-healthcare-green: var(--healthcare-green);
+  --color-healthcare-green-light: var(--healthcare-green-light);
+  --color-healthcare-green-dark: var(--healthcare-green-dark);
+  --color-medical-teal: var(--medical-teal);
+  --color-medical-teal-light: var(--medical-teal-light);
+  --color-medical-teal-dark: var(--medical-teal-dark);
+  --color-medical-cyan: var(--medical-cyan);
+  --color-medical-cyan-light: var(--medical-cyan-light);
+  --color-medical-cyan-dark: var(--medical-cyan-dark);
+  --color-professional-gray: var(--professional-gray);
+  --color-professional-gray-light: var(--professional-gray-light);
+  --color-professional-gray-dark: var(--professional-gray-dark);
+
+  /* Status Colors */
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-success-dark: var(--success-dark);
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-warning-dark: var(--warning-dark);
+  --color-error: var(--error);
+  --color-error-light: var(--error-light);
+  --color-error-dark: var(--error-dark);
+  --color-info: var(--info);
+  --color-info-light: var(--info-light);
+  --color-info-dark: var(--info-dark);
+
+  /* Surface Colors */
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-4: var(--surface-4);
+
+  /* Text Colors */
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+
+  /* Interactive States */
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+  --color-focus: var(--focus);
+  --color-focus-ring: var(--focus-ring);
+
+  /* Fonts */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
+
+  /* Typography Scale */
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --text-2xl: var(--text-2xl);
+  --text-3xl: var(--text-3xl);
+  --text-4xl: var(--text-4xl);
+  --text-5xl: var(--text-5xl);
+  --text-6xl: var(--text-6xl);
+
+  /* Line Heights */
+  --leading-tight: var(--leading-tight);
+  --leading-normal: var(--leading-normal);
+  --leading-relaxed: var(--leading-relaxed);
+
+  /* Letter Spacing */
+  --tracking-tight: var(--tracking-tight);
+  --tracking-normal: var(--tracking-normal);
+  --tracking-wide: var(--tracking-wide);
+  --tracking-wider: var(--tracking-wider);
+
+  /* Border Radius */
+  --radius-none: var(--radius-none);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-3xl: var(--radius-3xl);
+  --radius-full: var(--radius-full);
+
+  /* Shadows */
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
+
+  /* Spacing */
+  --spacing-0: var(--spacing-0);
+  --spacing-1: var(--spacing-1);
+  --spacing-2: var(--spacing-2);
+  --spacing-3: var(--spacing-3);
+  --spacing-4: var(--spacing-4);
+  --spacing-5: var(--spacing-5);
+  --spacing-6: var(--spacing-6);
+  --spacing-8: var(--spacing-8);
+  --spacing-10: var(--spacing-10);
+  --spacing-12: var(--spacing-12);
+  --spacing-16: var(--spacing-16);
+  --spacing-20: var(--spacing-20);
+  --spacing-24: var(--spacing-24);
+  --spacing-32: var(--spacing-32);
+
+  /* Animations */
+  --animate-fade-in: var(--animate-fade-in);
+  --animate-slide-up: var(--animate-slide-up);
+  --animate-scale-in: var(--animate-scale-in);
+  --animate-spin-slow: var(--animate-spin-slow);
+
+  /* Z-index */
+  --z-0: var(--z-0);
+  --z-10: var(--z-10);
+  --z-20: var(--z-20);
+  --z-30: var(--z-30);
+  --z-40: var(--z-40);
+  --z-50: var(--z-50);
+  --z-auto: var(--z-auto);
+}
