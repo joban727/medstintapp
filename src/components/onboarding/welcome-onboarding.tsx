@@ -1,381 +1,213 @@
-// TODO: Add cache invalidation hooks for mutations
 "use client"
 
-import { BookOpen, Calendar, CheckCircle, Clock, Play, Shield, Users } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
-import { TutorialIntegration } from "../tutorial/tutorial-integration"
-import type { UserRole } from "@/types"
 import { Button } from "../ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card"
-import { Progress } from "../ui/progress"
-
-interface User {
-  id: string
-  email: string | null
-  name: string | null
-  role: string | null
-  schoolId: string | null
-  onboardingCompleted: boolean | null
-}
-
-interface ClerkUser {
-  id: string
-  firstName: string | null
-  lastName: string | null
-  emailAddresses: { emailAddress: string }[]
-}
+import { motion } from "framer-motion"
+import {
+  ArrowRight,
+  Check,
+  Building2,
+  GraduationCap,
+  ClipboardCheck,
+  Loader2,
+  Sparkles,
+} from "lucide-react"
 
 interface WelcomeOnboardingProps {
-  user: User
-  clerkUser: ClerkUser
+  user: any
+  clerkUser: any
 }
-
-const onboardingSteps = [
-  {
-    id: 1,
-    title: "Welcome & Orientation",
-    icon: CheckCircle,
-    description: "Get started with your onboarding journey",
-  },
-  {
-    id: 2,
-    title: "School Profile Setup",
-    icon: Shield,
-    description: "Configure your institution details",
-  },
-  {
-    id: 3,
-    title: "Academic Programs",
-    icon: BookOpen,
-    description: "Set up your educational programs",
-  },
-  { id: 4, title: "Class Rotations", icon: Calendar, description: "Configure rotation schedules" },
-  {
-    id: 5,
-    title: "Validation & Review",
-    icon: Users,
-    description: "Review and validate your setup",
-  },
-  {
-    id: 6,
-    title: "Completion & Summary",
-    icon: CheckCircle,
-    description: "Finalize your onboarding",
-  },
-]
-
-const quickStartItems = [
-  {
-    title: "System Overview",
-    description: "Learn about MedstintClerk's core features and capabilities",
-    estimatedTime: "5 min",
-  },
-  {
-    title: "Setup Checklist",
-    description: "Complete essential configuration steps for your institution",
-    estimatedTime: "15-20 min",
-  },
-  {
-    title: "Best Practices",
-    description: "Discover recommended workflows and optimization tips",
-    estimatedTime: "10 min",
-  },
-]
 
 export function WelcomeOnboarding({ user, clerkUser }: WelcomeOnboardingProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [_showTutorial, setShowTutorial] = useState(false)
 
-  const userName = user.name || clerkUser.firstName || "Administrator"
-  const currentStep = 1
-  const progressPercentage = (currentStep / 6) * 100
-
-  useEffect(() => {
-    setProgress(progressPercentage)
-
-    // Check if this is the user's first time and auto-start tutorial
-    const hasSeenWelcomeTutorial = localStorage.getItem(`welcome-tutorial-seen-${user.id}`)
-
-    if (!hasSeenWelcomeTutorial && user.role === "SCHOOL_ADMIN") {
-      // Delay tutorial start to allow page to render
-      setTimeout(() => {
-        setShowTutorial(true)
-      }, 1500)
-    }
-  }, [progressPercentage, user.id, user.role])
-
-  const handleContinue = async () => {
+  const handleGetStarted = async () => {
     setIsLoading(true)
     try {
-      // Mark tutorial as seen
-      localStorage.setItem(`welcome-tutorial-seen-${user.id}`, "true")
-
-      // Save progress
       const response = await fetch("/api/onboarding/progress", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          currentStep: 2,
-          completedSteps: [1],
-          formData: {
-            welcomeCompleted: true,
-            startedAt: new Date().toISOString(),
-          },
+          currentStep: 1,
+          completedSteps: [],
+          formData: {},
           isCompleted: false,
         }),
       })
 
-      if (!response.ok) {
-        throw new Error("Failed to save progress")
-      }
-
+      if (!response.ok) throw new Error("Failed to initialize")
       router.push("/onboarding/school-profile")
     } catch (error) {
-      console.error("Error saving progress:", error)
-      toast.error("Failed to save progress. Please try again.")
-    } finally {
+      toast.error("Something went wrong. Please try again.")
       setIsLoading(false)
     }
   }
 
-  const handleStartTutorial = () => {
-    setShowTutorial(true)
-  }
+  const steps = [
+    { icon: Building2, label: "School Profile", description: "Add your institution details" },
+    { icon: GraduationCap, label: "Programs", description: "Configure academic programs" },
+    { icon: ClipboardCheck, label: "Clinical Sites", description: "Set up rotation locations" },
+  ]
 
   return (
-    <TutorialIntegration userRole={user.role as UserRole} userId={user.id} onboardingStep="welcome">
-      <div className="space-y-8">
-        {/* Progress Header */}
-        <header className="space-y-4 text-center" data-tutorial="welcome-header">
-          <h1 className="font-bold text-3xl text-gray-900 dark:text-white">
-            Welcome to MedstintClerk, {userName}!
-          </h1>
-          <p className="text-gray-600 text-lg dark:text-gray-300">
-            Let's get your school administration system set up in just a few steps.
-          </p>
-          <div
-            className="mx-auto max-w-md space-y-2"
-            role="region"
-            aria-label="Onboarding progress"
-            data-tutorial="progress-tracker"
-          >
-            <div className="flex justify-between text-gray-600 text-sm dark:text-gray-400">
-              <span aria-label={`Current step: ${currentStep} of 6`}>Step {currentStep} of 6</span>
-              <span aria-label={`Progress: ${Math.round(progressPercentage)} percent complete`}>
-                {Math.round(progressPercentage)}% Complete
-              </span>
-            </div>
-            <Progress
-              value={progress}
-              className="h-2"
-              aria-label={`Onboarding progress: ${Math.round(progressPercentage)}% complete`}
-            />
-          </div>
-        </header>
-
-        {/* Tutorial Start Button */}
-        <div className="mb-6 flex justify-center">
-          <Button
-            onClick={handleStartTutorial}
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 border-blue-200 text-blue-600 hover:bg-blue-50"
-            data-tutorial="start-tutorial-btn"
-          >
-            <Play className="h-4 w-4" />
-            Start Interactive Tutorial
-          </Button>
-        </div>
-
-        {/* Quick Start Guide */}
-        <section aria-labelledby="quick-start-title" data-tutorial="quick-start-guide">
-          <Card>
-            <CardHeader>
-              <CardTitle id="quick-start-title" className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-blue-600" aria-hidden="true" />
-                Quick Start Guide
-              </CardTitle>
-              <CardDescription>
-                Get familiar with the onboarding process and what to expect.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3" role="list">
-                {quickStartItems.map((item, index) => (
-                  <div
-                    key={`quick-start-${item.title.replace(/\s+/g, '-').toLowerCase()}-${item.estimatedTime.replace(/\s+/g, '')}`}
-                    className="rounded-lg border p-4 transition-colors focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    role="listitem"
-                  >
-                    <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">
-                      {item.title}
-                    </h3>
-                    <p className="mb-2 text-gray-600 text-sm dark:text-gray-400">
-                      {item.description}
-                    </p>
-                    <span
-                      className="font-medium text-blue-600 text-xs dark:text-blue-400"
-                      aria-label={`Estimated time: ${item.estimatedTime}`}
-                    >
-                      {item.estimatedTime}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Onboarding Steps Overview */}
-        <section aria-labelledby="onboarding-steps-title" data-tutorial="onboarding-steps">
-          <Card>
-            <CardHeader>
-              <CardTitle id="onboarding-steps-title">Your Onboarding Journey</CardTitle>
-              <CardDescription>
-                Here's what we'll accomplish together during the setup process.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" role="list">
-                {onboardingSteps.map((step) => {
-                  const Icon = step.icon
-                  const isActive = step.id === currentStep
-                  const isCompleted = step.id < currentStep
-
-                  return (
-                    <div
-                      key={step.id}
-                      className={`rounded-lg border p-4 transition-all focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2 ${
-                        isActive
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                          : isCompleted
-                            ? "border-green-500 bg-green-50 dark:bg-green-900/20"
-                            : "border-gray-200 dark:border-gray-700"
-                      }`}
-                      role="listitem"
-                      aria-label={`Step ${step.id}: ${step.title}. ${isActive ? "Current step" : isCompleted ? "Completed" : "Upcoming step"}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`rounded-full p-2 ${
-                            isActive
-                              ? "bg-blue-100 text-blue-600 dark:bg-blue-800 dark:text-blue-300"
-                              : isCompleted
-                                ? "bg-green-100 text-green-600 dark:bg-green-800 dark:text-green-300"
-                                : "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500"
-                          }`}
-                          aria-hidden="true"
-                        >
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="mb-1 font-semibold text-gray-900 dark:text-white">
-                            {step.title}
-                          </h3>
-                          <p className="text-gray-600 text-sm dark:text-gray-400">
-                            {step.description}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* System Overview */}
-        <section aria-labelledby="system-overview-title" data-tutorial="system-overview">
-          <Card>
-            <CardHeader>
-              <CardTitle id="system-overview-title">System Overview</CardTitle>
-              <CardDescription>
-                MedstintClerk helps you manage your medical education programs efficiently.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-6 md:grid-cols-2">
-                <div>
-                  <h3 className="mb-3 font-semibold text-gray-900 dark:text-white">Key Features</h3>
-                  <ul className="space-y-2 text-gray-600 text-sm dark:text-gray-400">
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" aria-hidden="true" />
-                      Student enrollment and management
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" aria-hidden="true" />
-                      Clinical rotation scheduling
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" aria-hidden="true" />
-                      Competency tracking and assessment
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" aria-hidden="true" />
-                      Reporting and analytics
-                    </li>
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="mb-3 font-semibold text-gray-900 dark:text-white">
-                    What You'll Set Up
-                  </h3>
-                  <ul className="space-y-2 text-gray-600 text-sm dark:text-gray-400">
-                    <li className="flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-blue-500" aria-hidden="true" />
-                      Your school profile and settings
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <BookOpen className="h-4 w-4 text-blue-500" aria-hidden="true" />
-                      Academic programs and curricula
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-blue-500" aria-hidden="true" />
-                      Clinical rotation schedules
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-blue-500" aria-hidden="true" />
-                      User roles and permissions
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Action Buttons */}
-        <footer
-          className="flex flex-col items-center justify-between gap-4 pt-6 sm:flex-row"
-          role="contentinfo"
-          data-tutorial="action-buttons"
+    <div className="flex flex-col items-center justify-center min-h-[85vh] px-4 py-12">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        className="w-full max-w-xl text-center"
+      >
+        {/* Badge */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1, duration: 0.4 }}
+          className="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 px-4 py-2 text-xs font-medium tracking-wider text-slate-600 dark:text-slate-300 mb-6 backdrop-blur-sm shadow-sm uppercase"
         >
-          <div
-            className="text-gray-500 text-sm dark:text-gray-400"
-            aria-label="Estimated completion time"
-          >
-            Estimated completion time: 15-20 minutes
+          <Sparkles className="mr-2 h-3.5 w-3.5 text-teal-500" />
+          School Administrator
+        </motion.div>
+
+        {/* Welcome Text */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.15, duration: 0.4 }}
+          className="text-base font-medium text-teal-600 dark:text-teal-400 mb-3"
+        >
+          Welcome{user?.name ? `, ${user.name.split(' ')[0]}` : ''}
+        </motion.p>
+
+        {/* Title */}
+        <motion.h1
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+          className="text-3xl sm:text-4xl md:text-5xl font-light text-slate-900 dark:text-white mb-4 tracking-tight leading-tight"
+          style={{ fontFamily: "'Playfair Display', ui-serif, Georgia, serif" }}
+        >
+          Set up your{" "}
+          <span className="font-medium text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-emerald-500 dark:from-teal-400 dark:to-emerald-400">
+            workspace
+          </span>
+        </motion.h1>
+
+        {/* Subtitle */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.25, duration: 0.4 }}
+          className="text-slate-500 dark:text-slate-400 mb-10 max-w-md mx-auto font-light"
+        >
+          Configure your institution in a few simple steps. This will only take about 5 minutes.
+        </motion.p>
+
+        {/* Main Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.5 }}
+          className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-700/50 rounded-2xl p-6 md:p-8 shadow-xl shadow-slate-200/50 dark:shadow-slate-950/50 backdrop-blur-xl mb-8"
+        >
+          {/* Steps Preview */}
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            {steps.map((step, index) => (
+              <motion.div
+                key={step.label}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 + index * 0.1, duration: 0.4 }}
+                className="flex flex-col items-center text-center group"
+              >
+                <div className="h-12 w-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3 group-hover:bg-teal-100 dark:group-hover:bg-teal-900/30 transition-colors duration-300">
+                  <step.icon className="h-5 w-5 text-slate-500 dark:text-slate-400 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors duration-300" />
+                </div>
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5">
+                  {step.label}
+                </span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 hidden sm:block">
+                  {step.description}
+                </span>
+              </motion.div>
+            ))}
           </div>
-          <Button
-            onClick={handleContinue}
-            disabled={isLoading}
-            size="lg"
-            className="min-w-[160px] px-8"
-            aria-describedby="onboarding-progress"
-            aria-label={isLoading ? "Starting onboarding process" : "Begin school profile setup"}
-            data-tutorial="continue-btn"
+
+          {/* Divider */}
+          <div className="h-px bg-slate-200 dark:bg-slate-700 mb-6" />
+
+          {/* CTA Button */}
+          <motion.div
+            whileHover={{ scale: 1.02, y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.15 }}
           >
-            {isLoading ? "Starting..." : "Let's Get Started"}
-          </Button>
-        </footer>
-      </div>
-    </TutorialIntegration>
+            <Button
+              onClick={handleGetStarted}
+              disabled={isLoading}
+              size="lg"
+              className="w-full h-12 text-base font-medium rounded-xl shadow-md shadow-teal-500/20 hover:shadow-lg hover:shadow-teal-500/30 bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600 text-white group overflow-hidden relative"
+            >
+              {/* Shimmer effect */}
+              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Getting started...
+                </>
+              ) : (
+                <>
+                  <span className="relative">Get Started</span>
+                  <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                </>
+              )}
+            </Button>
+          </motion.div>
+
+          {/* Skip Option */}
+          <button
+            onClick={async () => {
+              setIsLoading(true)
+              try {
+                const { skipOnboarding } = await import("@/app/actions/onboarding")
+                const result = await skipOnboarding()
+                if (result?.success) {
+                  router.push("/dashboard")
+                }
+              } catch (error) {
+                toast.error("Failed to skip")
+                setIsLoading(false)
+              }
+            }}
+            className="mt-5 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors duration-200"
+          >
+            I'll do this later
+          </button>
+        </motion.div>
+
+        {/* Trust Indicators */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6, duration: 0.5 }}
+          className="flex flex-wrap items-center justify-center gap-6 text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider"
+        >
+          {["HIPAA Compliant", "Secure & Encrypted", "Free Forever"].map((item, index) => (
+            <motion.div
+              key={item}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 + index * 0.1, duration: 0.3 }}
+              className="flex items-center gap-1.5"
+            >
+              <Check className="h-3.5 w-3.5 text-teal-500" />
+              <span>{item}</span>
+            </motion.div>
+          ))}
+        </motion.div>
+      </motion.div>
+    </div>
   )
 }

@@ -1,19 +1,19 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from "react"
 
 export interface LocationData {
   latitude: number
   longitude: number
   accuracy: number
   timestamp: number
-  source: 'gps' | 'network' | 'passive'
+  source: "gps" | "network" | "passive"
 }
 
 export interface LocationError {
   code: number
   message: string
-  type: 'permission_denied' | 'position_unavailable' | 'timeout' | 'not_supported'
+  type: "permission_denied" | "position_unavailable" | "timeout" | "not_supported"
 }
 
 export interface LocationState {
@@ -22,7 +22,7 @@ export interface LocationState {
   hasPermission: boolean | null
   currentLocation: LocationData | null
   error: LocationError | null
-  accuracy: 'high' | 'medium' | 'low' | null
+  accuracy: "high" | "medium" | "low" | null
 }
 
 export interface LocationOptions {
@@ -38,25 +38,25 @@ const DEFAULT_OPTIONS: Required<LocationOptions> = {
   timeout: 15000, // 15 seconds
   maximumAge: 60000, // 1 minute
   watchPosition: false,
-  requiredAccuracy: 50 // 50 meters
+  requiredAccuracy: 50, // 50 meters
 }
 
 export function useLocation(options: LocationOptions = {}) {
   const opts = { ...DEFAULT_OPTIONS, ...options }
-  
+
   const [state, setState] = useState<LocationState>({
     isSupported: false,
     isLoading: false,
     hasPermission: null,
     currentLocation: null,
     error: null,
-    accuracy: null
+    accuracy: null,
   })
 
   const watchIdRef = useRef<number | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const stateRef = useRef(state)
-  
+
   // Update state ref whenever state changes
   useEffect(() => {
     stateRef.current = state
@@ -64,8 +64,8 @@ export function useLocation(options: LocationOptions = {}) {
 
   // Check if geolocation is supported
   useEffect(() => {
-    const isSupported = 'geolocation' in navigator && 'permissions' in navigator
-    setState(prev => ({ ...prev, isSupported }))
+    const isSupported = "geolocation" in navigator && "permissions" in navigator
+    setState((prev) => ({ ...prev, isSupported }))
   }, [])
 
   // Check permission status
@@ -73,78 +73,78 @@ export function useLocation(options: LocationOptions = {}) {
     if (!stateRef.current.isSupported) return false
 
     try {
-      const permission = await navigator.permissions.query({ name: 'geolocation' })
-      const hasPermission = permission.state === 'granted'
-      setState(prev => ({ ...prev, hasPermission }))
+      const permission = await navigator.permissions.query({ name: "geolocation" })
+      const hasPermission = permission.state === "granted"
+      setState((prev) => ({ ...prev, hasPermission }))
       return hasPermission
     } catch (error) {
-      console.warn('Permission API not available, will request on location access')
+      console.warn("Permission API not available, will request on location access")
       return null
     }
   }, [])
 
   // Get accuracy classification
-  const getAccuracyLevel = useCallback((accuracy: number): 'high' | 'medium' | 'low' => {
-    if (accuracy <= 10) return 'high'
-    if (accuracy <= 50) return 'medium'
-    return 'low'
+  const getAccuracyLevel = useCallback((accuracy: number): "high" | "medium" | "low" => {
+    if (accuracy <= 10) return "high"
+    if (accuracy <= 50) return "medium"
+    return "low"
   }, [])
 
   // Convert GeolocationPosition to LocationData
   const convertPosition = useCallback((position: GeolocationPosition): LocationData => {
     const { latitude, longitude, accuracy } = position.coords
-    
+
     // Determine source based on accuracy and other factors
-    let source: LocationData['source'] = 'network'
-    if (accuracy <= 20) source = 'gps'
-    else if (accuracy > 100) source = 'passive'
+    let source: LocationData["source"] = "network"
+    if (accuracy <= 20) source = "gps"
+    else if (accuracy > 100) source = "passive"
 
     return {
       latitude,
       longitude,
       accuracy,
       timestamp: position.timestamp,
-      source
+      source,
     }
   }, [])
 
   // Handle geolocation errors
   const handleError = useCallback((error: GeolocationPositionError): LocationError => {
-    let type: LocationError['type']
+    let type: LocationError["type"]
     let message: string
 
     switch (error.code) {
       case error.PERMISSION_DENIED:
-        type = 'permission_denied'
-        message = 'Location access denied by user'
+        type = "permission_denied"
+        message = "Location access denied by user"
         break
       case error.POSITION_UNAVAILABLE:
-        type = 'position_unavailable'
-        message = 'Location information unavailable'
+        type = "position_unavailable"
+        message = "Location information unavailable"
         break
       case error.TIMEOUT:
-        type = 'timeout'
-        message = 'Location request timed out'
+        type = "timeout"
+        message = "Location request timed out"
         break
       default:
-        type = 'not_supported'
-        message = 'Geolocation not supported'
+        type = "not_supported"
+        message = "Geolocation not supported"
     }
 
     return {
       code: error.code,
       message,
-      type
+      type,
     }
   }, [])
 
   // Get current position
   const getCurrentPosition = useCallback(async (): Promise<LocationData> => {
     if (!stateRef.current.isSupported) {
-      throw new Error('Geolocation not supported')
+      throw new Error("Geolocation not supported")
     }
 
-    setState(prev => ({ ...prev, isLoading: true, error: null }))
+    setState((prev) => ({ ...prev, isLoading: true, error: null }))
 
     // Create abort controller for timeout handling
     abortControllerRef.current = new AbortController()
@@ -153,14 +153,14 @@ export function useLocation(options: LocationOptions = {}) {
       const successCallback = (position: GeolocationPosition) => {
         const locationData = convertPosition(position)
         const accuracy = getAccuracyLevel(locationData.accuracy)
-        
-        setState(prev => ({
+
+        setState((prev) => ({
           ...prev,
           isLoading: false,
           currentLocation: locationData,
           accuracy,
           hasPermission: true,
-          error: null
+          error: null,
         }))
 
         // Check if accuracy meets requirements
@@ -168,9 +168,9 @@ export function useLocation(options: LocationOptions = {}) {
           const warning: LocationError = {
             code: 0,
             message: `Location accuracy (${Math.round(locationData.accuracy)}m) exceeds required accuracy (${opts.requiredAccuracy}m)`,
-            type: 'position_unavailable'
+            type: "position_unavailable",
           }
-          setState(prev => ({ ...prev, error: warning }))
+          setState((prev) => ({ ...prev, error: warning }))
         }
 
         resolve(locationData)
@@ -178,11 +178,11 @@ export function useLocation(options: LocationOptions = {}) {
 
       const errorCallback = (error: GeolocationPositionError) => {
         const locationError = handleError(error)
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           isLoading: false,
           error: locationError,
-          hasPermission: error.code === error.PERMISSION_DENIED ? false : prev.hasPermission
+          hasPermission: error.code === error.PERMISSION_DENIED ? false : prev.hasPermission,
         }))
         reject(locationError)
       }
@@ -190,14 +190,10 @@ export function useLocation(options: LocationOptions = {}) {
       const positionOptions: PositionOptions = {
         enableHighAccuracy: opts.enableHighAccuracy,
         timeout: opts.timeout,
-        maximumAge: opts.maximumAge
+        maximumAge: opts.maximumAge,
       }
 
-      navigator.geolocation.getCurrentPosition(
-        successCallback,
-        errorCallback,
-        positionOptions
-      )
+      navigator.geolocation.getCurrentPosition(successCallback, errorCallback, positionOptions)
     })
   }, [opts, convertPosition, getAccuracyLevel, handleError])
 
@@ -208,29 +204,29 @@ export function useLocation(options: LocationOptions = {}) {
     const successCallback = (position: GeolocationPosition) => {
       const locationData = convertPosition(position)
       const accuracy = getAccuracyLevel(locationData.accuracy)
-      
-      setState(prev => ({
+
+      setState((prev) => ({
         ...prev,
         currentLocation: locationData,
         accuracy,
         hasPermission: true,
-        error: null
+        error: null,
       }))
     }
 
     const errorCallback = (error: GeolocationPositionError) => {
       const locationError = handleError(error)
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         error: locationError,
-        hasPermission: error.code === error.PERMISSION_DENIED ? false : prev.hasPermission
+        hasPermission: error.code === error.PERMISSION_DENIED ? false : prev.hasPermission,
       }))
     }
 
     const positionOptions: PositionOptions = {
       enableHighAccuracy: opts.enableHighAccuracy,
       timeout: opts.timeout,
-      maximumAge: opts.maximumAge
+      maximumAge: opts.maximumAge,
     }
 
     watchIdRef.current = navigator.geolocation.watchPosition(
@@ -296,41 +292,13 @@ export function useLocation(options: LocationOptions = {}) {
     requestPermission,
     startWatching,
     stopWatching,
-    checkPermission
+    checkPermission,
   }
 }
 
-// Utility function to calculate distance between two points
-export function calculateDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371e3 // Earth's radius in meters
-  const φ1 = (lat1 * Math.PI) / 180
-  const φ2 = (lat2 * Math.PI) / 180
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180
-  const Δλ = ((lon2 - lon1) * Math.PI) / 180
-
-  const a =
-    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-
-  return R * c // Distance in meters
-}
-
-// Utility function to format coordinates for display
-export function formatCoordinates(lat: number, lon: number, precision = 6): string {
-  return `${lat.toFixed(precision)}, ${lon.toFixed(precision)}`
-}
-
-// Utility function to get location accuracy description
-export function getAccuracyDescription(accuracy: number): string {
-  if (accuracy <= 5) return 'Excellent (±' + Math.round(accuracy) + 'm)'
-  if (accuracy <= 10) return 'Very Good (±' + Math.round(accuracy) + 'm)'
-  if (accuracy <= 20) return 'Good (±' + Math.round(accuracy) + 'm)'
-  if (accuracy <= 50) return 'Fair (±' + Math.round(accuracy) + 'm)'
-  return 'Poor (±' + Math.round(accuracy) + 'm)'
-}
+// Re-export geographic utilities from shared module
+export {
+  calculateDistance,
+  formatCoordinates,
+  getAccuracyDescription,
+} from "@/lib/geo-utils"

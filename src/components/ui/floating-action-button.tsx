@@ -9,6 +9,8 @@ interface ActionItem {
   label: string
   icon: React.ComponentType<{ className?: string }>
   onClick: () => void
+  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
+  disabled?: boolean
 }
 
 interface FloatingActionButtonProps {
@@ -28,7 +30,7 @@ export function FloatingActionButton({ actions, className }: FloatingActionButto
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
             transition={{ duration: 0.2 }}
-            className="mb-3 flex flex-col items-end space-y-3"
+            className="mb-3 flex flex-col items-end gap-3"
           >
             {actions.map((action, idx) => {
               const Icon = action.icon
@@ -40,14 +42,35 @@ export function FloatingActionButton({ actions, className }: FloatingActionButto
                   exit={{ opacity: 0, x: 10 }}
                   transition={{ duration: 0.2, delay: idx * 0.05 }}
                   onClick={() => {
-                    action.onClick()
-                    setOpen(false)
+                    if (!action.disabled) {
+                      action.onClick()
+                      setOpen(false)
+                    }
                   }}
-                  className="group inline-flex min-h-12 min-w-12 items-center justify-center gap-3 rounded-full border-2 border-border bg-background/95 px-4 py-3 text-sm font-medium shadow-lg backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  disabled={action.disabled}
+                  className={cn(
+                    "group inline-flex min-h-12 min-w-12 items-center justify-center gap-3 rounded-full border-2 border-border bg-background/95 px-4 py-3 text-sm font-medium shadow-lg backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    action.variant === "destructive" &&
+                      "border-red-200 bg-red-50 text-red-900 hover:bg-red-100",
+                    action.disabled && "opacity-50 cursor-not-allowed"
+                  )}
                   aria-label={action.label}
                 >
-                  <Icon className="h-5 w-5 text-foreground" aria-hidden="true" />
-                  <span className="text-foreground">{action.label}</span>
+                  <Icon
+                    className={cn(
+                      "h-5 w-5 text-foreground",
+                      action.variant === "destructive" && "text-red-900"
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span
+                    className={cn(
+                      "text-foreground",
+                      action.variant === "destructive" && "text-red-900"
+                    )}
+                  >
+                    {action.label}
+                  </span>
                 </motion.button>
               )
             })}

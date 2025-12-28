@@ -96,17 +96,17 @@ const getColorClasses = (color: string) => {
   const colorMap = {
     blue: {
       bg: "bg-blue-50 dark:bg-blue-950",
-      icon: "text-blue-600 dark:text-blue-400",
-      text: "text-blue-600 dark:text-blue-400",
+      icon: "text-medical-primary dark:text-blue-400",
+      text: "text-medical-primary dark:text-blue-400",
       gradient: "from-blue-600 to-blue-700",
-      progress: "bg-blue-600",
+      progress: "bg-medical-primary",
     },
     green: {
       bg: "bg-green-50 dark:bg-green-950",
-      icon: "text-green-600 dark:text-green-400",
-      text: "text-green-600 dark:text-green-400",
+      icon: "text-healthcare-green dark:text-green-400",
+      text: "text-healthcare-green dark:text-green-400",
       gradient: "from-green-600 to-green-700",
-      progress: "bg-green-600",
+      progress: "bg-healthcare-green",
     },
     orange: {
       bg: "bg-orange-50 dark:bg-orange-950",
@@ -147,7 +147,6 @@ export const MedStintStatsEnhanced = () => {
             {platformStats.map((stat, _index) => {
               const colors = getColorClasses(stat.color)
               const IconComponent = stat.icon
-
               return (
                 <Card
                   key={`stat-${stat.label.replace(/\s+/g, "-").toLowerCase()}`}
@@ -160,28 +159,23 @@ export const MedStintStatsEnhanced = () => {
                     >
                       <IconComponent className={`h-8 w-8 ${colors.icon}`} />
                     </div>
-
                     {/* Value with Animation */}
                     <div className="mb-2 font-bold text-4xl text-slate-900 dark:text-white">
                       {stat.value}
                     </div>
-
                     {/* Label */}
                     <div className="mb-2 font-semibold text-lg text-slate-700 dark:text-slate-300">
                       {stat.label}
                     </div>
-
                     {/* Description */}
                     <div className="mb-3 text-slate-500 text-sm dark:text-slate-400">
                       {stat.description}
                     </div>
-
                     {/* Growth Indicator */}
                     <Badge className={`${colors.bg} ${colors.text} border-0 font-medium text-xs`}>
                       {stat.growth}
                     </Badge>
                   </CardContent>
-
                   {/* Hover Effect */}
                   <div
                     className={`absolute inset-0 bg-gradient-to-r ${colors.gradient} opacity-0 transition-opacity duration-300 group-hover:opacity-5`}
@@ -192,7 +186,7 @@ export const MedStintStatsEnhanced = () => {
           </div>
 
           {/* Performance Metrics */}
-          <div className="mb-16 rounded-2xl bg-white p-8 shadow-xl dark:bg-slate-800">
+          <div className="mb-16 rounded-xl bg-white p-8 shadow-xl dark:bg-slate-800">
             <div className="mb-8 text-center">
               <h3 className="mb-4 font-bold text-2xl text-slate-900 dark:text-white">
                 Platform Performance
@@ -201,12 +195,14 @@ export const MedStintStatsEnhanced = () => {
                 Consistent excellence in key performance indicators that matter most to our users.
               </p>
             </div>
-
             <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
               {performanceMetrics.map((metric, _index) => {
                 const colors = getColorClasses(metric.color)
                 return (
-                  <div key={`metric-${metric.label.replace(/\s+/g, "-").toLowerCase()}`} className="space-y-4">
+                  <div
+                    key={`metric-${metric.label.replace(/\s+/g, "-").toLowerCase()}`}
+                    className="gap-4"
+                  >
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-semibold text-slate-900 dark:text-white">
@@ -233,7 +229,7 @@ export const MedStintStatsEnhanced = () => {
           </div>
 
           {/* Achievements Section */}
-          <div className="rounded-2xl bg-gradient-to-br from-slate-50 to-white p-8 dark:from-slate-800 dark:to-slate-900">
+          <div className="rounded-xl bg-gradient-to-br from-slate-50 to-white p-8 dark:from-slate-800 dark:to-slate-900">
             <div className="mb-12 text-center">
               <h3 className="mb-4 font-bold text-2xl text-slate-900 dark:text-white">
                 Why Institutions Choose MedStint
@@ -243,7 +239,6 @@ export const MedStintStatsEnhanced = () => {
                 results.
               </p>
             </div>
-
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {achievements.map((achievement, _index) => {
                 const IconComponent = achievement.icon
@@ -253,7 +248,7 @@ export const MedStintStatsEnhanced = () => {
                     className="group hover:-translate-y-1 rounded-xl bg-white p-6 text-center shadow-lg transition-all duration-300 hover:shadow-xl dark:bg-slate-800"
                   >
                     <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
-                      <IconComponent className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                      <IconComponent className="h-6 w-6 text-medical-primary dark:text-blue-400" />
                     </div>
                     <h4 className="mb-2 font-semibold text-lg text-slate-900 dark:text-white">
                       {achievement.title}
@@ -272,7 +267,7 @@ export const MedStintStatsEnhanced = () => {
 
           {/* CTA Section */}
           <div className="mt-16 text-center">
-            <div className="mx-auto max-w-4xl rounded-3xl bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 p-12 text-white shadow-2xl">
+            <div className="mx-auto max-w-4xl rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 p-12 text-white shadow-2xl">
               <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
                 <TrendingUp className="h-8 w-8 text-white" />
               </div>
@@ -280,12 +275,13 @@ export const MedStintStatsEnhanced = () => {
                 Ready to Transform Your Clinical Education?
               </h3>
               <p className="mx-auto mb-8 max-w-2xl text-blue-100 text-lg">
-                Join thousands of medical institutions already using MedStint to streamline their clinical education programs.
+                Join thousands of medical institutions already using MedStint to streamline their
+                clinical education programs.
               </p>
               <div className="flex flex-wrap justify-center gap-4">
-                <Button 
-                  size="lg" 
-                  className="bg-white font-bold text-blue-600 hover:bg-blue-50 px-8 py-6 text-lg shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-105"
+                <Button
+                  size="lg"
+                  className="bg-white font-bold text-medical-primary hover:bg-blue-50 px-8 py-6 text-lg shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-105"
                 >
                   Get Started Today
                   <TrendingUp className="ml-2 h-5 w-5" />

@@ -80,7 +80,7 @@ export class CircuitBreaker {
     if (this.state === CircuitBreakerState.OPEN) {
       if (this.shouldAttemptReset()) {
         this.state = CircuitBreakerState.HALF_OPEN
-        logger.info(`Circuit breaker ${this.name} moved to HALF_OPEN state`)
+        logger.info({}, `Circuit breaker ${this.name} moved to HALF_OPEN state`)
       } else {
         throw new Error(`Circuit breaker ${this.name} is OPEN`)
       }
@@ -103,7 +103,7 @@ export class CircuitBreaker {
     if (this.state === CircuitBreakerState.HALF_OPEN) {
       this.state = CircuitBreakerState.CLOSED
       this.failureCount = 0
-      logger.info(`Circuit breaker ${this.name} moved to CLOSED state`)
+      logger.info({}, `Circuit breaker ${this.name} moved to CLOSED state`)
     }
   }
 
@@ -112,15 +112,15 @@ export class CircuitBreaker {
     this.failureCount++
     this.lastFailureTime = Date.now()
 
-    logger.warn(`Circuit breaker ${this.name} recorded failure`, { error: error.message })
+    logger.warn({ error: error.message }, `Circuit breaker ${this.name} recorded failure`)
 
     if (this.shouldOpenCircuit()) {
       this.state = CircuitBreakerState.OPEN
-      logger.error(`Circuit breaker ${this.name} moved to OPEN state`, {
+      logger.error({
         failureCount: this.failureCount,
         requestCount: this.requestCount,
         errorRate: this.getErrorRate(),
-      })
+      }, `Circuit breaker ${this.name} moved to OPEN state`)
     }
   }
 
@@ -168,7 +168,7 @@ export class CircuitBreaker {
     this.requestCount = 0
     this.successCount = 0
     this.lastFailureTime = 0
-    logger.info(`Circuit breaker ${this.name} manually reset`)
+    logger.info({}, `Circuit breaker ${this.name} manually reset`)
   }
 }
 
@@ -501,14 +501,14 @@ export class PerformanceMonitor {
     }
 
     if (alerts.length > 0) {
-      logger.warn(`Performance alerts for operation ${operation}`, {
-        alerts,
-        metrics: {
+      logger.warn({
+        alerts: JSON.stringify(alerts),
+        metrics: JSON.stringify({
           responseTime: metrics.averageResponseTime,
           errorRate: metrics.errorRate,
           throughput: metrics.throughput,
-        },
-      })
+        }),
+      }, `Performance alerts for operation ${operation}`)
     }
   }
 

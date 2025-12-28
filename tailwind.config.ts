@@ -7,105 +7,110 @@ const config: Config = {
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/**/*.{js,ts,jsx,tsx,mdx}",
   ],
-  darkMode: ["class"],
+  darkMode: "class",
   theme: {
     extend: {
+      screens: {
+        "3xl": "1920px",
+        "4xl": "2560px",
+        "5xl": "3840px",
+      },
       colors: {
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+        background: "hsl(var(--background) / <alpha-value>)",
+        foreground: "hsl(var(--foreground) / <alpha-value>)",
         card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+          DEFAULT: "hsl(var(--card) / <alpha-value>)",
+          foreground: "hsl(var(--card-foreground) / <alpha-value>)",
         },
         popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
+          DEFAULT: "hsl(var(--popover) / <alpha-value>)",
+          foreground: "hsl(var(--popover-foreground) / <alpha-value>)",
         },
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "hsl(var(--primary) / <alpha-value>)",
+          foreground: "hsl(var(--primary-foreground) / <alpha-value>)",
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
+          DEFAULT: "hsl(var(--secondary) / <alpha-value>)",
+          foreground: "hsl(var(--secondary-foreground) / <alpha-value>)",
         },
         muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          DEFAULT: "hsl(var(--muted) / <alpha-value>)",
+          foreground: "hsl(var(--muted-foreground) / <alpha-value>)",
         },
         accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
+          DEFAULT: "hsl(var(--accent) / <alpha-value>)",
+          foreground: "hsl(var(--accent-foreground) / <alpha-value>)",
         },
         destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
+          DEFAULT: "hsl(var(--destructive) / <alpha-value>)",
+          foreground: "hsl(var(--destructive-foreground) / <alpha-value>)",
         },
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
+        border: "hsl(var(--border) / <alpha-value>)",
+        input: "hsl(var(--input) / <alpha-value>)",
+        ring: "hsl(var(--ring) / <alpha-value>)",
         chart: {
-          "1": "hsl(var(--chart-1))",
-          "2": "hsl(var(--chart-2))",
-          "3": "hsl(var(--chart-3))",
-          "4": "hsl(var(--chart-4))",
-          "5": "hsl(var(--chart-5))",
+          "1": "hsl(var(--chart-1) / <alpha-value>)",
+          "2": "hsl(var(--chart-2) / <alpha-value>)",
+          "3": "hsl(var(--chart-3) / <alpha-value>)",
+          "4": "hsl(var(--chart-4) / <alpha-value>)",
+          "5": "hsl(var(--chart-5) / <alpha-value>)",
         },
         // Enhanced Medical Color Palette
         "medical-primary": {
-          DEFAULT: "var(--medical-primary)",
-          light: "var(--medical-primary-light)",
-          dark: "var(--medical-primary-dark)",
-          hover: "var(--medical-primary-hover)",
+          DEFAULT: "hsl(var(--medical-primary) / <alpha-value>)",
+          light: "hsl(var(--medical-primary-light) / <alpha-value>)",
+          dark: "hsl(var(--medical-primary-dark) / <alpha-value>)",
+          hover: "hsl(var(--medical-primary-hover) / <alpha-value>)",
         },
         "healthcare-green": {
-          DEFAULT: "var(--healthcare-green)",
-          light: "var(--healthcare-green-light)",
-          dark: "var(--healthcare-green-dark)",
-          hover: "var(--healthcare-green-hover)",
+          DEFAULT: "hsl(var(--healthcare-green) / <alpha-value>)",
+          light: "hsl(var(--healthcare-green-light) / <alpha-value>)",
+          dark: "hsl(var(--healthcare-green-dark) / <alpha-value>)",
+          hover: "hsl(var(--healthcare-green-hover) / <alpha-value>)",
         },
         "medical-teal": {
-          DEFAULT: "var(--medical-teal)",
-          light: "var(--medical-teal-light)",
-          dark: "var(--medical-teal-dark)",
+          DEFAULT: "hsl(var(--medical-teal) / <alpha-value>)",
+          light: "hsl(var(--medical-teal-light) / <alpha-value>)",
+          dark: "hsl(var(--medical-teal-dark) / <alpha-value>)",
         },
         "medical-cyan": {
-          DEFAULT: "var(--medical-cyan)",
-          light: "var(--medical-cyan-light)",
-          dark: "var(--medical-cyan-dark)",
+          DEFAULT: "hsl(var(--medical-cyan) / <alpha-value>)",
+          light: "hsl(var(--medical-cyan-light) / <alpha-value>)",
+          dark: "hsl(var(--medical-cyan-dark) / <alpha-value>)",
         },
         "professional-gray": {
-          DEFAULT: "var(--professional-gray)",
-          light: "var(--professional-gray-light)",
-          dark: "var(--professional-gray-dark)",
+          DEFAULT: "hsl(var(--professional-gray) / <alpha-value>)",
+          light: "hsl(var(--professional-gray-light) / <alpha-value>)",
+          dark: "hsl(var(--professional-gray-dark) / <alpha-value>)",
         },
         // Status Colors
         success: {
-          DEFAULT: "var(--success)",
-          light: "var(--success-light)",
-          dark: "var(--success-dark)",
+          DEFAULT: "hsl(var(--success) / <alpha-value>)",
+          light: "hsl(var(--success-light) / <alpha-value>)",
+          dark: "hsl(var(--success-dark) / <alpha-value>)",
         },
         warning: {
-          DEFAULT: "var(--warning)",
-          light: "var(--warning-light)",
-          dark: "var(--warning-dark)",
+          DEFAULT: "hsl(var(--warning) / <alpha-value>)",
+          light: "hsl(var(--warning-light) / <alpha-value>)",
+          dark: "hsl(var(--warning-dark) / <alpha-value>)",
         },
         error: {
-          DEFAULT: "var(--error)",
-          light: "var(--error-light)",
-          dark: "var(--error-dark)",
+          DEFAULT: "hsl(var(--error) / <alpha-value>)",
+          light: "hsl(var(--error-light) / <alpha-value>)",
+          dark: "hsl(var(--error-dark) / <alpha-value>)",
         },
         info: {
-          DEFAULT: "var(--info)",
-          light: "var(--info-light)",
-          dark: "var(--info-dark)",
+          DEFAULT: "hsl(var(--info) / <alpha-value>)",
+          light: "hsl(var(--info-light) / <alpha-value>)",
+          dark: "hsl(var(--info-dark) / <alpha-value>)",
         },
         // Surface Colors
         surface: {
-          1: "var(--surface-1)",
-          2: "var(--surface-2)",
-          3: "var(--surface-3)",
-          4: "var(--surface-4)",
+          1: "hsl(var(--surface-1) / <alpha-value>)",
+          2: "hsl(var(--surface-2) / <alpha-value>)",
+          3: "hsl(var(--surface-3) / <alpha-value>)",
+          4: "hsl(var(--surface-4) / <alpha-value>)",
         },
       },
       borderRadius: {
@@ -167,11 +172,87 @@ const config: Config = {
         24: "var(--spacing-24)",
         32: "var(--spacing-32)",
       },
+      keyframes: {
+        marquee: {
+          "0%": { transform: "translateX(0%)" },
+          "100%": { transform: "translateX(-100%)" },
+        },
+        blob: {
+          "0%": {
+            transform: "translate(0px, 0px) scale(1)",
+          },
+          "33%": {
+            transform: "translate(30px, -50px) scale(1.1)",
+          },
+          "66%": {
+            transform: "translate(-20px, 20px) scale(0.9)",
+          },
+          "100%": {
+            transform: "translate(0px, 0px) scale(1)",
+          },
+        },
+        tilt: {
+          "0%, 50%, 100%": {
+            transform: "rotate(0deg)",
+          },
+          "25%": {
+            transform: "rotate(0.5deg)",
+          },
+          "75%": {
+            transform: "rotate(-0.5deg)",
+          },
+        },
+        shimmer: {
+          from: {
+            backgroundPosition: "0 0",
+          },
+          to: {
+            backgroundPosition: "-200% 0",
+          },
+        },
+        "gradient-x": {
+          "0%, 100%": {
+            "background-size": "200% 200%",
+            "background-position": "left center",
+          },
+          "50%": {
+            "background-size": "200% 200%",
+            "background-position": "right center",
+          },
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-10px)" },
+        },
+        "xray-scan": {
+          "0%": {
+            transform: "translateY(-100%)",
+            opacity: "0",
+          },
+          "10%": {
+            opacity: "1",
+          },
+          "90%": {
+            opacity: "1",
+          },
+          "100%": {
+            transform: "translateY(100vh)",
+            opacity: "0",
+          },
+        },
+      },
       animation: {
         "fade-in": "var(--animate-fade-in)",
         "slide-up": "var(--animate-slide-up)",
         "scale-in": "var(--animate-scale-in)",
         "spin-slow": "var(--animate-spin-slow)",
+        blob: "blob 7s infinite",
+        marquee: "marquee 25s linear infinite",
+        tilt: "tilt 10s infinite linear",
+        shimmer: "shimmer 2s linear infinite",
+        "gradient-x": "gradient-x 15s ease infinite",
+        float: "float 6s ease-in-out infinite",
+        "xray-scan": "xray-scan 4s ease-in-out infinite",
       },
       zIndex: {
         0: "var(--z-0)",

@@ -8,6 +8,10 @@ export type OnboardingStep =
   | "program-selection"
   | "school-setup"
   | "affiliation-setup"
+  | "school-profile"
+  | "profile-completion"
+  | "tutorial"
+  | "completion"
   | "complete"
 
 // Analytics event types for tracking user interactions

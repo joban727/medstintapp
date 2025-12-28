@@ -1,5 +1,5 @@
-import { and, desc, eq, gte, inArray, lte } from "drizzle-orm"
-import { db } from "@/database/db"
+import { and, desc, eq, gte, inArray, lte, or, sql, count } from "drizzle-orm"
+import { db } from "@/database/connection-pool"
 import {
   clinicalSites,
   rotations,
@@ -14,24 +14,25 @@ interface TimeRecordWithDetails {
   id: string
   studentId: string
   rotationId: string
-  clockIn: Date
-  clockOut: Date | null
+  clockIn: string | null
+  clockOut: string | null
   totalHours: number | null
   activities: string | null
   notes: string | null
   status: "PENDING" | "APPROVED" | "REJECTED"
-  createdAt: Date
-  updatedAt: Date
+  createdAt: string
+  updatedAt: string
   student: {
     id: string
     name: string
     email: string
+    schoolId: string
   }
   rotation: {
     id: string
     name: string
-    startDate: Date
-    endDate: Date
+    startDate: string
+    endDate: string
   }
   site: {
     id: string
@@ -72,14 +73,9 @@ export default async function AdminTimecardMonitoringPage({
   console.log("UserSchoolId:", userSchoolId)
 
   if (!userSchoolId) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <h1 className="mb-4 font-bold text-2xl text-gray-900">Access Denied</h1>
-          <p className="text-gray-600">You don't have access to view timecard data.</p>
-        </div>
-      </div>
-    )
+    console.log("User has no schoolId, returning empty data")
+    // If user has no school associated, return empty state instead of error
+    // This allows the page to load for users who skipped onboarding
   }
 
   // Build filters
@@ -138,75 +134,105 @@ export default async function AdminTimecardMonitoringPage({
 
   // Define interfaces for type safety
   interface TimeRecordData {
-    id: string;
-    studentId: string;
-    rotationId: string;
-    clockIn: Date;
-    clockOut: Date | null;
-    status: string;
-    studentName?: string;
-    studentEmail?: string;
-    rotationName?: string;
-    studentSchoolId?: string;
+    id: string
+    studentId: string
+    rotationId: string
+    clockIn: Date | null
+    clockOut: Date | null
+    status: string
+    createdAt: Date
+    updatedAt: Date
+    totalHours: string | null
+    activities: string | null
+    notes: string | null
+    studentName: string | null
+    studentEmail: string | null
+    studentSchoolId: string | null
   }
 
   interface StudentData {
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-    schoolId: string;
-    studentId: string;
-    isActive: boolean;
+    id: string
+    name: string
+    email: string
+    role: string
+    schoolId: string
+    studentId: string
+    isActive: boolean
   }
 
   interface CorrectionData {
-    id: string;
-    originalTimeRecordId: string;
-    correctionType: string;
-    status: string;
-    createdAt: Date;
+    id: string
+    originalTimeRecordId: string
+    correctionType: string
+    status: string
+    createdAt: Date
   }
 
   interface RotationData {
-    id: string;
-    name: string;
-    startDate: Date;
-    endDate: Date;
-    clinicalSiteId: string;
+    id: string
+    specialty: string
+    startDate: Date | null
+    endDate: Date | null
+    clinicalSiteId: string
   }
 
   interface SiteData {
-    id: string;
-    name: string;
+    id: string
+    name: string
   }
 
   // Fetch time records with joins
   let timeRecordsData: TimeRecordData[] = []
 
   // Initialize lookup maps
-  let _studentsMap = new Map()
   let _rotationsMap = new Map()
   let _sitesMap = new Map()
 
   try {
     console.log("Executing time records query with joins...")
 
-    // Use separate queries to avoid Drizzle join issues
-    const baseQuery = db.select().from(timeRecords).orderBy(desc(timeRecords.clockIn)).limit(50)
+    // Execute time records query with joins and school filter
+    console.log("Executing time records query with joins...")
 
-    // Only add where clause if we have valid filters
-    if (validFilters.length > 0) {
-      console.log("Applying filters to query...")
-      timeRecordsData = await baseQuery.where(and(...validFilters))
-    } else {
-      console.log("No filters to apply, executing base query...")
-      timeRecordsData = await baseQuery
-    }
+    // Execute time records query with joins and school filter
+    const baseQuery = db
+      .select({
+        id: timeRecords.id,
+        studentId: timeRecords.studentId,
+        rotationId: timeRecords.rotationId,
+        clockIn: timeRecords.clockIn,
+        clockOut: timeRecords.clockOut,
+        status: timeRecords.status,
+        createdAt: timeRecords.createdAt,
+        updatedAt: timeRecords.updatedAt,
+        totalHours: timeRecords.totalHours,
+        activities: timeRecords.activities,
+        notes: timeRecords.notes,
+        studentName: users.name,
+        studentEmail: users.email,
+        studentSchoolId: users.schoolId,
+      })
+      .from(timeRecords)
+      .leftJoin(users, eq(timeRecords.studentId, users.id))
+      .orderBy(desc(timeRecords.clockIn))
+      .limit(50)
 
-    // Apply school filter if needed
+    // Only execute query if we have a school ID to filter by
     if (userSchoolId) {
-      timeRecordsData = timeRecordsData.filter((record) => record.studentSchoolId === userSchoolId)
+      // Add school filter to validFilters
+      validFilters.push(eq(users.schoolId, userSchoolId))
+
+      // Only add where clause if we have valid filters
+      if (validFilters.length > 0) {
+        console.log("Applying filters to query...")
+        timeRecordsData = await baseQuery.where(and(...validFilters))
+      } else {
+        console.log("No filters to apply, executing base query...")
+        timeRecordsData = await baseQuery
+      }
+    } else {
+      console.log("No school ID, skipping query execution")
+      timeRecordsData = []
     }
 
     // Apply search filter if needed
@@ -215,35 +241,17 @@ export default async function AdminTimecardMonitoringPage({
       timeRecordsData = timeRecordsData.filter(
         (record) =>
           record.studentName?.toLowerCase().includes(searchTerm) ||
-          record.studentEmail?.toLowerCase().includes(searchTerm) ||
-          record.rotationName?.toLowerCase().includes(searchTerm)
+          record.studentEmail?.toLowerCase().includes(searchTerm)
       )
     }
 
     console.log("Time records query result:", timeRecordsData.length, "records")
 
     // Fetch related data separately
-    const studentIds = [...new Set(timeRecordsData.map((r) => r.studentId).filter(Boolean))]
     const rotationIds = [...new Set(timeRecordsData.map((r) => r.rotationId).filter(Boolean))]
 
-    let studentsData: StudentData[] = []
     let rotationsData: RotationData[] = []
     let sitesData: SiteData[] = []
-
-    if (studentIds.length > 0) {
-      studentsData = await db
-        .select({
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          role: users.role,
-          schoolId: users.schoolId,
-          studentId: users.studentId,
-          isActive: users.isActive,
-        })
-        .from(users)
-        .where(inArray(users.id, studentIds))
-    }
 
     if (rotationIds.length > 0) {
       rotationsData = await db.select().from(rotations).where(inArray(rotations.id, rotationIds))
@@ -254,12 +262,11 @@ export default async function AdminTimecardMonitoringPage({
     }
 
     // Populate lookup maps
-    _studentsMap = new Map(studentsData.map((s) => [s.id, s]))
     _rotationsMap = new Map(rotationsData.map((r) => [r.id, r]))
     _sitesMap = new Map(sitesData.map((s) => [s.id, s]))
 
     console.log("Fetched related data:", {
-      students: studentsData.length,
+      filteredTimeRecords: timeRecordsData.length,
       rotations: rotationsData.length,
       sites: sitesData.length,
     })
@@ -339,7 +346,6 @@ export default async function AdminTimecardMonitoringPage({
   // Combine data with joined results using lookup maps
   const enrichedTimeRecords: TimeRecordWithDetails[] = (timeRecordsData || []).map((record) => {
     try {
-      const student = _studentsMap?.get(record.studentId)
       const rotation = _rotationsMap?.get(record.rotationId)
       const site = rotation ? _sitesMap?.get(rotation.clinicalSiteId) : null
 
@@ -347,30 +353,35 @@ export default async function AdminTimecardMonitoringPage({
         id: record.id,
         studentId: record.studentId,
         rotationId: record.rotationId,
-        clockIn: record.clockIn,
-        clockOut: record.clockOut,
-        totalHours: record.totalHours,
+        clockIn: record.clockIn ? new Date(record.clockIn).toISOString() : null,
+        clockOut: record.clockOut ? new Date(record.clockOut).toISOString() : null,
+        totalHours: record.totalHours != null ? Number(record.totalHours) : null,
         activities: record.activities,
         notes: record.notes,
-        status: record.status,
-        createdAt: record.createdAt,
-        updatedAt: record.updatedAt,
+        status: record.status as "PENDING" | "APPROVED" | "REJECTED",
+        createdAt: new Date(record.createdAt).toISOString(),
+        updatedAt: new Date(record.updatedAt).toISOString(),
         student: {
           id: record.studentId,
-          name: student?.name || "Unknown Student",
-          email: student?.email || "unknown@example.com",
+          name: record.studentName || "Unknown Student",
+          email: record.studentEmail || "unknown@example.com",
+          schoolId: record.studentSchoolId || "",
         },
         rotation: {
           id: record.rotationId,
-          name: rotation?.name || "Unknown Rotation",
-          startDate: rotation?.startDate || new Date(),
-          endDate: rotation?.endDate || new Date(),
+          name: rotation?.specialty || "Unknown Rotation",
+          startDate: rotation?.startDate
+            ? new Date(rotation.startDate).toISOString()
+            : new Date().toISOString(),
+          endDate: rotation?.endDate
+            ? new Date(rotation.endDate).toISOString()
+            : new Date().toISOString(),
         },
         site: site
           ? {
-              id: site.id,
-              name: site.name || "Unknown Site",
-            }
+            id: site.id,
+            name: site.name || "Unknown Site",
+          }
           : null,
         corrections: correctionsByRecord[record.id] || [],
       }
@@ -379,6 +390,9 @@ export default async function AdminTimecardMonitoringPage({
       throw error
     }
   })
+
+  // NOTE: School filtering now happens earlier at the query level (after fetching students)
+  // This prevents issues with null/empty student.schoolId values causing blank results
 
   // Calculate summary statistics
   const totalRecords = (enrichedTimeRecords || []).length
@@ -392,7 +406,7 @@ export default async function AdminTimecardMonitoringPage({
     totalHours = (enrichedTimeRecords || [])
       .filter((r) => r && r.totalHours != null)
       .reduce((sum, r) => {
-        const hours = r.totalHours || 0
+        const hours = Number(r.totalHours ?? 0) || 0
         return sum + hours
       }, 0)
   } catch (error) {
@@ -405,7 +419,7 @@ export default async function AdminTimecardMonitoringPage({
 
   // Get unique students and rotations for filters
   let _uniqueStudents: { id: string; name: string; email: string }[] = []
-  let _uniqueRotations: { id: string; name: string; startDate: Date; endDate: Date }[] = []
+  let _uniqueRotations: { id: string; name: string; startDate: string; endDate: string }[] = []
 
   try {
     _uniqueStudents = Array.from(

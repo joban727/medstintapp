@@ -12,6 +12,10 @@ import {
   CardHeader,
   CardTitle,
 } from "../../../components/ui/card"
+import { PageContainer } from "@/components/ui/page-container"
+import { StatCard, StatGrid } from "@/components/ui/stat-card"
+import { QuickActionCard } from "@/components/ui/quick-action-card"
+import { ActivityList, TaskList } from "@/components/ui/activity-list"
 import type { User } from "../../../database/schema"
 import { requireAnyRole } from "../../../lib/auth-clerk"
 
@@ -19,25 +23,25 @@ export default async function ClinicalPreceptorDashboardPage() {
   const user = await requireAnyRole(["CLINICAL_PRECEPTOR"], "/dashboard")
 
   return (
-    <div className="space-y-6">
+    <PageContainer>
       {/* Welcome Banner for First-Time Users */}
       <WelcomeBanner userRole="CLINICAL_PRECEPTOR" userName={user.name || "Preceptor"} />
 
       <Suspense fallback={<DashboardStatsSkeleton />}>
         <ClinicalPreceptorDashboardContent user={user} />
       </Suspense>
-    </div>
+    </PageContainer>
   )
 }
 
-async function ClinicalPreceptorDashboardContent({ user }: { user: User }) {
+async function ClinicalPreceptorDashboardContent({ user }: { user: { id: string; name: string | null } }) {
   // Fetch real data for clinical preceptor dashboard with comprehensive error handling
   let pendingTimeRecords: Array<{
     id: string
     date: Date
-    clockIn: Date
+    clockIn: Date | null
     clockOut: Date | null
-    totalHours: string
+    totalHours: string | null
     status: "PENDING" | "APPROVED" | "REJECTED"
     studentName: string | null
     rotationName: string | null
@@ -298,203 +302,91 @@ async function ClinicalPreceptorDashboardContent({ user }: { user: User }) {
             Welcome back, {user.name}. Guide your students through their clinical experience.
           </p>
         </div>
-        <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+        <Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
           Clinical Preceptor
         </Badge>
       </div>
 
       {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Assigned Students</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{preceptorStats.assignedStudents}</div>
-            <p className="text-muted-foreground text-xs">Currently under supervision</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Pending Reviews</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{preceptorStats.pendingTimeRecords}</div>
-            <p className="text-muted-foreground text-xs">Time records awaiting approval</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Evaluations Done</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{preceptorStats.completedEvaluations}</div>
-            <p className="text-muted-foreground text-xs">This semester</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Upcoming Deadlines</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{preceptorStats.upcomingDeadlines}</div>
-            <p className="text-muted-foreground text-xs">Next 7 days</p>
-          </CardContent>
-        </Card>
-      </div>
+      <StatGrid columns={4}>
+        <StatCard
+          title="Assigned Students"
+          value={preceptorStats.assignedStudents}
+          icon={Users}
+          variant="blue"
+          description="Currently under supervision"
+        />
+        <StatCard
+          title="Pending Reviews"
+          value={preceptorStats.pendingTimeRecords}
+          icon={Clock}
+          variant="orange"
+          description="Time records awaiting approval"
+        />
+        <StatCard
+          title="Evaluations Done"
+          value={preceptorStats.completedEvaluations}
+          icon={CheckCircle}
+          variant="green"
+          description="This semester"
+        />
+        <StatCard
+          title="Upcoming Deadlines"
+          value={preceptorStats.upcomingDeadlines}
+          icon={Calendar}
+          variant="purple"
+          description="Next 7 days"
+        />
+      </StatGrid>
 
       {/* Quick Actions */}
       <div>
         <h2 className="mb-4 font-semibold text-xl">Quick Actions</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {quickActions.map((action) => {
-            const Icon = action.icon
-            return (
-              <Card key={action.title} className="transition-shadow hover:shadow-md">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <div className={`rounded-md p-2 ${action.color}`}>
-                        <Icon className="h-4 w-4 text-white" />
-                      </div>
-                      <CardTitle className="text-sm">{action.title}</CardTitle>
-                    </div>
-                    {action.badge && (
-                      <Badge variant="destructive" className="text-xs">
-                        {action.badge}
-                      </Badge>
-                    )}
-                  </div>
-                  <CardDescription className="text-xs">{action.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button asChild size="sm" className="w-full">
-                    <Link href={action.href}>Access</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            )
-          })}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 stagger-children">
+          {quickActions.map((action) => (
+            <QuickActionCard
+              key={action.title}
+              title={action.title}
+              description={action.description}
+              icon={action.icon}
+              href={action.href}
+              color={action.color}
+              badge={action.badge}
+            />
+          ))}
         </div>
       </div>
 
-      {/* Student Overview & Recent Activity */}
+      {/* Tasks & Activity Grid */}
       <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>My Students</CardTitle>
-            <CardDescription>Current student assignments and progress</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {assignedStudents.map(
-                (student: { id: string; name: string; rotation: string; progress: number }) => (
-                  <div
-                    key={student.id}
-                    className="flex items-center justify-between rounded-lg bg-gray-50 p-3"
-                  >
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{student.name}</p>
-                      <p className="text-muted-foreground text-xs">{student.rotation}</p>
-                      <div className="mt-1 flex items-center space-x-2">
-                        <div className="h-1.5 w-full rounded-full bg-gray-200">
-                          <div
-                            className="h-1.5 rounded-full bg-blue-600"
-                            style={{ width: `${student.progress}%` }}
-                          />
-                        </div>
-                        <span className="text-muted-foreground text-xs">{student.progress}%</span>
-                      </div>
-                    </div>
-                    <Button size="sm" variant="outline">
-                      View
-                    </Button>
-                  </div>
-                )
-              )}
-            </div>
-            <div className="mt-4">
-              <Button asChild className="w-full" variant="outline">
-                <Link href="/dashboard/clinical-preceptor/students">View All Students</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Pending Tasks */}
+        <TaskList
+          title="Pending Tasks"
+          description="Items requiring your immediate attention"
+          tasks={pendingTasksData.map((task: any) => ({
+            id: task.id,
+            title: task.title,
+            description: task.description,
+            count: task.count,
+            priority: task.priority,
+            href: task.href,
+            actionLabel: task.action || "View"
+          }))}
+          emptyMessage="No pending tasks at the moment"
+        />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest updates and actions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivities.map((activity, index) => (
-                <div
-                  key={`activity-${activity.message.replace(/\s+/g, "-").toLowerCase()}-${index}`}
-                  className="flex items-center space-x-4"
-                >
-                  <div className={`h-2 w-2 ${activity.color} rounded-full`} />
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{activity.message}</p>
-                    <p className="text-muted-foreground text-xs">{activity.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Recent Activity */}
+        <ActivityList
+          title="Recent Activity"
+          description="Latest updates and actions"
+          activities={recentActivities.map((activity, index) => ({
+            id: `activity-${index}`,
+            message: activity.message,
+            time: activity.time,
+            type: activity.type === "time_record" ? "info" : "success"
+          }))}
+        />
       </div>
-
-      {/* Pending Tasks */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Pending Tasks</CardTitle>
-          <CardDescription>Items requiring your immediate attention</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            {pendingTasksData.length > 0 ? (
-              pendingTasksData.map(
-                (
-                  task: {
-                    id: string
-                    title: string
-                    description: string
-                    count: number
-                    priority: "high" | "medium" | "low"
-                    type: "approval" | "evaluation" | "setup" | "review"
-                    color?: string
-                    href?: string
-                    action?: string
-                  },
-                  index: number
-                ) => (
-                  <div
-                    key={`task-${task.id || index}`}
-                    className={`flex items-center justify-between rounded-lg p-4 bg-${task.color}-50`}
-                  >
-                    <div>
-                      <p className="font-medium text-sm">{task.title}</p>
-                      <p className="text-muted-foreground text-xs">{task.description}</p>
-                    </div>
-                    <Button size="sm" asChild>
-                      <Link href={task.href || "#"}>{task.action || "View"}</Link>
-                    </Button>
-                  </div>
-                )
-              )
-            ) : (
-              <div className="col-span-3 py-4 text-center">
-                <p className="text-muted-foreground text-sm">No pending tasks at the moment</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

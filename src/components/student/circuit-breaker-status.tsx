@@ -1,12 +1,12 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
-import { Shield, AlertTriangle, CheckCircle, RotateCcw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { circuitBreakerRegistry, CircuitState } from '@/lib/api-circuit-breaker'
-import { toast } from 'sonner'
+import React, { useState, useEffect } from "react"
+import { Shield, AlertTriangle, CheckCircle, RotateCcw } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { circuitBreakerRegistry, CircuitState } from "@/lib/api-circuit-breaker"
+import { toast } from "sonner"
 
 interface CircuitBreakerStatusProps {
   className?: string
@@ -41,10 +41,10 @@ export function CircuitBreakerStatus({ className }: CircuitBreakerStatusProps) {
     setIsRefreshing(true)
     try {
       circuitBreakerRegistry.resetAll()
-      toast.success('All circuit breakers reset successfully')
+      toast.success("All circuit breakers reset successfully")
       refreshStats()
     } catch (error) {
-      toast.error('Failed to reset circuit breakers')
+      toast.error("Failed to reset circuit breakers")
     } finally {
       setIsRefreshing(false)
     }
@@ -57,7 +57,7 @@ export function CircuitBreakerStatus({ className }: CircuitBreakerStatusProps) {
       case CircuitState.OPEN:
         return <AlertTriangle className="h-4 w-4 text-red-500" />
       case CircuitState.HALF_OPEN:
-        return <Shield className="h-4 w-4 text-yellow-500" />
+        return <Shield className="h-4 w-4 text-warning" />
       default:
         return <Shield className="h-4 w-4 text-gray-500" />
     }
@@ -66,13 +66,13 @@ export function CircuitBreakerStatus({ className }: CircuitBreakerStatusProps) {
   const getStateBadgeVariant = (state: CircuitState) => {
     switch (state) {
       case CircuitState.CLOSED:
-        return 'default'
+        return "default"
       case CircuitState.OPEN:
-        return 'destructive'
+        return "destructive"
       case CircuitState.HALF_OPEN:
-        return 'secondary'
+        return "secondary"
       default:
-        return 'outline'
+        return "outline"
     }
   }
 
@@ -84,7 +84,7 @@ export function CircuitBreakerStatus({ className }: CircuitBreakerStatusProps) {
 
   return (
     <Card className={className}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader className="flex items-center justify-between gap-0 pb-2">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <Shield className="h-4 w-4" />
           Circuit Breaker Status
@@ -96,11 +96,11 @@ export function CircuitBreakerStatus({ className }: CircuitBreakerStatusProps) {
           disabled={isRefreshing}
           className="h-8"
         >
-          <RotateCcw className={`h-3 w-3 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+          <RotateCcw className={`h-3 w-3 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
           Reset All
         </Button>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="gap-3">
         {breakerEntries.map(([name, stat]) => (
           <div key={name} className="flex items-center justify-between p-2 border rounded-lg">
             <div className="flex items-center gap-2 flex-1">
@@ -111,11 +111,11 @@ export function CircuitBreakerStatus({ className }: CircuitBreakerStatusProps) {
                   <Badge variant={getStateBadgeVariant(stat.state)} className="text-xs">
                     {stat.state}
                   </Badge>
-                  <span>Failures: {stat.failureCount}/{stat.totalFailures}</span>
+                  <span>
+                    Failures: {stat.failureCount}/{stat.totalFailures}
+                  </span>
                   {stat.nextAttemptTime && stat.state === CircuitState.OPEN && (
-                    <span>
-                      Next: {new Date(stat.nextAttemptTime).toLocaleTimeString()}
-                    </span>
+                    <span>Next: {new Date(stat.nextAttemptTime).toLocaleTimeString()}</span>
                   )}
                 </div>
               </div>

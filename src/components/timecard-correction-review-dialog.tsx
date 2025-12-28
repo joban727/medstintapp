@@ -29,6 +29,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
+import { safeFetchApi } from "@/lib/safe-fetch"
 
 interface TimecardCorrectionReviewDialogProps {
   children: React.ReactNode
@@ -65,30 +66,33 @@ export function TimecardCorrectionReviewDialog({
   const [reviewComments, setReviewComments] = useState("")
   const router = useRouter()
 
-  const requestedChanges = JSON.parse(correction.requestedChanges || "{}")
+  let requestedChanges: any = {}
+  try {
+    requestedChanges = JSON.parse(correction.requestedChanges || "{}")
+  } catch (error) {
+    console.error("Failed to parse requested changes:", error)
+    requestedChanges = {}
+  }
 
   const handleApprove = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch(`/api/timecard-corrections/${correction.id}/approve`, {
+      const result = await safeFetchApi<any>(`/api/timecard-corrections/${correction.id}/approve`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
           action: "approve",
           comments: reviewComments,
+          applyImmediately: true,
         }),
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || "Failed to approve correction")
+      if (result.success) {
+        toast.success("Timecard correction approved successfully")
+        setOpen(false)
+        router.refresh()
+      } else {
+        throw new Error(result.error || "Failed to approve correction")
       }
-
-      toast.success("Timecard correction approved successfully")
-      setOpen(false)
-      router.refresh()
     } catch (error) {
       // Error approving correction
       toast.error(error instanceof Error ? error.message : "Failed to approve correction")
@@ -105,25 +109,21 @@ export function TimecardCorrectionReviewDialog({
 
     setIsLoading(true)
     try {
-      const response = await fetch(`/api/timecard-corrections/${correction.id}/approve`, {
+      const result = await safeFetchApi<any>(`/api/timecard-corrections/${correction.id}/approve`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
           action: "reject",
           comments: reviewComments,
         }),
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || "Failed to reject correction")
+      if (result.success) {
+        toast.success("Timecard correction rejected")
+        setOpen(false)
+        router.refresh()
+      } else {
+        throw new Error(result.error || "Failed to reject correction")
       }
-
-      toast.success("Timecard correction rejected")
-      setOpen(false)
-      router.refresh()
     } catch (error) {
       // Error rejecting correction
       toast.error(error instanceof Error ? error.message : "Failed to reject correction")
@@ -152,7 +152,10 @@ export function TimecardCorrectionReviewDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+      <DialogContent
+        className="max-h-[90vh] max-w-4xl overflow-y-auto"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
@@ -261,64 +264,64 @@ export function TimecardCorrectionReviewDialog({
             {/* Requested Changes */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base text-blue-600">Requested Changes</CardTitle>
+                <CardTitle className="text-base text-medical-primary">Requested Changes</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {(correction.correctionType === "CLOCK_IN_TIME" ||
                   correction.correctionType === "CLOCK_OUT_TIME") && (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{formatDate(correction.originalRecord.date)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">
-                        {formatTime(
-                          requestedChanges.newClockIn || correction.originalRecord.clockIn
-                        )}{" "}
-                        -{" "}
-                        {formatTime(
-                          requestedChanges.newClockOut || correction.originalRecord.clockOut
-                        )}
-                      </span>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground text-xs">Total Hours</Label>
-                      <div className="text-sm">
-                        {requestedChanges.newClockIn && requestedChanges.newClockOut
-                          ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">{formatDate(correction.originalRecord.date)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">
+                          {formatTime(
+                            requestedChanges.newClockIn || correction.originalRecord.clockIn
+                          )}{" "}
+                          -{" "}
+                          {formatTime(
+                            requestedChanges.newClockOut || correction.originalRecord.clockOut
+                          )}
+                        </span>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground text-xs">Total Hours</Label>
+                        <div className="text-sm">
+                          {requestedChanges.newClockIn && requestedChanges.newClockOut
+                            ? (
                               (new Date(requestedChanges.newClockOut).getTime() -
                                 new Date(requestedChanges.newClockIn).getTime()) /
                               (1000 * 60 * 60)
                             ).toFixed(2)
-                          : correction.originalRecord.totalHours || "Not calculated"}
+                            : correction.originalRecord.totalHours || "Not calculated"}
+                        </div>
                       </div>
-                    </div>
-                  </>
-                )}
+                    </>
+                  )}
 
                 {(correction.correctionType === "ACTIVITIES" ||
                   correction.correctionType === "MULTIPLE") && (
-                  <div>
-                    <Label className="text-muted-foreground text-xs">Activities</Label>
-                    <div className="text-sm">
-                      {requestedChanges.newActivities ||
-                        correction.originalRecord.activities ||
-                        "No activities recorded"}
+                    <div>
+                      <Label className="text-muted-foreground text-xs">Activities</Label>
+                      <div className="text-sm">
+                        {requestedChanges.newActivities ||
+                          correction.originalRecord.activities ||
+                          "No activities recorded"}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {(correction.correctionType === "NOTES" ||
                   correction.correctionType === "MULTIPLE") && (
-                  <div>
-                    <Label className="text-muted-foreground text-xs">Notes</Label>
-                    <div className="text-sm">
-                      {requestedChanges.newNotes || correction.originalRecord.notes || "No notes"}
+                    <div>
+                      <Label className="text-muted-foreground text-xs">Notes</Label>
+                      <div className="text-sm">
+                        {requestedChanges.newNotes || correction.originalRecord.notes || "No notes"}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {correction.correctionType === "MULTIPLE" && (
                   <>
@@ -339,10 +342,10 @@ export function TimecardCorrectionReviewDialog({
                       <div className="text-sm">
                         {requestedChanges.newClockIn && requestedChanges.newClockOut
                           ? (
-                              (new Date(requestedChanges.newClockOut).getTime() -
-                                new Date(requestedChanges.newClockIn).getTime()) /
-                              (1000 * 60 * 60)
-                            ).toFixed(2)
+                            (new Date(requestedChanges.newClockOut).getTime() -
+                              new Date(requestedChanges.newClockIn).getTime()) /
+                            (1000 * 60 * 60)
+                          ).toFixed(2)
                           : correction.originalRecord.totalHours || "Not calculated"}
                       </div>
                     </div>
@@ -368,7 +371,12 @@ export function TimecardCorrectionReviewDialog({
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isLoading}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={isLoading}
+            >
               Cancel
             </Button>
             <Button type="button" variant="destructive" onClick={handleReject} disabled={isLoading}>

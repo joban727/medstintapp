@@ -11,6 +11,9 @@ interface Subscription {
   periodEnd?: Date
   stripeSubscriptionId?: string
   seats?: number
+  limits?: {
+    tokens?: number
+  }
   [key: string]: unknown
 }
 

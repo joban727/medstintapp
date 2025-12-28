@@ -1,5 +1,18 @@
 import type { NextRequest } from "next/server"
 
+// Ensure singletons across hot reloads and avoid duplicate intervals
+declare global {
+  // Global store for rate limiter entries
+   
+  var __rateLimitStore: Map<string, RateLimitEntry> | undefined
+  // Global cleanup interval handle
+   
+  var __rateLimiterCleanupInterval: NodeJS.Timeout | undefined
+  // Guard to attach shutdown hooks once
+   
+  var __rateLimiterShutdownHookSetup: boolean | undefined
+}
+
 interface RateLimitConfig {
   windowMs: number // Time window in milliseconds
   maxRequests: number // Maximum requests per window
@@ -12,17 +25,44 @@ interface RateLimitEntry {
 }
 
 // In-memory store for rate limiting (in production, use Redis)
-const rateLimitStore = new Map<string, RateLimitEntry>()
+const rateLimitStore = (globalThis.__rateLimitStore ??= new Map<string, RateLimitEntry>())
 
-// Clean up expired entries every 5 minutes
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, entry] of rateLimitStore.entries()) {
-    if (entry.resetTime < now) {
-      rateLimitStore.delete(key)
+function setupCleanupInterval(): void {
+  if (globalThis.__rateLimiterCleanupInterval) return
+  globalThis.__rateLimiterCleanupInterval = setInterval(
+    () => {
+      const now = Date.now()
+      for (const [key, entry] of rateLimitStore.entries()) {
+        if (entry.resetTime < now) {
+          rateLimitStore.delete(key)
+        }
+      }
+    },
+    5 * 60 * 1000
+  )
+}
+
+function setupShutdownHooks(): void {
+  if (globalThis.__rateLimiterShutdownHookSetup) return
+  globalThis.__rateLimiterShutdownHookSetup = true
+  const clear = () => {
+    if (globalThis.__rateLimiterCleanupInterval) {
+      clearInterval(globalThis.__rateLimiterCleanupInterval)
+      globalThis.__rateLimiterCleanupInterval = undefined
     }
   }
-}, 5 * 60 * 1000)
+  // Attach once; Node.js environment
+  try {
+    process.on("beforeExit", clear)
+    process.on("SIGINT", clear)
+    process.on("SIGTERM", clear)
+  } catch (_) {
+    // ignore if process is not available (edge runtimes)
+  }
+}
+
+setupCleanupInterval()
+setupShutdownHooks()
 
 export class RateLimiter {
   private config: RateLimitConfig
@@ -36,10 +76,10 @@ export class RateLimiter {
     remaining: number
     resetTime: number
   }> {
-    const key = this.config.keyGenerator 
+    const key = this.config.keyGenerator
       ? this.config.keyGenerator(request)
       : this.getDefaultKey(request)
-    
+
     const now = Date.now()
     const windowStart = now
     const windowEnd = now + this.config.windowMs
@@ -50,14 +90,14 @@ export class RateLimiter {
     if (!entry || entry.resetTime < now) {
       entry = {
         count: 1,
-        resetTime: windowEnd
+        resetTime: windowEnd,
       }
       rateLimitStore.set(key, entry)
-      
+
       return {
         allowed: true,
         remaining: this.config.maxRequests - 1,
-        resetTime: windowEnd
+        resetTime: windowEnd,
       }
     }
 
@@ -66,7 +106,7 @@ export class RateLimiter {
       return {
         allowed: false,
         remaining: 0,
-        resetTime: entry.resetTime
+        resetTime: entry.resetTime,
       }
     }
 
@@ -77,17 +117,17 @@ export class RateLimiter {
     return {
       allowed: true,
       remaining: this.config.maxRequests - entry.count,
-      resetTime: entry.resetTime
+      resetTime: entry.resetTime,
     }
   }
 
   private getDefaultKey(request: NextRequest): string {
     // Use IP address and user agent as default key
-    const ip = request.ip || 
-               request.headers.get('x-forwarded-for')?.split(',')[0] || 
-               request.headers.get('x-real-ip') || 
-               'unknown'
-    const userAgent = request.headers.get('user-agent') || 'unknown'
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown"
+    const userAgent = request.headers.get("user-agent") || "unknown"
     return `${ip}:${userAgent}`
   }
 }
@@ -98,18 +138,27 @@ export const clockOperationLimiter = new RateLimiter({
   maxRequests: 10, // Max 10 clock operations per minute
   keyGenerator: (request) => {
     // Use user ID from auth context if available, fallback to IP
-    const userId = request.headers.get('x-user-id')
+    const userId = request.headers.get("x-user-id")
     if (userId) {
       return `clock:${userId}`
     }
-    const ip = request.ip || 
-               request.headers.get('x-forwarded-for')?.split(',')[0] || 
-               'unknown'
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown"
     return `clock:ip:${ip}`
-  }
+  },
 })
 
 export const generalApiLimiter = new RateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   maxRequests: 100, // Max 100 requests per 15 minutes
+})
+
+export const adminApiLimiter = new RateLimiter({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  maxRequests: 30, // Max 30 requests per 5 minutes
+  keyGenerator: (request) => {
+    const userId = request.headers.get("x-user-id")
+    if (userId) return `admin:${userId}`
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown"
+    return `admin:ip:${ip}`
+  },
 })

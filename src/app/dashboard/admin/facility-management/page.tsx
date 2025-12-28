@@ -1,31 +1,25 @@
 "use client"
 
 import { useAuth } from "@clerk/nextjs"
-import { 
-  Building2, 
-  Edit, 
-  MapPin, 
-  MoreHorizontal, 
-  Plus, 
-  Search, 
+import {
+  Building2,
+  Edit,
+  MapPin,
+  MoreHorizontal,
+  Plus,
+  Search,
   Trash2,
   Hospital,
   Stethoscope,
   AlertCircle,
   CheckCircle,
-  Clock
+  Clock,
 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,6 +67,7 @@ interface ManagedFacility {
   isActive: boolean
   createdAt: string
   updatedAt: string
+  clinicalSiteId?: string
 }
 
 interface FacilityFormData {
@@ -84,15 +79,16 @@ interface FacilityFormData {
   osmId?: string
   priority: number
   isCustom: boolean
+  clinicalSiteId?: string
 }
 
 const FACILITY_TYPES = [
-  { value: 'hospital', label: 'Hospital', icon: Hospital },
-  { value: 'clinic', label: 'Clinic', icon: Stethoscope },
-  { value: 'emergency', label: 'Emergency Department', icon: AlertCircle },
-  { value: 'urgent_care', label: 'Urgent Care', icon: Clock },
-  { value: 'pharmacy', label: 'Pharmacy', icon: Building2 },
-  { value: 'laboratory', label: 'Laboratory', icon: CheckCircle },
+  { value: "hospital", label: "Hospital", icon: Hospital },
+  { value: "clinic", label: "Clinic", icon: Stethoscope },
+  { value: "emergency", label: "Emergency Department", icon: AlertCircle },
+  { value: "urgent_care", label: "Urgent Care", icon: Clock },
+  { value: "pharmacy", label: "Pharmacy", icon: Building2 },
+  { value: "laboratory", label: "Laboratory", icon: CheckCircle },
 ]
 
 export default function FacilityManagementPage() {
@@ -110,60 +106,89 @@ export default function FacilityManagementPage() {
     longitude: "",
     osmId: "",
     priority: 1,
-    isCustom: true
+    isCustom: true,
+    clinicalSiteId: undefined,
   })
+  const [clinicalSitesOptions, setClinicalSitesOptions] = useState<{ id: string; name: string }[]>(
+    []
+  )
+  const [sitesLoading, setSitesLoading] = useState(false)
 
   const fetchFacilities = useCallback(async () => {
     try {
-      const response = await fetch('/api/facility-management')
+      const response = await fetch("/api/facility-management")
       if (response.ok) {
         const data = await response.json()
-        setFacilities(data.facilities || [])
+        setFacilities(data?.data?.facilities ?? data?.facilities ?? [])
       } else {
-        toast.error('Failed to load facilities')
+        toast.error("Failed to load facilities")
       }
     } catch (error) {
-      console.error('Error fetching facilities:', error)
-      toast.error('Error loading facilities')
+      console.error("Error fetching facilities:", error)
+      toast.error("Error loading facilities")
     } finally {
       setLoading(false)
     }
   }, [])
 
+  const fetchClinicalSites = useCallback(async () => {
+    try {
+      setSitesLoading(true)
+      const resp = await fetch("/api/competencies?isActive=true&limit=200")
+      if (resp.ok) {
+        const payload = await resp.json()
+        const rawSites = payload?.data ?? payload?.sites ?? []
+        const options = rawSites.map((s: any) => ({ id: s.id, name: s.name }))
+        setClinicalSitesOptions(options)
+      } else {
+        toast.error("Failed to load clinical sites")
+      }
+    } catch (err) {
+      console.error("Error fetching clinical sites:", err)
+      toast.error("Error loading clinical sites")
+    } finally {
+      setSitesLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    fetchFacilities()
-  }, [fetchFacilities])
+    if (isDialogOpen) {
+      fetchClinicalSites()
+    }
+  }, [isDialogOpen, fetchClinicalSites])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     try {
-      const method = editingFacility ? 'PUT' : 'POST'
-      const url = editingFacility 
+      const method = editingFacility ? "PUT" : "POST"
+      const url = editingFacility
         ? `/api/facility-management?id=${editingFacility.id}`
-        : '/api/facility-management'
-      
+        : "/api/facility-management"
+
       const response = await fetch(url, {
         method,
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(formData),
       })
 
       if (response.ok) {
-        toast.success(editingFacility ? 'Facility updated successfully' : 'Facility created successfully')
+        toast.success(
+          editingFacility ? "Facility updated successfully" : "Facility created successfully"
+        )
         setIsDialogOpen(false)
         setEditingFacility(null)
         resetForm()
         fetchFacilities()
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to save facility')
+        toast.error(error.error || "Failed to save facility")
       }
     } catch (error) {
-      console.error('Error saving facility:', error)
-      toast.error('Error saving facility')
+      console.error("Error saving facility:", error)
+      toast.error("Error saving facility")
     }
   }
 
@@ -177,31 +202,32 @@ export default function FacilityManagementPage() {
       longitude: facility.longitude,
       osmId: facility.osmId || "",
       priority: facility.priority,
-      isCustom: facility.isCustom
+      isCustom: facility.isCustom,
+      clinicalSiteId: facility.clinicalSiteId,
     })
     setIsDialogOpen(true)
   }
 
   const handleDelete = async (facilityId: string) => {
-    if (!confirm('Are you sure you want to delete this facility?')) {
+    if (!confirm("Are you sure you want to delete this facility?")) {
       return
     }
 
     try {
       const response = await fetch(`/api/facility-management?id=${facilityId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       })
 
       if (response.ok) {
-        toast.success('Facility deleted successfully')
+        toast.success("Facility deleted successfully")
         fetchFacilities()
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to delete facility')
+        toast.error(error.error || "Failed to delete facility")
       }
     } catch (error) {
-      console.error('Error deleting facility:', error)
-      toast.error('Error deleting facility')
+      console.error("Error deleting facility:", error)
+      toast.error("Error deleting facility")
     }
   }
 
@@ -214,23 +240,25 @@ export default function FacilityManagementPage() {
       longitude: "",
       osmId: "",
       priority: 1,
-      isCustom: true
+      isCustom: true,
+      clinicalSiteId: undefined,
     })
   }
 
-  const filteredFacilities = facilities.filter(facility =>
-    facility.facilityName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    facility.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    facility.facilityType.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredFacilities = facilities.filter(
+    (facility) =>
+      facility.facilityName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      facility.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      facility.facilityType.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const getFacilityTypeIcon = (type: string) => {
-    const facilityType = FACILITY_TYPES.find(ft => ft.value === type)
+    const facilityType = FACILITY_TYPES.find((ft) => ft.value === type)
     return facilityType?.icon || Building2
   }
 
   const getFacilityTypeLabel = (type: string) => {
-    const facilityType = FACILITY_TYPES.find(ft => ft.value === type)
+    const facilityType = FACILITY_TYPES.find((ft) => ft.value === type)
     return facilityType?.label || type
   }
 
@@ -243,27 +271,29 @@ export default function FacilityManagementPage() {
             Manage medical facilities and their location data for enhanced clock-in accuracy
           </p>
         </div>
-        
+
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => { resetForm(); setEditingFacility(null) }}>
+            <Button
+              onClick={() => {
+                resetForm()
+                setEditingFacility(null)
+              }}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add Facility
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
-              <DialogTitle>
-                {editingFacility ? 'Edit Facility' : 'Add New Facility'}
-              </DialogTitle>
+              <DialogTitle>{editingFacility ? "Edit Facility" : "Add New Facility"}</DialogTitle>
               <DialogDescription>
-                {editingFacility 
-                  ? 'Update the facility information below.'
-                  : 'Add a new medical facility to the system for enhanced location tracking.'
-                }
+                {editingFacility
+                  ? "Update the facility information below."
+                  : "Add a new medical facility to the system for enhanced location tracking."}
               </DialogDescription>
             </DialogHeader>
-            
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -271,17 +301,21 @@ export default function FacilityManagementPage() {
                   <Input
                     id="facilityName"
                     value={formData.facilityName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, facilityName: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, facilityName: e.target.value }))
+                    }
                     placeholder="St. Mary's Hospital"
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="facilityType">Facility Type</Label>
                   <Select
                     value={formData.facilityType}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, facilityType: value }))}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, facilityType: value }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -305,7 +339,7 @@ export default function FacilityManagementPage() {
                 <Textarea
                   id="address"
                   value={formData.address}
-                  onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))}
                   placeholder="123 Medical Center Dr, City, State 12345"
                   required
                 />
@@ -319,12 +353,12 @@ export default function FacilityManagementPage() {
                     type="number"
                     step="any"
                     value={formData.latitude}
-                    onChange={(e) => setFormData(prev => ({ ...prev, latitude: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, latitude: e.target.value }))}
                     placeholder="40.7128"
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="longitude">Longitude</Label>
                   <Input
@@ -332,7 +366,9 @@ export default function FacilityManagementPage() {
                     type="number"
                     step="any"
                     value={formData.longitude}
-                    onChange={(e) => setFormData(prev => ({ ...prev, longitude: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, longitude: e.target.value }))
+                    }
                     placeholder="-74.0060"
                     required
                   />
@@ -341,27 +377,58 @@ export default function FacilityManagementPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
+                  <Label htmlFor="linkedClinicalSite">Linked Clinical Site (optional)</Label>
+                  <Select
+                    value={formData.clinicalSiteId ?? "none"}
+                    onValueChange={(val) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        clinicalSiteId: val === "none" ? undefined : val,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={sitesLoading ? "Loading sites..." : "Select a clinical site"}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={"none"}>None</SelectItem>
+                      {clinicalSitesOptions.map((site) => (
+                        <SelectItem key={site.id} value={site.id}>
+                          {site.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="osmId">OpenStreetMap ID (Optional)</Label>
                   <Input
                     id="osmId"
                     value={formData.osmId}
-                    onChange={(e) => setFormData(prev => ({ ...prev, osmId: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, osmId: e.target.value }))}
                     placeholder="way/123456789"
                   />
                 </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="priority">Priority (1-10)</Label>
-                  <Input
-                    id="priority"
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={formData.priority}
-                    onChange={(e) => setFormData(prev => ({ ...prev, priority: Number.parseInt(e.target.value) || 1 }))}
-                    required
-                  />
-                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority (1-10)</Label>
+                <Input
+                  id="priority"
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={formData.priority}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      priority: Number.parseInt(e.target.value) || 1,
+                    }))
+                  }
+                  required
+                />
               </div>
 
               <DialogFooter>
@@ -369,7 +436,7 @@ export default function FacilityManagementPage() {
                   Cancel
                 </Button>
                 <Button type="submit">
-                  {editingFacility ? 'Update Facility' : 'Add Facility'}
+                  {editingFacility ? "Update Facility" : "Add Facility"}
                 </Button>
               </DialogFooter>
             </form>
@@ -415,7 +482,9 @@ export default function FacilityManagementPage() {
                 {filteredFacilities.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      {searchTerm ? 'No facilities match your search.' : 'No facilities configured yet.'}
+                      {searchTerm
+                        ? "No facilities match your search."
+                        : "No facilities configured yet."}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -429,7 +498,9 @@ export default function FacilityManagementPage() {
                             <div>
                               <div className="font-medium">{facility.facilityName}</div>
                               {facility.isCustom && (
-                                <Badge variant="secondary" className="text-xs">Custom</Badge>
+                                <Badge variant="secondary" className="text-xs">
+                                  Custom
+                                </Badge>
                               )}
                             </div>
                           </div>
@@ -439,17 +510,26 @@ export default function FacilityManagementPage() {
                             {getFacilityTypeLabel(facility.facilityType)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="max-w-[200px] truncate">
-                          {facility.address}
-                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate">{facility.address}</TableCell>
                         <TableCell className="font-mono text-sm">
                           <div className="flex items-center space-x-1">
                             <MapPin className="h-3 w-3 text-muted-foreground" />
-                            <span>{Number.parseFloat(facility.latitude).toFixed(4)}, {Number.parseFloat(facility.longitude).toFixed(4)}</span>
+                            <span>
+                              {Number.parseFloat(facility.latitude).toFixed(4)},{" "}
+                              {Number.parseFloat(facility.longitude).toFixed(4)}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={facility.priority <= 3 ? "default" : facility.priority <= 7 ? "secondary" : "outline"}>
+                          <Badge
+                            variant={
+                              facility.priority <= 3
+                                ? "default"
+                                : facility.priority <= 7
+                                  ? "secondary"
+                                  : "outline"
+                            }
+                          >
                             {facility.priority}
                           </Badge>
                         </TableCell>
@@ -470,7 +550,7 @@ export default function FacilityManagementPage() {
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 onClick={() => handleDelete(facility.id)}
                                 className="text-red-600"
                               >

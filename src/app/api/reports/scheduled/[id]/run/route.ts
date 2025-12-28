@@ -1,6 +1,24 @@
 import { avg, count, eq } from "drizzle-orm"
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "../../../../../../database/db"
+import { db } from "@/database/connection-pool"
+import type { UserRole } from "@/types"
+
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
 import {
   assessments,
   competencies,
@@ -8,8 +26,7 @@ import {
   users,
 } from "../../../../../../database/schema"
 import { getCurrentUser } from "../../../../../../lib/auth-clerk"
-import { cacheIntegrationService } from '@/lib/cache-integration'
-
+import { cacheIntegrationService } from "@/lib/cache-integration"
 
 function checkRunPermissions(userRole: string): boolean {
   const allowedRoles = ["SCHOOL_ADMIN", "CLINICAL_SUPERVISOR"]
@@ -214,7 +231,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     // Check if user can run this report
-    if (user.role !== "SCHOOL_ADMIN" && report.createdBy !== user.id) {
+    if (
+      user.role !== ("SCHOOL_ADMIN" as UserRole as UserRole as UserRole) &&
+      report.createdBy !== user.id
+    ) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
@@ -256,14 +276,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     })
   } catch (error) {
     console.error("Error running scheduled report:", error)
-    
+
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateReportCache()
+      await cacheIntegrationService.invalidateByTags(["reports"])
     } catch (cacheError) {
-      console.warn('Cache invalidation error in reports/scheduled/[id]/run/route.ts:', cacheError)
+      console.warn("Cache invalidation error in reports/scheduled/[id]/run/route.ts:", cacheError)
     }
-    
+
     return NextResponse.json({ error: "Failed to run scheduled report" }, { status: 500 })
   }
 }

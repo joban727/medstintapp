@@ -4,7 +4,7 @@
  * and reduce network overhead for optimal performance and cost reduction
  */
 
-import { sql } from "drizzle-orm"
+import { sql, type SQL } from "drizzle-orm"
 import type { PgTable } from "drizzle-orm/pg-core"
 import { db } from "../database/connection-pool"
 
@@ -35,8 +35,8 @@ const DEFAULT_BATCH_CONFIG: BatchConfig = {
   retryDelay: 1000, // 1 second delay between retries
   dynamicSizing: true, // Enable adaptive batch sizing
   minBatchSize: 10, // Minimum batch size
-  maxBatchSize: 1000, // Maximum batch size
-  adaptiveThreshold: 500, // Processing time threshold in ms
+  maxBatchSize: 500, // Maximum batch size
+  adaptiveThreshold: 200, // Processing time threshold in ms
 }
 
 // Batch operation result
@@ -88,6 +88,14 @@ export class BatchProcessor<T = unknown> {
 
     const batchPromises = batches.map(async (batch, index) => {
       await semaphore.acquire()
+
+      // Check memory usage before starting batch
+      const memUsage = process.memoryUsage().heapUsed / 1024 / 1024
+      if (memUsage > 200) {
+        // 200MB soft limit
+        console.warn(`⚠️ High memory usage (${memUsage.toFixed(0)}MB), pausing briefly...`)
+        await this.delay(1000)
+      }
 
       const batchStartTime = Date.now()
       try {
@@ -160,7 +168,7 @@ export class BatchProcessor<T = unknown> {
     retryAttempts: number,
     retryDelay: number
   ): Promise<R[]> {
-    let lastError: Error
+    let lastError: Error | undefined
 
     for (let attempt = 1; attempt <= retryAttempts; attempt++) {
       try {
@@ -175,7 +183,10 @@ export class BatchProcessor<T = unknown> {
       }
     }
 
-    throw lastError!
+    if (lastError) {
+      throw lastError
+    }
+    throw new Error("Batch processing failed without an error instance")
   }
 
   /**
@@ -409,7 +420,7 @@ export class DatabaseBatchOperations {
             const result = await tx
               .update(table)
               .set(set as Record<string, unknown>)
-              .where(where as unknown)
+              .where(where as SQL)
               .returning()
             results.push(result[0])
           }
@@ -473,7 +484,7 @@ export class DatabaseBatchOperations {
           for (const condition of batch) {
             const result = await tx
               .delete(table)
-              .where(condition as unknown)
+              .where(condition as SQL)
               .returning()
             results.push(result[0])
           }
@@ -489,39 +500,30 @@ export class DatabaseBatchOperations {
    * Optimized bulk insert using COPY-like operations
    */
   async bulkInsert<T extends Record<string, unknown>>(
-    tableName: string,
+    table: PgTable,
     records: T[],
     options: Partial<BatchConfig> = {}
   ): Promise<BatchResult> {
     const config = { ...DEFAULT_BATCH_CONFIG, ...options }
 
+    // Calculate safe batch size based on column count to avoid Postgres parameter limit (65535)
+    // We use a safe buffer of 60000 parameters
+    const columnCount = Object.keys(records[0] || {}).length
+    const maxItemsPerBatch = columnCount > 0 ? Math.floor(60000 / columnCount) : 500
+    const safeBatchSize = Math.min(config.batchSize, maxItemsPerBatch, 500)
+
+    // Use Drizzle's parameterized multi-row insert to prevent SQL injection
     return this.processor.processBatches(
       records,
       async (batch) => {
-        // Use raw SQL for maximum performance
-        const columns = Object.keys(batch[0] as Record<string, unknown>)
-        const values = batch.map((record) =>
-          columns.map((col) => (record as Record<string, unknown>)[col])
-        )
+        const inserted = await db
+          .insert(table)
+          .values(batch as unknown as Record<string, unknown>[])
+          .returning()
 
-        const placeholders = values
-          .map(
-            (row) =>
-              `(${row.map((val) => (typeof val === "string" ? `'${val.replace(/'/g, "''")}'` : val)).join(", ")})`
-          )
-          .join(", ")
-
-        const query = `
-          INSERT INTO ${tableName} (${columns.join(", ")})
-          VALUES ${placeholders}
-          RETURNING *
-        `
-
-        const result = await db.execute(sql.raw(query))
-
-        return result.rows
+        return inserted
       },
-      { ...config, batchSize: Math.min(config.batchSize, 50) } // Smaller batches for raw SQL
+      { ...config, batchSize: safeBatchSize }
     )
   }
 }

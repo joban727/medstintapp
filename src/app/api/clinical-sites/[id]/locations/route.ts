@@ -1,8 +1,15 @@
-import { type NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
-import { db } from '@/database/db'
-import { clinicalSiteLocations, clinicalSites } from '@/database/schema'
-import { eq, and } from 'drizzle-orm'
+import { type NextRequest, NextResponse } from "next/server"
+import { auth } from "@clerk/nextjs/server"
+import { db } from "@/database/connection-pool"
+import { clinicalSiteLocations, clinicalSites } from "@/database/schema"
+import { eq, and } from "drizzle-orm"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+  withErrorHandling,
+} from "@/lib/api-response"
 
 interface CreateLocationRequest {
   name: string
@@ -20,18 +27,12 @@ interface UpdateLocationRequest extends Partial<CreateLocationRequest> {
 }
 
 // GET /api/clinical-sites/[id]/locations - Get all locations for a clinical site
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
+export const GET = withErrorHandling(
+  async (request: NextRequest, { params }: { params: { id: string } }) => {
     const { userId } = await auth()
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     const clinicalSiteId = params.id
@@ -44,10 +45,7 @@ export async function GET(
       .limit(1)
 
     if (siteAccess.length === 0) {
-      return NextResponse.json(
-        { error: 'Clinical site not found' },
-        { status: 404 }
-      )
+      return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
     }
 
     // Get all locations for the clinical site
@@ -71,43 +69,30 @@ export async function GET(
       .where(eq(clinicalSiteLocations.clinicalSiteId, clinicalSiteId))
       .orderBy(clinicalSiteLocations.isPrimary, clinicalSiteLocations.name)
 
-    return NextResponse.json({
+    return createSuccessResponse({
       clinicalSiteId,
-      locations: locations.map(location => ({
+      locations: locations.map((location) => ({
         ...location,
         latitude: Number.parseFloat(location.latitude),
         longitude: Number.parseFloat(location.longitude),
       })),
       total: locations.length,
     })
-
-  } catch (error) {
-    console.error('Error fetching clinical site locations:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
   }
-}
+)
 
 // POST /api/clinical-sites/[id]/locations - Create a new location for a clinical site
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
+export const POST = withErrorHandling(
+  async (request: NextRequest, { params }: { params: { id: string } }) => {
     const { userId } = await auth()
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     const clinicalSiteId = params.id
     const body = await request.json()
-    
+
     const {
       name,
       latitude,
@@ -120,26 +105,28 @@ export async function POST(
     }: CreateLocationRequest = body
 
     // Validate required fields
-    if (!name || typeof latitude !== 'number' || typeof longitude !== 'number' || typeof radius !== 'number') {
-      return NextResponse.json(
-        { error: 'Missing required fields: name, latitude, longitude, radius' },
-        { status: 400 }
+    if (
+      !name ||
+      typeof latitude !== "number" ||
+      typeof longitude !== "number" ||
+      typeof radius !== "number"
+    ) {
+      return createErrorResponse(
+        "Missing required fields: name, latitude, longitude, radius",
+        HTTP_STATUS.BAD_REQUEST
       )
     }
 
     // Validate coordinate ranges
     if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-      return NextResponse.json(
-        { error: 'Invalid coordinates' },
-        { status: 400 }
-      )
+      return createErrorResponse("Invalid coordinates", HTTP_STATUS.BAD_REQUEST)
     }
 
     // Validate radius
     if (radius <= 0 || radius > 10000) {
-      return NextResponse.json(
-        { error: 'Radius must be between 1 and 10000 meters' },
-        { status: 400 }
+      return createErrorResponse(
+        "Radius must be between 1 and 10000 meters",
+        HTTP_STATUS.BAD_REQUEST
       )
     }
 
@@ -151,10 +138,7 @@ export async function POST(
       .limit(1)
 
     if (siteExists.length === 0) {
-      return NextResponse.json(
-        { error: 'Clinical site not found' },
-        { status: 404 }
-      )
+      return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
     }
 
     // If this is set as primary, unset other primary locations
@@ -191,42 +175,32 @@ export async function POST(
 
     const location = newLocation[0]
 
-    return NextResponse.json({
-      success: true,
-      location: {
-        ...location,
-        latitude: Number.parseFloat(location.latitude),
-        longitude: Number.parseFloat(location.longitude),
+    return createSuccessResponse(
+      {
+        location: {
+          ...location,
+          latitude: Number.parseFloat(location.latitude),
+          longitude: Number.parseFloat(location.longitude),
+        },
       },
-    }, { status: 201 })
-
-  } catch (error) {
-    console.error('Error creating clinical site location:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      "Location created successfully",
+      HTTP_STATUS.CREATED
     )
   }
-}
+)
 
 // PUT /api/clinical-sites/[id]/locations - Update a location
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
+export const PUT = withErrorHandling(
+  async (request: NextRequest, { params }: { params: { id: string } }) => {
     const { userId } = await auth()
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     const clinicalSiteId = params.id
     const body = await request.json()
-    
+
     const {
       locationId,
       name,
@@ -241,32 +215,23 @@ export async function PUT(
     } = body
 
     if (!locationId) {
-      return NextResponse.json(
-        { error: 'Location ID is required' },
-        { status: 400 }
-      )
+      return createErrorResponse("Location ID is required", HTTP_STATUS.BAD_REQUEST)
     }
 
     // Validate coordinates if provided
     if (latitude !== undefined && (latitude < -90 || latitude > 90)) {
-      return NextResponse.json(
-        { error: 'Invalid latitude' },
-        { status: 400 }
-      )
+      return createErrorResponse("Invalid latitude", HTTP_STATUS.BAD_REQUEST)
     }
 
     if (longitude !== undefined && (longitude < -180 || longitude > 180)) {
-      return NextResponse.json(
-        { error: 'Invalid longitude' },
-        { status: 400 }
-      )
+      return createErrorResponse("Invalid longitude", HTTP_STATUS.BAD_REQUEST)
     }
 
     // Validate radius if provided
     if (radius !== undefined && (radius <= 0 || radius > 10000)) {
-      return NextResponse.json(
-        { error: 'Radius must be between 1 and 10000 meters' },
-        { status: 400 }
+      return createErrorResponse(
+        "Radius must be between 1 and 10000 meters",
+        HTTP_STATUS.BAD_REQUEST
       )
     }
 
@@ -283,10 +248,7 @@ export async function PUT(
       .limit(1)
 
     if (existingLocation.length === 0) {
-      return NextResponse.json(
-        { error: 'Location not found' },
-        { status: 404 }
-      )
+      return createErrorResponse("Location not found", HTTP_STATUS.NOT_FOUND)
     }
 
     // If setting as primary, unset other primary locations
@@ -304,7 +266,7 @@ export async function PUT(
 
     // Prepare update data
     const updateData: any = { updatedAt: new Date() }
-    
+
     if (name !== undefined) updateData.name = name
     if (latitude !== undefined) updateData.latitude = latitude.toString()
     if (longitude !== undefined) updateData.longitude = longitude.toString()
@@ -324,48 +286,34 @@ export async function PUT(
 
     const location = updatedLocation[0]
 
-    return NextResponse.json({
-      success: true,
-      location: {
-        ...location,
-        latitude: Number.parseFloat(location.latitude),
-        longitude: Number.parseFloat(location.longitude),
+    return createSuccessResponse(
+      {
+        location: {
+          ...location,
+          latitude: Number.parseFloat(location.latitude),
+          longitude: Number.parseFloat(location.longitude),
+        },
       },
-    })
-
-  } catch (error) {
-    console.error('Error updating clinical site location:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      "Location updated successfully"
     )
   }
-}
+)
 
 // DELETE /api/clinical-sites/[id]/locations - Delete a location
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
+export const DELETE = withErrorHandling(
+  async (request: NextRequest, { params }: { params: { id: string } }) => {
     const { userId } = await auth()
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     const clinicalSiteId = params.id
     const { searchParams } = new URL(request.url)
-    const locationId = searchParams.get('locationId')
+    const locationId = searchParams.get("locationId")
 
     if (!locationId) {
-      return NextResponse.json(
-        { error: 'Location ID is required' },
-        { status: 400 }
-      )
+      return createErrorResponse("Location ID is required", HTTP_STATUS.BAD_REQUEST)
     }
 
     // Verify location exists and belongs to the clinical site
@@ -381,27 +329,12 @@ export async function DELETE(
       .limit(1)
 
     if (existingLocation.length === 0) {
-      return NextResponse.json(
-        { error: 'Location not found' },
-        { status: 404 }
-      )
+      return createErrorResponse("Location not found", HTTP_STATUS.NOT_FOUND)
     }
 
     // Delete the location
-    await db
-      .delete(clinicalSiteLocations)
-      .where(eq(clinicalSiteLocations.id, locationId))
+    await db.delete(clinicalSiteLocations).where(eq(clinicalSiteLocations.id, locationId))
 
-    return NextResponse.json({
-      success: true,
-      message: 'Location deleted successfully',
-    })
-
-  } catch (error) {
-    console.error('Error deleting clinical site location:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return createSuccessResponse({ success: true }, "Location deleted successfully")
   }
-}
+)

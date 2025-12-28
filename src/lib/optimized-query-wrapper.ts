@@ -5,7 +5,7 @@
  */
 
 import { and, desc, eq, inArray, sql } from "drizzle-orm"
-import { db } from "@/database/connection-pool"
+import { db, dbUtils } from "@/database/connection-pool"
 import {
   competencies,
   competencyAssignments,
@@ -14,6 +14,12 @@ import {
   rotations,
   timeRecords,
   users,
+  programs,
+  schools,
+  mvUserProgressSummary,
+  mvSchoolStatistics,
+  mvDailyActivitySummary,
+  mvCompetencyAnalytics,
 } from "@/database/schema"
 import { queryPerformanceUtils } from "@/lib/query-performance-logger"
 
@@ -69,7 +75,8 @@ export class OptimizedQueryWrapper {
       endpoint?: string
     } = {}
   ) {
-    const cacheKey = `competency_assignments_${JSON.stringify({ userIds, options })}`
+    const sortedUserIds = [...userIds].sort()
+    const cacheKey = `competency_assignments_${JSON.stringify({ userIds: sortedUserIds, options })}`
 
     if (this.config.enableCaching) {
       const cached = this.getFromCache(cacheKey)
@@ -191,39 +198,53 @@ export class OptimizedQueryWrapper {
       endpoint?: string
     } = {}
   ) {
-    const cacheKey = `user_progress_${JSON.stringify({ userIds, options })}`
+    const sortedUserIds = [...userIds].sort()
+    const cacheKey = `user_progress_${JSON.stringify({ userIds: sortedUserIds, options })}`
 
     if (this.config.enableCaching) {
       const cached = this.getFromCache(cacheKey)
       if (cached) return cached
     }
 
-    return queryPerformanceUtils.executeQuery(
+    // Basic guard against empty inputs
+    const safeUserIds = (userIds || []).filter((id) => typeof id === "string" && id.length > 0)
+    if (safeUserIds.length === 0) {
+      return []
+    }
+
+    return dbUtils.executeQuery(
       async () => {
         // Use materialized view for better performance
-        const progressData = await db.execute(sql`
-          SELECT 
-            ups.user_id,
-            ups.total_assignments,
-            ups.completed_assignments,
-            ups.pending_assignments,
-            ups.overdue_assignments,
-            ups.completion_rate,
-            ups.average_score,
-            ups.last_activity,
-            u.first_name,
-            u.last_name,
-            u.email,
-            p.name as program_name,
-            r.name as rotation_name
-          FROM mv_user_progress_summary ups
-          INNER JOIN users u ON ups.user_id = u.id
-          LEFT JOIN programs p ON ups.program_id = p.id
-          LEFT JOIN rotations r ON ups.rotation_id = r.id
-          WHERE ups.user_id = ANY(${userIds})
-            ${options.programId ? sql`AND ups.program_id = ${options.programId}` : sql``}
-            ${options.rotationId ? sql`AND ups.rotation_id = ${options.rotationId}` : sql``}
-        `)
+        const progressData = await db
+          .select({
+            userId: mvUserProgressSummary.userId,
+            totalAssignments: mvUserProgressSummary.totalAssignments,
+            completedAssignments: mvUserProgressSummary.completedAssignments,
+            pendingAssignments: mvUserProgressSummary.pendingAssignments,
+            overdueAssignments: mvUserProgressSummary.overdueAssignments,
+            completionRate: mvUserProgressSummary.completionRate,
+            averageScore: mvUserProgressSummary.averageScore,
+            lastUpdated: mvUserProgressSummary.lastUpdated,
+            userName: users.name,
+            userEmail: users.email,
+            programName: programs.name,
+            rotationName: rotations.specialty,
+          })
+          .from(mvUserProgressSummary)
+          .innerJoin(users, eq(mvUserProgressSummary.userId, users.id))
+          .leftJoin(programs, eq(mvUserProgressSummary.programId, programs.id))
+          .leftJoin(rotations, eq(mvUserProgressSummary.rotationId, rotations.id))
+          .where(
+            and(
+              inArray(mvUserProgressSummary.userId, safeUserIds),
+              options.programId
+                ? eq(mvUserProgressSummary.programId, options.programId)
+                : undefined,
+              options.rotationId
+                ? eq(mvUserProgressSummary.rotationId, options.rotationId)
+                : undefined
+            )
+          )
 
         // Batch load time records if requested
         let timeRecordsMap = new Map()
@@ -237,27 +258,33 @@ export class OptimizedQueryWrapper {
           )
         }
 
-        const result = (progressData.rows as Record<string, unknown>[]).map((row) => ({
-          userId: row.user_id,
-          user: {
-            id: row.user_id,
-            firstName: row.first_name,
-            lastName: row.last_name,
-            email: row.email,
-          },
-          program: row.program_name ? { name: row.program_name } : null,
-          rotation: row.rotation_name ? { name: row.rotation_name } : null,
-          progress: {
-            totalAssignments: Number.parseInt(String(row.total_assignments)) || 0,
-            completedAssignments: Number.parseInt(String(row.completed_assignments)) || 0,
-            pendingAssignments: Number.parseInt(String(row.pending_assignments)) || 0,
-            overdueAssignments: Number.parseInt(String(row.overdue_assignments)) || 0,
-            completionRate: Number.parseFloat(String(row.completion_rate)) || 0,
-            averageScore: Number.parseFloat(String(row.average_score)) || 0,
-            lastActivity: row.last_activity,
-          },
-          timeRecords: timeRecordsMap.get(row.user_id) || [],
-        }))
+        const result = progressData.map((row) => {
+          const nameParts = (row.userName || "").split(" ")
+          const firstName = nameParts[0] || ""
+          const lastName = nameParts.slice(1).join(" ") || ""
+
+          return {
+            userId: row.userId,
+            user: {
+              id: row.userId,
+              firstName: firstName,
+              lastName: lastName,
+              email: row.userEmail,
+            },
+            program: row.programName ? { name: row.programName } : null,
+            rotation: row.rotationName ? { name: row.rotationName } : null,
+            progress: {
+              totalAssignments: row.totalAssignments || 0,
+              completedAssignments: row.completedAssignments || 0,
+              pendingAssignments: row.pendingAssignments || 0,
+              overdueAssignments: row.overdueAssignments || 0,
+              completionRate: Number(row.completionRate) || 0,
+              averageScore: Number(row.averageScore) || 0,
+              lastUpdated: row.lastUpdated,
+            },
+            timeRecords: timeRecordsMap.get(row.userId) || [],
+          }
+        })
 
         if (this.config.enableCaching) {
           this.setCache(cacheKey, result)
@@ -314,6 +341,10 @@ export class OptimizedQueryWrapper {
       endpoint?: string
     } = {}
   ) {
+    // Sort competency IDs for consistent cache keys
+    if (options.competencyIds) {
+      options.competencyIds.sort()
+    }
     const cacheKey = `competency_analytics_${JSON.stringify(options)}`
 
     if (this.config.enableCaching) {
@@ -321,44 +352,72 @@ export class OptimizedQueryWrapper {
       if (cached) return cached
     }
 
-    return queryPerformanceUtils.executeQuery(
+    // Normalize and validate inputs
+    const safeCompetencyIds = (options.competencyIds || []).filter(
+      (id) => typeof id === "string" && id.length > 0
+    )
+    let safeDateRange = options.dateRange
+    if (safeDateRange && safeDateRange.start && safeDateRange.end) {
+      const start = new Date(safeDateRange.start)
+      const end = new Date(safeDateRange.end)
+      if (start > end) {
+        safeDateRange = { start: end, end: start }
+      }
+    }
+
+    return dbUtils.executeQuery(
       async () => {
         // Use materialized view for complex analytics
-        const analyticsData = await db.execute(sql`
-          SELECT 
-            ca.competency_id,
-            ca.competency_name,
-            ca.total_assignments,
-            ca.completed_assignments,
-            ca.average_score,
-            ca.pass_rate,
-            ca.completion_rate,
-            ca.school_id,
-            ca.program_id,
-            s.name as school_name,
-            p.name as program_name
-          FROM mv_competency_analytics ca
-          LEFT JOIN schools s ON ca.school_id = s.id
-          LEFT JOIN programs p ON ca.program_id = p.id
-          WHERE 1=1
-            ${options.schoolId ? sql`AND ca.school_id = ${options.schoolId}` : sql``}
-            ${options.programId ? sql`AND ca.program_id = ${options.programId}` : sql``}
-            ${options.competencyIds?.length ? sql`AND ca.competency_id = ANY(${options.competencyIds})` : sql``}
-            ${options.dateRange ? sql`AND ca.last_updated >= ${options.dateRange.start} AND ca.last_updated <= ${options.dateRange.end}` : sql``}
-          ORDER BY ca.completion_rate DESC, ca.average_score DESC
-        `)
+        const analyticsData = await db
+          .select({
+            competencyId: mvCompetencyAnalytics.competencyId,
+            competencyName: mvCompetencyAnalytics.competencyName,
+            totalAssignments: mvCompetencyAnalytics.totalAssignments,
+            completedAssignments: mvCompetencyAnalytics.completedAssignments,
+            averageScore: mvCompetencyAnalytics.averageScore,
+            passRate: mvCompetencyAnalytics.passRate,
+            completionRate: mvCompetencyAnalytics.completionRate,
+            schoolId: mvCompetencyAnalytics.schoolId,
+            programId: mvCompetencyAnalytics.programId,
+            schoolName: schools.name,
+            programName: programs.name,
+          })
+          .from(mvCompetencyAnalytics)
+          .leftJoin(schools, eq(mvCompetencyAnalytics.schoolId, schools.id))
+          .leftJoin(programs, eq(mvCompetencyAnalytics.programId, programs.id))
+          .where(
+            and(
+              options.schoolId ? eq(mvCompetencyAnalytics.schoolId, options.schoolId) : undefined,
+              options.programId
+                ? eq(mvCompetencyAnalytics.programId, options.programId)
+                : undefined,
+              safeCompetencyIds.length
+                ? inArray(mvCompetencyAnalytics.competencyId, safeCompetencyIds)
+                : undefined,
+              safeDateRange
+                ? and(
+                    sql`${mvCompetencyAnalytics.lastUpdated} >= ${safeDateRange.start}`,
+                    sql`${mvCompetencyAnalytics.lastUpdated} <= ${safeDateRange.end}`
+                  )
+                : undefined
+            )
+          )
+          .orderBy(
+            desc(mvCompetencyAnalytics.completionRate),
+            desc(mvCompetencyAnalytics.averageScore)
+          )
 
-        const result = (analyticsData.rows as Record<string, unknown>[]).map((row) => ({
-          competencyId: row.competency_id,
-          competencyName: row.competency_name,
-          school: row.school_name ? { id: row.school_id, name: row.school_name } : null,
-          program: row.program_name ? { id: row.program_id, name: row.program_name } : null,
+        const result = analyticsData.map((row) => ({
+          competencyId: row.competencyId,
+          competencyName: row.competencyName,
+          school: row.schoolName ? { id: row.schoolId, name: row.schoolName } : null,
+          program: row.programName ? { id: row.programId, name: row.programName } : null,
           metrics: {
-            totalAssignments: Number.parseInt(String(row.total_assignments)) || 0,
-            completedAssignments: Number.parseInt(String(row.completed_assignments)) || 0,
-            averageScore: Number.parseFloat(String(row.average_score)) || 0,
-            passRate: Number.parseFloat(String(row.pass_rate)) || 0,
-            completionRate: Number.parseFloat(String(row.completion_rate)) || 0,
+            totalAssignments: row.totalAssignments || 0,
+            completedAssignments: row.completedAssignments || 0,
+            averageScore: Number(row.averageScore) || 0,
+            passRate: Number(row.passRate) || 0,
+            completionRate: Number(row.completionRate) || 0,
           },
         }))
 
@@ -378,6 +437,10 @@ export class OptimizedQueryWrapper {
   /**
    * Batch process multiple operations with concurrency control
    */
+  /**
+   * Batch process multiple operations with concurrency control
+   * Uses the robust BatchProcessor for adaptive sizing and memory management
+   */
   async batchProcess<T, R>(
     items: T[],
     processor: (batch: T[]) => Promise<R[]>,
@@ -387,37 +450,20 @@ export class OptimizedQueryWrapper {
       onProgress?: (completed: number, total: number) => void
     } = {}
   ): Promise<R[]> {
-    const batchSize = options.batchSize || this.config.batchSize
-    const maxConcurrency = options.maxConcurrency || this.config.maxConcurrency
+    const { BatchProcessor } = await import("./batch-processor")
+    const batchProcessor = new BatchProcessor<T>({
+      batchSize: options.batchSize || this.config.batchSize,
+      maxConcurrency: options.maxConcurrency || this.config.maxConcurrency,
+      dynamicSizing: true,
+    })
 
-    const batches: T[][] = []
-    for (let i = 0; i < items.length; i += batchSize) {
-      batches.push(items.slice(i, i + batchSize))
+    const result = await batchProcessor.processBatches(items, processor)
+
+    if (options.onProgress) {
+      options.onProgress(result.processedCount, items.length)
     }
 
-    const results: R[] = []
-    let completed = 0
-
-    // Process batches with concurrency control
-    for (let i = 0; i < batches.length; i += maxConcurrency) {
-      const concurrentBatches = batches.slice(i, i + maxConcurrency)
-
-      const batchPromises = concurrentBatches.map(async (batch) => {
-        const batchResults = await processor(batch)
-        completed += batch.length
-
-        if (options.onProgress) {
-          options.onProgress(completed, items.length)
-        }
-
-        return batchResults
-      })
-
-      const batchResults = await Promise.all(batchPromises)
-      results.push(...batchResults.flat())
-    }
-
-    return results
+    return result.results || []
   }
 
   /**
@@ -448,14 +494,14 @@ export class OptimizedQueryWrapper {
     setInterval(() => {
       const now = Date.now()
       const keysToDelete: string[] = []
-      
+
       this.cache.forEach((entry, key) => {
         if (now - entry.timestamp > entry.ttl) {
           keysToDelete.push(key)
         }
       })
-      
-      keysToDelete.forEach(key => this.cache.delete(key))
+
+      keysToDelete.forEach((key) => this.cache.delete(key))
     }, 60000) // Cleanup every minute
   }
 
@@ -536,15 +582,20 @@ export const queryOptimizationUtils = {
     ])
 
     // Combine results
-    const progressMap = new Map((progress as Record<string, unknown>[]).map((p: Record<string, unknown>) => [p.userId, p]))
+    const progressMap = new Map(
+      (progress as Record<string, unknown>[]).map((p: Record<string, unknown>) => [p.userId, p])
+    )
     const assignmentsMap = new Map(
-      (assignments as Record<string, unknown>[]).reduce((acc: Map<string, Record<string, unknown>[]>, a: Record<string, unknown>) => {
-        const assignment = a.assignment as { userId: string }
-        const userId = assignment.userId
-        if (!acc.has(userId)) acc.set(userId, [])
-        acc.get(userId)?.push(a)
-        return acc
-      }, new Map())
+      (assignments as Record<string, unknown>[]).reduce(
+        (acc: Map<string, Record<string, unknown>[]>, a: Record<string, unknown>) => {
+          const assignment = a.assignment as { userId: string }
+          const userId = assignment.userId
+          if (!acc.has(userId)) acc.set(userId, [])
+          acc.get(userId)?.push(a)
+          return acc
+        },
+        new Map()
+      )
     )
 
     return usersData.map((user: any) => ({
@@ -565,24 +616,28 @@ export const queryOptimizationUtils = {
       // School statistics
       queryPerformanceUtils.executeQuery(
         () =>
-          db.execute(sql`
-          SELECT * FROM mv_school_statistics
-          ${options.schoolId ? sql`WHERE school_id = ${options.schoolId}` : sql``}
-          ORDER BY total_students DESC
-          LIMIT 10
-        `),
+          db
+            .select()
+            .from(mvSchoolStatistics)
+            .where(options.schoolId ? eq(mvSchoolStatistics.schoolId, options.schoolId) : undefined)
+            .orderBy(desc(mvSchoolStatistics.totalStudents))
+            .limit(10),
         { name: "get_school_statistics", endpoint: options.endpoint }
       ),
 
       // Daily activity
       queryPerformanceUtils.executeQuery(
         () =>
-          db.execute(sql`
-          SELECT * FROM mv_daily_activity_summary
-          WHERE activity_date >= CURRENT_DATE - INTERVAL '30 days'
-          ${options.schoolId ? sql`AND school_id = ${options.schoolId}` : sql``}
-          ORDER BY activity_date DESC
-        `),
+          db
+            .select()
+            .from(mvDailyActivitySummary)
+            .where(
+              and(
+                sql`${mvDailyActivitySummary.activityDate} >= CURRENT_DATE - INTERVAL '30 days'`,
+                options.schoolId ? eq(mvDailyActivitySummary.schoolId, options.schoolId) : undefined
+              )
+            )
+            .orderBy(desc(mvDailyActivitySummary.activityDate)),
         { name: "get_daily_activity", endpoint: options.endpoint }
       ),
 

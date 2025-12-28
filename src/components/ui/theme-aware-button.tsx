@@ -8,7 +8,7 @@ import { useEnhancedTheme } from "@/contexts/theme-context"
 
 // Enhanced button variants with theme awareness
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
@@ -23,7 +23,8 @@ const buttonVariants = cva(
         warning: "bg-warning text-white hover:bg-warning-dark shadow-sm",
         error: "bg-error text-white hover:bg-error-dark shadow-sm",
         info: "bg-info text-white hover:bg-info-dark shadow-sm",
-        gradient: "bg-gradient-to-r from-medical-primary to-medical-teal text-white hover:from-medical-primary-hover hover:to-medical-teal-dark shadow-md",
+        gradient:
+          "bg-gradient-to-r from-medical-primary to-medical-teal text-white hover:from-medical-primary-hover hover:to-medical-teal-dark shadow-md",
       },
       size: {
         default: "h-10 px-4 py-2",
@@ -38,7 +39,7 @@ const buttonVariants = cva(
         compact: "h-8 px-3 text-xs",
         comfortable: "",
         spacious: "h-12 px-6 text-base",
-      }
+      },
     },
     defaultVariants: {
       variant: "default",
@@ -57,37 +58,40 @@ export interface ThemeAwareButtonProps
 }
 
 const ThemeAwareButton = forwardRef<HTMLButtonElement, ThemeAwareButtonProps>(
-  ({ 
-    className, 
-    variant, 
-    size, 
-    density,
-    asChild = false, 
-    loading = false,
-    loadingText = "Loading...",
-    children,
-    disabled,
-    ...props 
-  }, ref) => {
+  (
+    {
+      className,
+      variant,
+      size,
+      density,
+      asChild = false,
+      loading = false,
+      loadingText = "Loading...",
+      children,
+      disabled,
+      ...props
+    },
+    ref
+  ) => {
     const { config } = useEnhancedTheme()
     const Comp = asChild ? Slot : "button"
-    
+
     // Use density from theme config if not explicitly provided
     const effectiveDensity = density || config.density
-    
+
     // Adjust animations based on theme config
     const animationClasses = cn(
-      config.animations === 'none' && "transition-none",
-      config.animations === 'reduced' && "transition-colors duration-150",
-      config.animations === 'full' && "transition-all duration-200 hover:scale-105 active:scale-95"
+      config.animations === "none" && "transition-none",
+      config.animations === "reduced" && "transition-colors duration-150",
+      config.animations === "full" && "transition-all duration-200 hover:scale-105 active:scale-95"
     )
-    
+
     // High contrast adjustments
     const contrastClasses = cn(
-      config.contrast === 'high' && [
+      config.contrast === "high" && [
         "ring-2 ring-offset-2",
-        variant === 'outline' && "border-2",
-        "focus-visible:ring-4"
+        variant === "outline" && "border-2",
+        "focus-visible:ring-4",
       ]
     )
 
@@ -116,6 +120,7 @@ const ThemeAwareButton = forwardRef<HTMLButtonElement, ThemeAwareButtonProps>(
     )
   }
 )
+
 ThemeAwareButton.displayName = "ThemeAwareButton"
 
 export { ThemeAwareButton, buttonVariants }

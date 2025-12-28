@@ -188,7 +188,7 @@ export class PerformanceCache {
     this.updateStats("delete", invalidated)
     this.updateMemoryUsage()
 
-    logger.info(`Invalidated ${invalidated} cache entries with tag: ${tag}`)
+    logger.info({}, `Invalidated ${invalidated} cache entries with tag: ${tag}`)
     return invalidated
   }
 
@@ -208,7 +208,7 @@ export class PerformanceCache {
     this.updateStats("delete", invalidated)
     this.updateMemoryUsage()
 
-    logger.info(`Invalidated ${invalidated} cache entries matching pattern: ${pattern}`)
+    logger.info({}, `Invalidated ${invalidated} cache entries matching pattern: ${pattern}`)
     return invalidated
   }
 
@@ -259,7 +259,7 @@ export class PerformanceCache {
       this.set(key, value, options)
       return value
     } catch (error) {
-      logger.error("Cache fallback function failed", { key, error })
+      logger.error({ key, error: String(error) }, "Cache fallback function failed")
       throw error
     }
   }
@@ -330,7 +330,7 @@ export class PerformanceCache {
     if (cleaned > 0) {
       this.updateStats("delete", cleaned)
       this.updateMemoryUsage()
-      logger.debug(`Cleaned up ${cleaned} expired cache entries`)
+      logger.debug({}, `Cleaned up ${cleaned} expired cache entries`)
     }
 
     return cleaned
@@ -371,14 +371,14 @@ export class PerformanceCache {
     if (oldestKey) {
       this.cache.delete(oldestKey)
       this.updateStats("eviction")
-      logger.debug(`Evicted LRU cache entry: ${oldestKey}`)
+      logger.debug({}, `Evicted LRU cache entry: ${oldestKey}`)
     }
   }
 
-  private serializeData<T>(data: T): string | T {
+  private serializeData<T>(data: T): T {
     if (this.config.enableCompression) {
       // In a real implementation, you might use compression here
-      return JSON.stringify(data)
+      return JSON.stringify(data) as unknown as T
     }
     return data
   }
@@ -448,10 +448,10 @@ export class PerformanceCache {
     this.cleanupTimer = setInterval(() => {
       this.cleanup()
     }, this.config.cleanupInterval)
-    
+
     // Only use unref in Node.js environment to prevent process hanging
-    if (typeof process !== 'undefined' && process.versions?.node && this.cleanupTimer) {
-      (this.cleanupTimer as any).unref?.()
+    if (typeof process !== "undefined" && process.versions?.node && this.cleanupTimer) {
+      ; (this.cleanupTimer as any).unref?.()
     }
   }
 }
@@ -495,11 +495,17 @@ export class UserDataCache {
   }
 
   invalidateUser(userId: string): void {
-    const patterns = [new RegExp(`user:.*:${userId}`), new RegExp(`session:.*:${userId}`)]
+    const escapedId = this.escapeRegExp(userId)
+    // eslint-disable-next-line security/detect-non-literal-regexp
+    const patterns = [new RegExp(`user:.*:${escapedId}`), new RegExp(`session:.*:${escapedId}`)]
 
     patterns.forEach((pattern) => {
       this.cache.invalidateByPattern(pattern)
     })
+  }
+
+  private escapeRegExp(string: string): string {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   }
 
   private formatKey(pattern: CacheKeyPattern, params: Record<string, string>): string {

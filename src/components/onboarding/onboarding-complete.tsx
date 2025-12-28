@@ -25,11 +25,11 @@ const testimonials: TestimonialProps[] = []
 
 export const TestimonialSection = () => {
   const sectionId = useId()
+
   return (
     <section id={`testimonials-${sectionId}`} className="container mx-auto px-4 py-24 sm:py-32">
       <div className="mb-8 text-center">
         <h2 className="mb-2 text-center text-lg text-primary tracking-wider">Testimonials</h2>
-
         <h2 className="mb-4 text-center font-bold text-3xl md:text-4xl">
           Hear What Our 1000+ Clients Say
         </h2>
@@ -57,14 +57,12 @@ export const TestimonialSection = () => {
                     <p className="text-sm leading-relaxed">{`"${review.comment}"`}</p>
                   </div>
                 </CardContent>
-
                 <CardHeader>
-                  <div className="flex flex-row items-center gap-4">
+                  <div className="flex items-center gap-4">
                     <Avatar>
                       <AvatarImage src={review.image} alt="radix" />
                       <AvatarFallback>SV</AvatarFallback>
                     </Avatar>
-
                     <div className="flex flex-col">
                       <CardTitle className="text-lg">{review.name}</CardTitle>
                       <CardDescription>{review.userName}</CardDescription>

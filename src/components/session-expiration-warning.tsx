@@ -85,7 +85,7 @@ export function SessionExpirationWarning({
           <Button
             onClick={handleRecoverSession}
             disabled={isRecovering || isLoading}
-            className="bg-red-600 hover:bg-red-700"
+            className="bg-red-600 hover:bg-red-700 transition-colors duration-200"
           >
             {isRecovering ? (
               <>
@@ -116,7 +116,6 @@ export function SessionExpirationWarning({
             <span className="font-semibold">{formatTime(timeUntilExpiry)}</span>. Extend your
             session to continue without losing progress.
           </p>
-
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span>Time remaining</span>
@@ -124,11 +123,10 @@ export function SessionExpirationWarning({
             </div>
             <Progress value={getProgressValue()} className="h-2" />
           </div>
-
           <Button
             onClick={handleExtendSession}
             disabled={isExtending || isLoading}
-            className="bg-amber-600 hover:bg-amber-700"
+            className="bg-amber-600 hover:bg-amber-700 transition-colors duration-200"
           >
             {isExtending ? (
               <>

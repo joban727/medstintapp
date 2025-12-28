@@ -21,6 +21,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../ui/textarea"
 import { toast } from "sonner"
 
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 interface RubricLevel {
   id: string
   name: string
@@ -96,22 +100,28 @@ export function CompetencyEvaluationForm({
   const [submitting, setSubmitting] = useState(false)
 
   // Calculate overall score based on criterion scores and weights
-  const calculateOverallScore = useCallback((scores: Record<string, number>) => {
-    if (!assignment?.competency.rubric || Object.keys(scores).length === 0) return 0
+  const calculateOverallScore = useCallback(
+    (scores: Record<string, number>) => {
+      if (!assignment?.competency.rubric || Object.keys(scores).length === 0) return 0
 
-    const totalWeight = assignment.competency.rubric.reduce((sum, criterion) => sum + criterion.weight, 0)
-    const weightedScore = assignment.competency.rubric.reduce((sum, criterion) => {
-      const score = scores[criterion.id] || 0
-      return sum + (score * criterion.weight)
-    }, 0)
+      const totalWeight = assignment.competency.rubric.reduce(
+        (sum, criterion) => sum + criterion.weight,
+        0
+      )
+      const weightedScore = assignment.competency.rubric.reduce((sum, criterion) => {
+        const score = scores[criterion.id] || 0
+        return sum + score * criterion.weight
+      }, 0)
 
-    return totalWeight > 0 ? Math.round((weightedScore / totalWeight) * 100) / 100 : 0
-  }, [assignment])
+      return totalWeight > 0 ? Math.round((weightedScore / totalWeight) * 100) / 100 : 0
+    },
+    [assignment]
+  )
 
   // Update overall score when criterion scores change
   useEffect(() => {
     const newOverallScore = calculateOverallScore(formData.criterionScores)
-    setFormData(prev => ({ ...prev, overallScore: newOverallScore }))
+    setFormData((prev) => ({ ...prev, overallScore: newOverallScore }))
   }, [formData.criterionScores, calculateOverallScore])
 
   // Reset form when assignment changes
@@ -128,7 +138,7 @@ export function CompetencyEvaluationForm({
   }, [assignment])
 
   const handleCriterionScoreChange = (criterionId: string, score: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       criterionScores: {
         ...prev.criterionScores,
@@ -143,11 +153,11 @@ export function CompetencyEvaluationForm({
     // Validate that all criteria have been scored
     const requiredCriteria = assignment.competency.rubric || []
     const missingScores = requiredCriteria.filter(
-      criterion => !(criterion.id in formData.criterionScores)
+      (criterion) => !(criterion.id in formData.criterionScores)
     )
 
     if (missingScores.length > 0) {
-      toast.error(`Please score all criteria: ${missingScores.map(c => c.name).join(", ")}`)
+      toast.error(`Please score all criteria: ${missingScores.map((c) => c.name).join(", ")}`)
       return
     }
 
@@ -158,7 +168,6 @@ export function CompetencyEvaluationForm({
 
     try {
       setSubmitting(true)
-
       const response = await fetch("/api/competency-evaluations", {
         method: "POST",
         headers: {
@@ -177,7 +186,10 @@ export function CompetencyEvaluationForm({
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch((err) => {
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
+        })
         throw new Error(errorData.error || "Failed to submit evaluation")
       }
 
@@ -185,8 +197,9 @@ export function CompetencyEvaluationForm({
       onSuccess()
       onClose()
     } catch (error) {
-      console.error("Failed to submit evaluation:", error)
-      toast.error(error instanceof Error ? error.message : "Failed to submit evaluation")
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+      console.error("[CompetencyEvaluationForm] Operation failed:", error)
+      toast.error(errorMessage)
     } finally {
       setSubmitting(false)
     }
@@ -202,15 +215,17 @@ export function CompetencyEvaluationForm({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-4xl max-h-[90vh] overflow-y-auto"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Evaluate Competency</DialogTitle>
           <DialogDescription>
             Assess student performance using the competency rubric
           </DialogDescription>
         </DialogHeader>
-
-        <div className="space-y-6">
+        <div className="gap-6">
           {/* Assignment Overview */}
           <Card>
             <CardHeader>
@@ -220,7 +235,7 @@ export function CompetencyEvaluationForm({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="gap-4">
                 <div className="flex items-center gap-4">
                   <Badge variant="secondary">{competency.category}</Badge>
                   <Badge variant={assignment.priority === "high" ? "destructive" : "outline"}>
@@ -232,13 +247,15 @@ export function CompetencyEvaluationForm({
                 </div>
                 <p className="text-sm text-muted-foreground">{competency.description}</p>
                 {submission && (
-                  <div className="space-y-2">
+                  <div className="gap-2">
                     <h4 className="font-medium">Student Submission</h4>
-                    <p className="text-sm bg-muted p-3 rounded">{submission.evidence}</p>
+                    <p className="text-sm bg-muted p-3 rounded-md">{submission.evidence}</p>
                     {submission.selfAssessment && (
                       <div>
                         <h5 className="font-medium text-sm">Self-Assessment</h5>
-                        <p className="text-sm bg-muted p-3 rounded">{submission.selfAssessment}</p>
+                        <p className="text-sm bg-muted p-3 rounded-md">
+                          {submission.selfAssessment}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -250,7 +267,7 @@ export function CompetencyEvaluationForm({
           {/* Evaluation Progress */}
           <Card>
             <CardContent className="pt-6">
-              <div className="space-y-2">
+              <div className="gap-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Evaluation Progress</span>
                   <span className="text-sm text-muted-foreground">
@@ -264,7 +281,7 @@ export function CompetencyEvaluationForm({
 
           {/* Rubric Evaluation */}
           {rubric.length > 0 ? (
-            <div className="space-y-4">
+            <div className="gap-4">
               <h3 className="font-semibold">Competency Rubric</h3>
               {rubric.map((criterion) => (
                 <Card key={criterion.id}>
@@ -277,13 +294,13 @@ export function CompetencyEvaluationForm({
                   <CardContent>
                     <RadioGroup
                       value={formData.criterionScores[criterion.id]?.toString() || ""}
-                      onValueChange={(value) => 
+                      onValueChange={(value) =>
                         handleCriterionScoreChange(criterion.id, Number.parseInt(value))
                       }
                     >
                       <div className="grid gap-3">
                         {criterion.levels.map((level) => (
-                          <div key={level.id} className="flex items-start space-x-2">
+                          <div key={level.id} className="flex items-start gap-2">
                             <RadioGroupItem value={level.points.toString()} id={level.id} />
                             <div className="flex-1">
                               <Label htmlFor={level.id} className="font-medium">
@@ -304,7 +321,7 @@ export function CompetencyEvaluationForm({
           ) : (
             <Card>
               <CardContent className="pt-6">
-                <div className="space-y-4">
+                <div className="gap-4">
                   <Label htmlFor="overallScore">Overall Score (0-{competency.maxScore})</Label>
                   <Input
                     id="overallScore"
@@ -312,10 +329,12 @@ export function CompetencyEvaluationForm({
                     min="0"
                     max={competency.maxScore}
                     value={formData.overallScore}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      overallScore: Number.parseFloat(e.target.value) || 0 
-                    }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        overallScore: Number.parseFloat(e.target.value) || 0,
+                      }))
+                    }
                   />
                 </div>
               </CardContent>
@@ -329,7 +348,7 @@ export function CompetencyEvaluationForm({
                 <div className="flex items-center justify-between">
                   <span className="font-medium">Calculated Overall Score:</span>
                   <div className="flex items-center gap-2">
-                    <Star className="h-5 w-5 text-yellow-500" />
+                    <Star className="h-5 w-5 text-warning" />
                     <span className="text-lg font-bold">{formData.overallScore}</span>
                     <span className="text-muted-foreground">/ {competency.maxScore}</span>
                   </div>
@@ -339,12 +358,12 @@ export function CompetencyEvaluationForm({
           )}
 
           {/* Evaluation Status */}
-          <div className="space-y-2">
+          <div className="gap-2">
             <Label>Evaluation Status</Label>
             <Select
               value={formData.status}
               onValueChange={(value: "approved" | "needs_revision" | "incomplete") =>
-                setFormData(prev => ({ ...prev, status: value }))
+                setFormData((prev) => ({ ...prev, status: value }))
               }
             >
               <SelectTrigger>
@@ -359,7 +378,7 @@ export function CompetencyEvaluationForm({
                 </SelectItem>
                 <SelectItem value="needs_revision">
                   <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-yellow-500" />
+                    <AlertCircle className="h-4 w-4 text-warning" />
                     Needs Revision
                   </div>
                 </SelectItem>
@@ -374,26 +393,28 @@ export function CompetencyEvaluationForm({
           </div>
 
           {/* Feedback */}
-          <div className="space-y-2">
+          <div className="gap-2">
             <Label htmlFor="feedback">Feedback *</Label>
             <Textarea
               id="feedback"
               placeholder="Provide detailed feedback on the student's performance..."
               value={formData.feedback}
-              onChange={(e) => setFormData(prev => ({ ...prev, feedback: e.target.value }))}
+              onChange={(e) => setFormData((prev) => ({ ...prev, feedback: e.target.value }))}
               rows={4}
               required
             />
           </div>
 
           {/* Recommendations */}
-          <div className="space-y-2">
+          <div className="gap-2">
             <Label htmlFor="recommendations">Recommendations for Improvement</Label>
             <Textarea
               id="recommendations"
               placeholder="Suggest specific areas for improvement or next steps..."
               value={formData.recommendations}
-              onChange={(e) => setFormData(prev => ({ ...prev, recommendations: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, recommendations: e.target.value }))
+              }
               rows={3}
             />
           </div>

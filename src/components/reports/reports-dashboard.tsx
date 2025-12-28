@@ -24,6 +24,7 @@ import { DatePickerWithRange } from "../ui/date-range-picker"
 import { Label } from "../ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs"
+import { safeFetchApi } from "@/lib/safe-fetch"
 
 interface ReportsDashboardProps {
   userId: string
@@ -67,26 +68,36 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
 
   const fetchFilterOptions = async () => {
     try {
-      // TODO: Replace with actual API calls
       const [studentsResponse, competenciesResponse, rotationsResponse] = await Promise.all([
-        fetch("/api/students"),
-        fetch("/api/competencies"),
-        fetch("/api/rotations"),
+        safeFetchApi("/api/students"),
+        safeFetchApi("/api/competencies"),
+        safeFetchApi("/api/rotations"),
       ])
 
-      if (studentsResponse.ok) {
-        const students = await studentsResponse.json()
+      if (studentsResponse.success) {
+        // Handle standardized API response: { success: true, data: { students: [] } }
+        const students = studentsResponse.data?.students || studentsResponse.data || []
         setAvailableStudents(students)
       }
 
-      if (competenciesResponse.ok) {
-        const competencies = await competenciesResponse.json()
-        setAvailableCompetencies(competencies)
+      if (competenciesResponse.success) {
+        // Handle standardized API response
+        const competencies =
+          competenciesResponse.data?.competencies ||
+          competenciesResponse.data ||
+          competenciesResponse ||
+          []
+        setAvailableCompetencies(Array.isArray(competencies) ? competencies : [])
       }
 
-      if (rotationsResponse.ok) {
-        const rotations = await rotationsResponse.json()
-        setAvailableRotations(rotations)
+      if (rotationsResponse.success) {
+        // Handle standardized API response: { success: true, data: { items: [], pagination: {} } }
+        const rotations =
+          rotationsResponse.data?.items ||
+          rotationsResponse.data?.data ||
+          rotationsResponse.data ||
+          []
+        setAvailableRotations(Array.isArray(rotations) ? rotations : [])
       }
     } catch (_error) {
       // Error fetching filter options - fallback to empty arrays
@@ -99,7 +110,7 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
   // Fetch available filter options
   useEffect(() => {
     fetchFilterOptions()
-  }, [fetchFilterOptions])
+  }, [])
 
   const generateReport = async () => {
     setLoading(true)
@@ -128,17 +139,19 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
         params.append("groupBy", filters.groupBy)
       }
 
-      const response = await fetch(`/api/reports?${params.toString()}`)
-      if (!response.ok) {
-        throw new Error("Failed to generate report")
-      }
+      const response = await safeFetchApi(`/api/reports?${params.toString()}`)
 
-      const data = await response.json()
-      setReportData(data)
-      toast.success("Report generated successfully")
-    } catch (_error) {
+      if (response.success) {
+        // Handle standardized API response
+        const data = response.data
+        setReportData(data)
+        toast.success("Report generated successfully")
+      } else {
+        throw new Error(response.error || "Failed to generate report")
+      }
+    } catch (error) {
       // Error generating report
-      toast.error("Failed to generate report")
+      toast.error(error instanceof Error ? error.message : "Failed to generate report")
     } finally {
       setLoading(false)
     }
@@ -162,9 +175,17 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
         params.append("studentIds", filters.studentIds.join(","))
       }
 
+      // For blob downloads, we still need raw fetch or a specialized safeFetchBlob
       const response = await fetch(`/api/reports/export?${params.toString()}`)
       if (!response.ok) {
-        throw new Error("Failed to export report")
+        const errorData = await response
+          .json()
+          .catch((err) => {
+            console.error("Failed to parse JSON response:", err)
+            throw new Error("Invalid response format")
+          })
+          .catch(() => ({}))
+        throw new Error(errorData.error || errorData.message || "Failed to export report")
       }
 
       const blob = await response.blob()
@@ -178,30 +199,36 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
       window.URL.revokeObjectURL(url)
 
       toast.success(`Report exported as ${format.toUpperCase()}`)
-    } catch (_error) {
+    } catch (error) {
       // Error exporting report
-      toast.error("Failed to export report")
+      toast.error(error instanceof Error ? error.message : "Failed to export report")
     }
   }
 
   const renderProgressChart = () => {
     if (!reportData || reportData.type !== "progress_report") return null
 
-    const chartData = reportData.data.reduce((acc: Array<{competencyTitle: string; averageCompletion: number; count: number}>, item: {competencyTitle?: string; completionPercentage?: number}) => {
-      const existing = acc.find((d) => d.competencyTitle === item.competencyTitle)
-      if (existing) {
-        existing.averageCompletion =
-          (existing.averageCompletion + (item.completionPercentage || 0)) / 2
-        existing.count += 1
-      } else {
-        acc.push({
-          competencyTitle: item.competencyTitle || "Unknown",
-          averageCompletion: item.completionPercentage || 0,
-          count: 1,
-        })
-      }
-      return acc
-    }, [])
+    const chartData = reportData.data.reduce(
+      (
+        acc: Array<{ competencyTitle: string; averageCompletion: number; count: number }>,
+        item: { competencyTitle?: string; completionPercentage?: number }
+      ) => {
+        const existing = acc.find((d) => d.competencyTitle === item.competencyTitle)
+        if (existing) {
+          existing.averageCompletion =
+            (existing.averageCompletion + (item.completionPercentage || 0)) / 2
+          existing.count += 1
+        } else {
+          acc.push({
+            competencyTitle: item.competencyTitle || "Unknown",
+            averageCompletion: item.completionPercentage || 0,
+            count: 1,
+          })
+        }
+        return acc
+      },
+      []
+    )
 
     return (
       <ResponsiveContainer width="100%" height={300}>
@@ -256,7 +283,9 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
 
     const typeData = reportData.summary.analyticsTypes.map((type: string, index: number) => ({
       type,
-      count: reportData.data.filter((item: {analyticsType: string}) => item.analyticsType === type).length,
+      count: reportData.data.filter(
+        (item: { analyticsType: string }) => item.analyticsType === type
+      ).length,
       color: COLORS[index % COLORS.length],
     }))
 
@@ -315,9 +344,11 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
                 <div className="space-y-2">
                   <Label>Date Range</Label>
                   <DatePickerWithRange
-                    from={filters.startDate}
-                    to={filters.endDate}
-                    onSelect={(range) => {
+                    date={{
+                      from: filters.startDate,
+                      to: filters.endDate,
+                    }}
+                    onDateChange={(range) => {
                       setFilters({
                         ...filters,
                         startDate: range?.from,
@@ -353,7 +384,7 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
                   <Label>Students (Optional)</Label>
                   <div className="flex flex-wrap gap-2">
                     {availableStudents.map((student) => (
-                      <div key={student.id} className="flex items-center space-x-2">
+                      <div key={student.id} className="flex items-center gap-2">
                         <Checkbox
                           id={`student-${student.id}`}
                           checked={filters.studentIds.includes(student.id)}
@@ -380,7 +411,7 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
                 </div>
               )}
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
                 <Checkbox
                   id="include-details"
                   checked={filters.includeDetails}
@@ -400,7 +431,6 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
                   )}
                   Generate Report
                 </Button>
-
                 {reportData && (
                   <>
                     <Button variant="outline" onClick={() => exportReport("pdf")}>
@@ -424,22 +454,22 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="font-medium text-sm">Total Records</CardTitle>
+                    <CardTitle className="text-sm font-medium">Total Records</CardTitle>
                     <FileText className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="font-bold text-2xl">{reportData.totalRecords}</div>
+                    <div className="text-2xl font-bold">{reportData.totalRecords}</div>
                   </CardContent>
                 </Card>
 
                 {reportData.summary.studentsCount !== undefined && (
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="font-medium text-sm">Students</CardTitle>
+                      <CardTitle className="text-sm font-medium">Students</CardTitle>
                       <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <div className="font-bold text-2xl">{reportData.summary.studentsCount}</div>
+                      <div className="text-2xl font-bold">{reportData.summary.studentsCount}</div>
                     </CardContent>
                   </Card>
                 )}
@@ -447,11 +477,11 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
                 {reportData.summary.averageCompletion !== undefined && (
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="font-medium text-sm">Avg Completion</CardTitle>
+                      <CardTitle className="text-sm font-medium">Avg Completion</CardTitle>
                       <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <div className="font-bold text-2xl">
+                      <div className="text-2xl font-bold">
                         {reportData.summary.averageCompletion.toFixed(1)}%
                       </div>
                     </CardContent>
@@ -461,11 +491,11 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
                 {reportData.summary.averageScore !== undefined && (
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="font-medium text-sm">Avg Score</CardTitle>
+                      <CardTitle className="text-sm font-medium">Avg Score</CardTitle>
                       <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <div className="font-bold text-2xl">
+                      <div className="text-2xl font-bold">
                         {reportData.summary.averageScore.toFixed(1)}%
                       </div>
                     </CardContent>
@@ -510,9 +540,19 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
                       </thead>
                       <tbody>
                         {reportData.data.slice(0, 50).map((row, index) => (
-                          <tr key={`row-${JSON.stringify(row).slice(0, 30).replace(/[^a-zA-Z0-9]/g, '')}-${Object.keys(row).length}`} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                          <tr
+                            key={`row-${JSON.stringify(row)
+                              .slice(0, 30)
+                              .replace(/[^a-zA-Z0-9]/g, "")}-${Object.keys(row).length}`}
+                            className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                          >
                             {Object.values(row).map((value: any, cellIndex) => (
-                              <td key={`cell-${JSON.stringify(value).slice(0, 10).replace(/[^a-zA-Z0-9]/g, '')}-${cellIndex}`} className="border border-gray-300 px-4 py-2">
+                              <td
+                                key={`cell-${JSON.stringify(value)
+                                  .slice(0, 10)
+                                  .replace(/[^a-zA-Z0-9]/g, "")}-${cellIndex}`}
+                                className="border border-gray-300 px-4 py-2"
+                              >
                                 {value instanceof Date
                                   ? value.toLocaleDateString()
                                   : typeof value === "object"
@@ -525,7 +565,7 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
                       </tbody>
                     </table>
                     {reportData.data.length > 50 && (
-                      <p className="mt-2 text-muted-foreground text-sm">
+                      <p className="mt-2 text-sm text-muted-foreground">
                         Showing first 50 records of {reportData.totalRecords} total records. Export
                         to see all data.
                       </p>

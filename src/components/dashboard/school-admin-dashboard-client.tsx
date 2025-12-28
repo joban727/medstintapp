@@ -1,23 +1,16 @@
 "use client"
 
-import {
-  AlertCircle,
-  BarChart3,
-  BookOpen,
-  Calendar,
-  CheckCircle,
-  Clock,
-  FileText,
-  GraduationCap,
-  TrendingUp,
-  Users,
-} from "lucide-react"
-import { Suspense } from "react"
-import { WelcomeBanner } from "@/components/dashboard/welcome-banner"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
+import { useState, useCallback, useEffect } from "react"
+import { BarChart3, BookOpen, Calendar, Clock, GraduationCap, Users, Activity } from "lucide-react"
+import { motion } from "framer-motion"
+import { DashboardHero } from "./school-admin/dashboard-hero"
+import { MetricsOverview } from "./school-admin/metrics-overview"
+import { QuickNav } from "./school-admin/quick-nav"
+import { RecentActivityFeed } from "./school-admin/recent-activity-feed"
+import { FloatingActionCenter } from "./school-admin/floating-action-center"
+import { EnrollmentTrendChart, SiteCapacityChart, CompetencyRadarChart } from "./school-admin/analytics-charts"
+import { DashboardSkeleton } from "@/components/ui/dashboard-skeleton"
+import { toast } from "sonner"
 import type { UserRole } from "@/types"
 
 interface User {
@@ -30,9 +23,12 @@ interface User {
 }
 
 interface PendingTask {
+  id: string
   title: string
   description: string
   count: number
+  priority: "high" | "medium" | "low"
+  type: "approval" | "evaluation" | "setup" | "review" | "system"
 }
 
 interface RecentActivity {
@@ -46,12 +42,21 @@ interface SchoolStats {
   totalPrograms?: number
   pendingEvaluations?: number
   avgCompetencyProgress?: number
+  activeRotations?: number
+  totalSites?: number
+  placementRate?: number
+  schoolName?: string
 }
 
 interface DashboardData {
   pendingTasks: PendingTask[]
   recentActivities: RecentActivity[]
   schoolStats: SchoolStats
+  analytics: {
+    enrollmentTrend: { month: string; students: number }[]
+    siteCapacity: { name: string; capacity: number; used: number }[]
+    competencyOverview: { subject: string; A: number; fullMark: number }[]
+  }
 }
 
 interface SchoolAdminDashboardClientProps {
@@ -59,258 +64,262 @@ interface SchoolAdminDashboardClientProps {
   dashboardData: DashboardData
 }
 
+import { DashboardBackground } from "./dashboard-background"
+
+// ... (imports remain the same, ensuring DashboardBackground is imported)
+
+const quickActions = [
+  {
+    title: "Students",
+    description: "View and manage student enrollment",
+    icon: Users,
+    href: "/dashboard/school-admin/students",
+    color: "text-medical-primary",
+    gradient: "bg-gradient-to-br from-medical-primary to-medical-cyan",
+  },
+  {
+    title: "Programs",
+    description: "Configure curricula and requirements",
+    icon: BookOpen,
+    href: "/dashboard/school-admin/programs",
+    color: "text-healthcare-green",
+    gradient: "bg-gradient-to-br from-healthcare-green to-medical-teal",
+  },
+  {
+    title: "Sites",
+    description: "Manage rotation sites and partnerships",
+    icon: Calendar,
+    href: "/dashboard/school-admin/sites",
+    color: "text-medical-primary",
+    gradient: "bg-gradient-to-br from-medical-primary to-medical-cyan",
+  },
+  {
+    title: "Reports",
+    description: "View performance metrics and reports",
+    icon: BarChart3,
+    href: "/dashboard/school-admin/reports",
+    color: "text-info",
+    gradient: "bg-gradient-to-br from-info to-medical-primary",
+  },
+  {
+    title: "Faculty",
+    description: "Manage preceptors and supervisors",
+    icon: GraduationCap,
+    href: "/dashboard/school-admin/faculty-staff",
+    color: "text-medical-cyan",
+    gradient: "bg-gradient-to-br from-medical-cyan to-info",
+  },
+  {
+    title: "Timecards",
+    description: "Monitor student timecards and corrections",
+    icon: Clock,
+    href: "/dashboard/school-admin/time-records",
+    color: "text-destructive",
+    gradient: "bg-gradient-to-br from-destructive to-warning",
+  },
+]
+
+// Action item type from API
+interface ActionItem {
+  id: string
+  title: string
+  description: string
+  type: 'approval' | 'time-approval' | 'evaluation' | 'system'
+  priority: 'high' | 'medium' | 'low'
+  date: string
+  entityId: string
+  entityType: string
+}
+
 export function SchoolAdminDashboardClient({
   user,
   dashboardData,
 }: SchoolAdminDashboardClientProps) {
-  const { pendingTasks, recentActivities, schoolStats } = dashboardData
+  const { schoolStats, recentActivities, analytics } = dashboardData
+  const [actionItems, setActionItems] = useState<ActionItem[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const quickActions = [
-    {
-      title: "Manage Students",
-      description: "View and manage student enrollment",
-      icon: Users,
-      href: "/dashboard/school-admin/students",
-      color: "bg-blue-500",
-    },
-    {
-      title: "Program Management",
-      description: "Configure curricula and requirements",
-      icon: BookOpen,
-      href: "/dashboard/school-admin/programs",
-      color: "bg-green-500",
-    },
-    {
-      title: "Clinical Sites",
-      description: "Manage rotation sites and partnerships",
-      icon: Calendar,
-      href: "/dashboard/school-admin/sites",
-      color: "bg-purple-500",
-    },
-    {
-      title: "Analytics & Reports",
-      description: "View performance metrics and reports",
-      icon: BarChart3,
-      href: "/dashboard/school-admin/reports",
-      color: "bg-indigo-500",
-    },
-    {
-      title: "Faculty & Staff",
-      description: "Manage preceptors and supervisors",
-      icon: GraduationCap,
-      href: "/dashboard/school-admin/faculty-staff",
-      color: "bg-teal-500",
-    },
-    {
-      title: "Timecard Monitoring",
-      description: "Monitor student timecards and corrections",
-      icon: Clock,
-      href: "/dashboard/school-admin/time-records",
-      color: "bg-red-500",
-    },
-  ]
+  // Fetch action items from API
+  useEffect(() => {
+    async function fetchActionItems() {
+      try {
+        const response = await fetch('/api/school-admin/action-items')
+        const data = await response.json()
+        if (data.success) {
+          setActionItems(data.data || [])
+        }
+      } catch (error) {
+        console.error('Failed to fetch action items:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchActionItems()
+  }, [])
+
+  // Transform data for components
+  const transformedStats = {
+    totalStudents: schoolStats.totalStudents,
+    activePrograms: schoolStats.totalPrograms,
+    totalSites: schoolStats.totalSites,
+    placementRate: schoolStats.placementRate
+  }
+
+  // Action handlers with real API calls
+  const handleApprove = useCallback(async (taskId: string, entityId: string, entityType: string) => {
+    try {
+      let response: Response
+
+      if (entityType === 'user') {
+        // Approve user account
+        response = await fetch('/api/school-admin/approvals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetUserId: entityId, action: 'APPROVE' })
+        })
+      } else if (entityType === 'timeRecord') {
+        // Approve time record
+        response = await fetch('/api/time-records', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: entityId, status: 'APPROVED' })
+        })
+      } else {
+        toast.info("This action type requires manual review")
+        return
+      }
+
+      const data = await response.json()
+      if (data.success) {
+        toast.success("Approved successfully")
+        setActionItems(prev => prev.filter(item => item.id !== taskId))
+      } else {
+        toast.error(data.error || "Failed to approve")
+      }
+    } catch (error) {
+      console.error('Approve error:', error)
+      toast.error("An error occurred")
+    }
+  }, [])
+
+  const handleDismiss = useCallback(async (taskId: string, entityId: string, entityType: string) => {
+    try {
+      let response: Response
+
+      if (entityType === 'user') {
+        // Reject user account
+        response = await fetch('/api/school-admin/approvals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetUserId: entityId, action: 'REJECT' })
+        })
+      } else if (entityType === 'timeRecord') {
+        // Reject time record
+        response = await fetch('/api/time-records', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: entityId, status: 'REJECTED' })
+        })
+      } else {
+        // Just remove from UI for system notifications
+        setActionItems(prev => prev.filter(item => item.id !== taskId))
+        toast.info("Dismissed")
+        return
+      }
+
+      const data = await response.json()
+      if (data.success) {
+        toast.success("Action completed")
+        setActionItems(prev => prev.filter(item => item.id !== taskId))
+      } else {
+        toast.error(data.error || "Failed to process")
+      }
+    } catch (error) {
+      console.error('Dismiss error:', error)
+      toast.error("An error occurred")
+    }
+  }, [])
+
+  const handleView = useCallback((taskId: string, entityId: string, entityType: string) => {
+    // Navigate based on entity type
+    if (entityType === 'evaluation') {
+      window.location.href = `/dashboard/school-admin/students?highlight=${entityId}`
+    } else if (entityType === 'timeRecord') {
+      window.location.href = `/dashboard/school-admin/time-records?highlight=${entityId}`
+    } else {
+      window.location.href = `/dashboard/school-admin/approvals?highlight=${entityId}`
+    }
+  }, [])
 
   return (
-    <div className="container mx-auto space-y-6 px-4 py-6">
-      {/* School Name Display */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-bold text-3xl tracking-tight">School Administration</h1>
-          <p className="mt-1 text-muted-foreground">Manage your institution and student programs</p>
+    <div className="relative min-h-screen w-full bg-background text-foreground">
+      {/* Subtle Background Accents */}
+      <DashboardBackground />
+
+      {/* Content */}
+      <div className="relative z-10 max-w-[1600px] mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6">
+        {/* Hero - Compact */}
+        <div data-tutorial="hero-section">
+          <DashboardHero
+            userName={user.name || "Admin"}
+            schoolName={schoolStats.schoolName || "Medical Institute"}
+          />
         </div>
+
+        {/* Metrics - Single Row */}
+        <div data-tutorial="metrics-section">
+          <MetricsOverview stats={transformedStats} />
+        </div>
+
+        {/* Analytics Charts */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="grid grid-cols-1 lg:grid-cols-6 gap-6"
+        >
+          <EnrollmentTrendChart data={analytics.enrollmentTrend} />
+          <SiteCapacityChart data={analytics.siteCapacity} />
+          <CompetencyRadarChart data={analytics.competencyOverview} />
+        </motion.section>
+
+        {/* Quick Access - Compact Grid */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          data-tutorial="quick-nav-section"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <div className="h-5 w-1 rounded-full bg-medical-primary" />
+            <h2 className="text-sm font-semibold text-foreground/80 uppercase tracking-wider">Quick Access</h2>
+          </div>
+          <QuickNav actions={quickActions} />
+        </motion.section>
+
+        {/* Recent Activity - Compact Inline */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          data-tutorial="activity-section"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="h-4 w-4 text-info" />
+            <h2 className="text-sm font-semibold text-foreground/80 uppercase tracking-wider">Recent Activity</h2>
+          </div>
+          <RecentActivityFeed activities={recentActivities} />
+        </motion.section>
       </div>
 
-      {/* Welcome Banner */}
-      <Suspense fallback={<div className="h-32 animate-pulse rounded-lg bg-gray-100" />}>
-        <WelcomeBanner userRole={user.role} userName={user.name || "Administrator"} />
-      </Suspense>
-
-      {/* Dashboard Content */}
-      <div className="space-y-6">
-        {/* Statistics Cards */}
-        {schoolStats && (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-in slide-in-from-bottom-4 duration-700">
-            <Card className="border-blue-500/20 bg-card/50 backdrop-blur hover:border-blue-500/30">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="font-medium text-sm text-foreground">Total Students</CardTitle>
-                <div className="rounded-full bg-blue-500/10 p-2">
-                  <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="font-bold text-2xl text-foreground">{schoolStats.totalStudents || 0}</div>
-                <p className="text-muted-foreground text-xs">Active learners in programs</p>
-                <div className="mt-2 h-1 w-full bg-secondary rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-primary transition-all duration-300"
-                    style={{ width: `${Math.min((schoolStats.totalStudents || 0) / 100 * 100, 100)}%` }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-green-500/20 bg-card/50 backdrop-blur hover:border-green-500/30">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="font-medium text-sm text-foreground">Active Programs</CardTitle>
-                <div className="rounded-full bg-green-500/10 p-2">
-                  <BookOpen className="h-4 w-4 text-green-600 dark:text-green-400" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="font-bold text-2xl text-foreground">{schoolStats.totalPrograms || 0}</div>
-                <p className="text-muted-foreground text-xs">Educational programs running</p>
-                <div className="mt-2 h-1 w-full bg-secondary rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-green-600 dark:bg-green-400 transition-all duration-300"
-                    style={{ width: `${Math.min((schoolStats.totalPrograms || 0) / 50 * 100, 100)}%` }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-orange-500/20 bg-card/50 backdrop-blur hover:border-orange-500/30">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="font-medium text-sm text-foreground">Pending Evaluations</CardTitle>
-                <div className="rounded-full bg-orange-500/10 p-2">
-                  <FileText className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="font-bold text-2xl text-foreground">{schoolStats.pendingEvaluations || 0}</div>
-                <p className="text-muted-foreground text-xs">Awaiting review</p>
-                <div className="mt-2 h-1 w-full bg-secondary rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-orange-600 dark:bg-orange-400 transition-all duration-300"
-                    style={{ width: `${Math.min((schoolStats.pendingEvaluations || 0) / 25 * 100, 100)}%` }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-purple-500/20 bg-card/50 backdrop-blur hover:border-purple-500/30">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="font-medium text-sm text-foreground">Completion Rate</CardTitle>
-                <div className="rounded-full bg-purple-500/10 p-2">
-                  <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="font-bold text-2xl text-foreground">
-                  {Math.round(schoolStats.avgCompetencyProgress || 0)}%
-                </div>
-                <p className="text-muted-foreground text-xs">Average competency progress</p>
-                <div className="mt-2 h-1 w-full bg-secondary rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-purple-600 dark:bg-purple-400 transition-all duration-300"
-                    style={{ width: `${schoolStats.avgCompetencyProgress || 0}%` }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common administrative tasks and management tools</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {quickActions.map((action) => {
-                const Icon = action.icon
-                return (
-                  <Button
-                    key={action.title}
-                    variant="outline"
-                    className="h-auto justify-start p-4 hover:bg-secondary/80"
-                    asChild
-                  >
-                    <a href={action.href}>
-                      <div className="flex items-center space-x-3">
-                        <div className={`rounded-md p-2 ${action.color} text-white`}>
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="text-left">
-                          <div className="font-medium">{action.title}</div>
-                          <div className="text-muted-foreground text-sm">{action.description}</div>
-                        </div>
-                      </div>
-                    </a>
-                  </Button>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-6 md:grid-cols-2 animate-in slide-in-from-bottom-6 duration-900">
-          {/* Pending Tasks */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5" />
-                Pending Tasks
-              </CardTitle>
-              <CardDescription>Items requiring your attention</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {pendingTasks.length > 0 ? (
-                <div className="space-y-3">
-                  {pendingTasks.slice(0, 5).map((task, index) => (
-                    <div
-                      key={`pending-task-${task.title.replace(/\s+/g, '-').toLowerCase()}-${index}`}
-                      className="flex items-center justify-between rounded-lg bg-secondary/50 p-3 transition-colors hover:bg-secondary/70"
-                    >
-                      <div>
-                        <p className="font-medium text-foreground">{task.title}</p>
-                        <p className="text-muted-foreground text-sm">{task.description}</p>
-                      </div>
-                      <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20">
-                        {task.count}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-6 text-center text-muted-foreground">
-                  <CheckCircle className="mx-auto mb-2 h-8 w-8" />
-                  <p>No pending tasks</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Recent Activities */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Activities</CardTitle>
-              <CardDescription>Latest actions in your school</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {recentActivities.length > 0 ? (
-                <div className="space-y-3">
-                  {recentActivities.slice(0, 5).map((activity, index) => (
-                    <div
-                      key={`recent-activity-${activity.action.replace(/\s+/g, '-').toLowerCase()}-${index}`}
-                      className="flex items-start space-x-3 rounded-lg bg-secondary/50 p-3 transition-colors hover:bg-secondary/70"
-                    >
-                      <div className="flex-1">
-                        <p className="font-medium text-foreground">{activity.action}</p>
-                        <p className="text-muted-foreground text-sm">{activity.details}</p>
-                        <p className="mt-1 text-muted-foreground text-xs">
-                          {new Date(activity.timestamp).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-6 text-center text-muted-foreground">
-                  <p>No recent activities</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+      {/* Floating Action Center */}
+      <div data-tutorial="action-center">
+        <FloatingActionCenter
+          tasks={actionItems}
+          onApprove={handleApprove}
+          onDismiss={handleDismiss}
+          onView={handleView}
+        />
       </div>
     </div>
   )
@@ -318,85 +327,22 @@ export function SchoolAdminDashboardClient({
 
 export function DashboardError({ error }: { error: string }) {
   return (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <Card className="border-destructive/20 bg-destructive/5 max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 rounded-full bg-destructive/10 p-3 w-fit">
-            <AlertCircle className="h-8 w-8 text-destructive" />
-          </div>
-          <CardTitle className="text-destructive">Dashboard Error</CardTitle>
-        </CardHeader>
-        <CardContent className="text-center space-y-4">
-          <p className="text-muted-foreground">{error}</p>
-          <Button 
-            onClick={() => window.location.reload()} 
-            variant="outline"
-            className="border-destructive/20 text-destructive hover:bg-destructive/10"
-          >
-            Retry Loading
-          </Button>
-        </CardContent>
-      </Card>
+    <div className="relative min-h-screen w-full flex items-center justify-center bg-background text-foreground">
+      <div className="text-center space-y-4 max-w-md">
+        <div className="mx-auto mb-4 rounded-full bg-destructive/10 p-3 w-fit">
+          <Clock className="h-8 w-8 text-destructive" />
+        </div>
+        <h2 className="text-xl font-semibold text-destructive">Dashboard Error</h2>
+        <p className="text-muted-foreground">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          Retry Loading
+        </button>
+      </div>
     </div>
   )
 }
 
-export function DashboardSkeleton() {
-  return (
-    <div className="space-y-6 p-6 animate-in fade-in-0 duration-1000">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
-          <Card key={i} className="border-border">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-4 rounded-full" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-16 mb-2" />
-              <Skeleton className="h-3 w-32" />
-              <Skeleton className="h-1 w-full mt-2" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="border-border">
-          <CardHeader>
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="h-3 w-48" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center space-x-4">
-                <Skeleton className="h-8 w-8 rounded-full" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-24" />
-                </div>
-                <Skeleton className="h-6 w-16" />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-        <Card className="border-border">
-          <CardHeader>
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="h-3 w-48" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center space-x-4">
-                <Skeleton className="h-8 w-8 rounded-full" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-24" />
-                </div>
-                <Skeleton className="h-6 w-16" />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
-}
+export { DashboardSkeleton }

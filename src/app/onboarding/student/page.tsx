@@ -1,9 +1,9 @@
 import { currentUser } from "@clerk/nextjs/server"
 import { eq } from "drizzle-orm"
 import { redirect } from "next/navigation"
-import { StudentOnboarding } from "../../../components/onboarding/student-onboarding"
-import { db } from "../../../database/db"
-import { programs, schools, users } from "../../../database/schema"
+import StudentOnboarding from "../../../components/onboarding/student-onboarding"
+import { db } from "@/database/connection-pool"
+import { programs, schools, users, cohorts } from "../../../database/schema"
 // verifyOnboardingState import removed - verification handled by dashboard router
 
 export default async function StudentOnboardingPage() {
@@ -43,6 +43,7 @@ export default async function StudentOnboardingPage() {
         isActive: users.isActive,
         studentId: users.studentId,
         programId: users.programId,
+        cohortId: users.cohortId,
         enrollmentDate: users.enrollmentDate,
         expectedGraduation: users.expectedGraduation,
         academicStatus: users.academicStatus,
@@ -67,10 +68,11 @@ export default async function StudentOnboardingPage() {
         name: schools.name,
         address: schools.address,
         website: schools.website,
-        accreditation: schools.accreditation,
       })
       .from(schools)
       .where(eq(schools.isActive, true))
+
+    console.log("[DEBUG] Available schools fetched:", availableSchools.length, availableSchools)
 
     const availablePrograms = await db
       .select({
@@ -84,6 +86,26 @@ export default async function StudentOnboardingPage() {
       .from(programs)
       .where(eq(programs.isActive, true))
 
+    console.log("[DEBUG] Available programs fetched:", availablePrograms.length, availablePrograms)
+
+    // Get available cohorts with enrollment counts
+    const availableCohorts = await db
+      .select({
+        id: cohorts.id,
+        name: cohorts.name,
+        programId: cohorts.programId,
+        startDate: cohorts.startDate,
+        endDate: cohorts.endDate,
+        graduationYear: cohorts.graduationYear,
+        capacity: cohorts.capacity,
+        description: cohorts.description,
+        status: cohorts.status,
+      })
+      .from(cohorts)
+      .where(eq(cohorts.status, "ACTIVE"))
+
+    console.log("[DEBUG] Available cohorts fetched:", availableCohorts.length)
+
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-green-50 p-4 dark:from-gray-900 dark:to-gray-800">
         <div className="w-full max-w-2xl">
@@ -92,10 +114,12 @@ export default async function StudentOnboardingPage() {
             clerkUser={serializableClerkUser}
             availableSchools={availableSchools}
             availablePrograms={availablePrograms}
+            availableCohorts={availableCohorts}
           />
         </div>
       </div>
     )
+
   } catch (error) {
     console.error("Error in student onboarding page:", error)
 
@@ -108,6 +132,7 @@ export default async function StudentOnboardingPage() {
             clerkUser={serializableClerkUser}
             availableSchools={[]}
             availablePrograms={[]}
+            availableCohorts={[]}
           />
         </div>
       </div>

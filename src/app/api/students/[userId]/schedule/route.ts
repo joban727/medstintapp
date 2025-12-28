@@ -1,33 +1,37 @@
+import type { UserRole } from "@/types"
 import { auth } from "@clerk/nextjs/server"
 import { and, eq, gte, lte } from "drizzle-orm"
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "../../../../../database/connection-pool"
 import { clinicalSites, rotations, users } from "../../../../../database/schema"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  withErrorHandling,
+  HTTP_STATUS,
+} from "../../../../../lib/api-response"
 
 interface WeeklyRotation {
   id: string
-  startDate: Date
-  endDate: Date
+  startDate: Date | null
+  endDate: Date | null
   status: string
   specialty: string
   objectives: string | null
-  requiredHours: number
+  requiredHours: number | null
   completedHours: number
   siteName: string | null
   siteAddress: string | null
 }
 
 // GET /api/students/[userId]/schedule - Get weekly schedule for a student
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
-) {
-  try {
+export const GET = withErrorHandling(
+  async (request: NextRequest, { params }: { params: Promise<{ userId: string }> }) => {
     const { userId: currentUserId } = await auth()
     const { userId: studentId } = await params
 
     if (!currentUserId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse("Unauthorized", HTTP_STATUS.UNAUTHORIZED)
     }
 
     const { searchParams } = new URL(request.url)
@@ -45,12 +49,12 @@ export async function GET(
       .limit(1)
 
     if (!currentUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+      return createErrorResponse("User not found", HTTP_STATUS.NOT_FOUND)
     }
 
     // Students can only access their own data, others need appropriate permissions
-    if (currentUser.role === "STUDENT" && currentUser.id !== studentId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (currentUser.role === ("STUDENT" as UserRole as UserRole) && currentUser.id !== studentId) {
+      return createErrorResponse("Forbidden", HTTP_STATUS.FORBIDDEN)
     }
 
     // Calculate week start and end dates
@@ -91,7 +95,7 @@ export async function GET(
         .orderBy(rotations.startDate)
     } catch (dbError) {
       console.error("Database query error in schedule API:", dbError)
-      return NextResponse.json({ error: "Failed to fetch schedule data" }, { status: 500 })
+      return createErrorResponse("Failed to fetch schedule data", HTTP_STATUS.INTERNAL_SERVER_ERROR)
     }
 
     // Format the schedule data with safe fallbacks
@@ -110,15 +114,11 @@ export async function GET(
       siteAddress: rotation.siteAddress || "",
     }))
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       schedule,
       weekStart: weekStart.toISOString(),
       weekEnd: weekEnd.toISOString(),
       total: schedule.length,
     })
-  } catch (error) {
-    console.error("Error fetching student schedule:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
+)

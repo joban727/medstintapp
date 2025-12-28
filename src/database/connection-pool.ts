@@ -6,13 +6,13 @@
 
 import { neonConfig, Pool, type PoolClient } from "@neondatabase/serverless"
 import { sql } from "drizzle-orm"
-import { drizzle } from "drizzle-orm/neon-serverless"
+import { drizzle } from "drizzle-orm/node-postgres"
 // Temporarily disabled to fix build issues
 // import { queryPerformanceLogger } from "../lib/query-performance-logger"
 import * as schema from "./schema"
 
 // Configure Neon for serverless environments to prevent WebSocket issues
-neonConfig.fetchConnectionCache = true
+// fetchConnectionCache is deprecated and now always true
 neonConfig.webSocketConstructor = undefined // Disable WebSocket to prevent s.unref errors
 
 // Connection pool configuration
@@ -83,9 +83,9 @@ const getPoolConfig = (): PoolConfig => {
 }
 
 // Connection string validation
-const connectionString = process.env.DATABASE_URL
+const connectionString = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL
 if (!connectionString) {
-  throw new Error("DATABASE_URL environment variable is required")
+  throw new Error("TEST_DATABASE_URL or DATABASE_URL environment variable is required")
 }
 
 // Create connection pool
@@ -93,6 +93,8 @@ const poolConfig = getPoolConfig()
 const pool = new Pool({
   connectionString,
   ...poolConfig,
+  // Always enable SSL for Neon/Postgres; avoid CA verification issues in test environments
+  ssl: { rejectUnauthorized: false },
 })
 
 // Connection pool metrics
@@ -297,8 +299,16 @@ export async function closeDatabasePool(): Promise<void> {
 }
 
 // Connection pool event handlers for monitoring
-pool.on("connect", (_client: PoolClient) => {
+pool.on("connect", async (client: PoolClient) => {
   // New database connection established
+  try {
+    // Set sane defaults to prevent runaway queries/locks
+    await client.query("SET statement_timeout = 15000") // 15s
+    await client.query("SET lock_timeout = 5000") // 5s
+    await client.query("SET idle_in_transaction_session_timeout = 15000") // 15s
+  } catch (_err) {
+    // Avoid crashing if SET fails; continue without hard timeouts
+  }
 })
 
 pool.on("remove", (_client: PoolClient) => {
@@ -406,9 +416,19 @@ export const dbUtils = {
       query?: string
     }
   ): Promise<T> {
-    // Temporarily disabled performance logging to fix build issues
-    return queryFn()
-    // return queryPerformanceLogger.executeWithLogging(queryFn, options)
+    // Lightweight timing + console logging without external deps
+    const start = Date.now()
+    try {
+      const result = await queryFn()
+      return result
+    } finally {
+      const duration = Date.now() - start
+      if (process.env.NODE_ENV === "development" && process.env.DEBUG_SQL === "true") {
+        const name = _options?.name || "unnamed_query"
+        const endpoint = _options?.endpoint ? ` @ ${_options.endpoint}` : ""
+        console.log(`SQL[${name}]${endpoint} took ${duration}ms`)
+      }
+    }
   },
 
   /**

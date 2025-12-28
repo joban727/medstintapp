@@ -3,36 +3,41 @@ import { eq, isNull } from "drizzle-orm"
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "../../../../../database/connection-pool"
 import { users } from "../../../../../database/schema"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { cacheIntegrationService } from "@/lib/cache-integration"
+import type { UserRole } from "@/types"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+  withErrorHandling,
+} from "../../../../../lib/api-response"
 
-
-export async function GET(_request: NextRequest) {
+export const GET = withErrorHandling(async (_request: NextRequest) => {
   try {
     // Try to get cached response
     const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:users/link-school/unlinked/route.ts',
+      "api:users/link-school/unlinked/route.ts",
       async () => {
         // Original function logic will be wrapped here
         return await executeOriginalLogic()
       },
       300 // 5 minutes TTL
     )
-    
+
     if (cached) {
       return cached
     }
   } catch (cacheError) {
-    console.warn('Cache error in users/link-school/unlinked/route.ts:', cacheError)
+    console.warn("Cache error in users/link-school/unlinked/route.ts:", cacheError)
     // Continue with original logic if cache fails
   }
-  
-  async function executeOriginalLogic() {
 
-  try {
+  async function executeOriginalLogic() {
     const clerkUser = await currentUser()
 
     if (!clerkUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     // Get current user to check permissions
@@ -45,8 +50,8 @@ export async function GET(_request: NextRequest) {
       .limit(1)
 
     // Only super admins can view unlinked users
-    if (!currentDbUser || currentDbUser.role !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    if (!currentDbUser || currentDbUser.role !== ("SUPER_ADMIN" as UserRole as UserRole)) {
+      return createErrorResponse("Insufficient permissions", HTTP_STATUS.FORBIDDEN)
     }
 
     const unlinkedUsers = await db
@@ -61,14 +66,9 @@ export async function GET(_request: NextRequest) {
       .where(isNull(users.schoolId))
       .orderBy(users.createdAt)
 
-    return NextResponse.json({
-      success: true,
-      unlinkedUsers,
-    })
-  } catch (error) {
-    console.error("Error fetching unlinked users:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return createSuccessResponse({ unlinkedUsers })
   }
 
-  }
-}
+  return await executeOriginalLogic()
+})
+

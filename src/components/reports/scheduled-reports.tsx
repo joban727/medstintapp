@@ -21,6 +21,10 @@ import { Label } from "../ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { Switch } from "../ui/switch"
 
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 interface ScheduledReport {
   id: string
   name: string
@@ -42,6 +46,7 @@ interface ScheduledReportsProps {
 export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
   const [scheduledReports, setScheduledReports] = useState<ScheduledReport[]>([])
   const [loading, setLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingReport, setEditingReport] = useState<ScheduledReport | null>(null)
   const [formData, setFormData] = useState({
@@ -57,20 +62,26 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
     try {
       const response = await fetch("/api/reports/scheduled")
       if (response.ok) {
-        const data = await response.json()
+        const data = await response.json().catch((err) => {
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
+        })
         setScheduledReports(data.reports || [])
       }
     } catch (_error) {
       // Error fetching scheduled reports
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   useEffect(() => {
     fetchScheduledReports()
-  }, [fetchScheduledReports])
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsSubmitting(true)
     setLoading(true)
 
     try {
@@ -86,7 +97,6 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
       const url = editingReport
         ? `/api/reports/scheduled/${editingReport.id}`
         : "/api/reports/scheduled"
-
       const method = editingReport ? "PUT" : "POST"
 
       const response = await fetch(url, {
@@ -96,7 +106,14 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to save scheduled report")
+        const errorData = await response
+          .json()
+          .catch((err) => {
+            console.error("Failed to parse JSON response:", err)
+            throw new Error("Invalid response format")
+          })
+          .catch(() => ({}))
+        throw new Error(errorData.error || errorData.message || "Failed to save scheduled report")
       }
 
       toast.success(editingReport ? "Report updated successfully" : "Report scheduled successfully")
@@ -115,6 +132,7 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
       // Error saving scheduled report
       toast.error("Failed to save scheduled report")
     } finally {
+      setIsSubmitting(false)
       setLoading(false)
     }
   }
@@ -143,7 +161,14 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to delete scheduled report")
+        const errorData = await response
+          .json()
+          .catch((err) => {
+            console.error("Failed to parse JSON response:", err)
+            throw new Error("Invalid response format")
+          })
+          .catch(() => ({}))
+        throw new Error(errorData.error || errorData.message || "Failed to delete scheduled report")
       }
 
       toast.success("Scheduled report deleted successfully")
@@ -151,6 +176,8 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
     } catch (_error) {
       // Error deleting scheduled report
       toast.error("Failed to delete scheduled report")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -163,7 +190,14 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to update report status")
+        const errorData = await response
+          .json()
+          .catch((err) => {
+            console.error("Failed to parse JSON response:", err)
+            throw new Error("Invalid response format")
+          })
+          .catch(() => ({}))
+        throw new Error(errorData.error || errorData.message || "Failed to update report status")
       }
 
       toast.success(`Report ${isActive ? "activated" : "deactivated"} successfully`)
@@ -171,6 +205,8 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
     } catch (_error) {
       // Error updating report status
       toast.error("Failed to update report status")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -181,7 +217,14 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to run report")
+        const errorData = await response
+          .json()
+          .catch((err) => {
+            console.error("Failed to parse JSON response:", err)
+            throw new Error("Invalid response format")
+          })
+          .catch(() => ({}))
+        throw new Error(errorData.error || errorData.message || "Failed to run report")
       }
 
       toast.success("Report is being generated and will be sent to recipients")
@@ -189,6 +232,8 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
     } catch (_error) {
       // Error running report
       toast.error("Failed to run report")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -224,7 +269,6 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
           <h3 className="font-semibold text-lg">Scheduled Reports</h3>
           <p className="text-muted-foreground text-sm">Automate report generation and delivery</p>
         </div>
-
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -232,7 +276,7 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
               Schedule Report
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[425px]" onOpenAutoFocus={(e) => e.preventDefault()}>
             <DialogHeader>
               <DialogTitle>
                 {editingReport ? "Edit Scheduled Report" : "Schedule New Report"}
@@ -241,8 +285,7 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
                 Configure automatic report generation and delivery settings.
               </DialogDescription>
             </DialogHeader>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div className="space-y-2">
                 <Label htmlFor="name">Report Name</Label>
                 <Input
@@ -253,7 +296,6 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
                   required
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="type">Report Type</Label>
@@ -271,7 +313,6 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="frequency">Frequency</Label>
                   <Select
@@ -290,7 +331,6 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
                   </Select>
                 </div>
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="recipients">Recipients (comma-separated emails)</Label>
                 <Input
@@ -301,7 +341,6 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
                   required
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="format">Export Format</Label>
                 <Select
@@ -317,7 +356,6 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="flex items-center space-x-2">
                 <Switch
                   id="active"
@@ -326,7 +364,6 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
                 />
                 <Label htmlFor="active">Active</Label>
               </div>
-
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
@@ -394,18 +431,20 @@ export function ScheduledReports({ userId, userRole }: ScheduledReportsProps) {
                       </div>
                     )}
                   </div>
-
                   <div>
                     <span className="font-medium text-sm">Recipients:</span>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {report.recipients.map((email, index) => (
-                        <Badge key={`recipient-${email}-${index}`} variant="outline" className="text-xs">
+                        <Badge
+                          key={`recipient-${email}-${index}`}
+                          variant="outline"
+                          className="text-xs"
+                        >
                           {email}
                         </Badge>
                       ))}
                     </div>
                   </div>
-
                   <div className="flex justify-end gap-2">
                     <Button
                       size="sm"

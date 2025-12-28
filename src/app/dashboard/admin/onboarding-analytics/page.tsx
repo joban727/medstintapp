@@ -4,7 +4,7 @@ import { requireAnyRole } from "@/lib/auth-clerk"
 
 export const metadata: Metadata = {
   title: "Onboarding Analytics | MedStint",
-  description: "Monitor onboarding completion rates and user progress analytics",
+  description: "Analytics dashboard for user onboarding metrics",
 }
 
 export default async function OnboardingAnalyticsPage() {

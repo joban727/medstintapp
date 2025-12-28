@@ -3,6 +3,8 @@
  * Prevents incorrect time entries and ensures data integrity
  */
 
+import { calculateDistance } from "@/lib/geo-utils"
+
 export interface ValidationRule<T = any> {
   name: string
   validate: (value: T, context?: any) => boolean
@@ -26,8 +28,6 @@ export interface TimeEntry {
   notes?: string
 }
 
-
-
 /**
  * Core validation engine
  */
@@ -50,14 +50,16 @@ export class ValidationEngine {
       isValid: true,
       errors: [],
       warnings: [],
-      info: []
+      info: [],
     }
 
     for (const rule of rules) {
       try {
         const isValid = rule.validate(data, context)
         if (!isValid) {
-          result[rule.severity === "error" ? "errors" : rule.severity === "warning" ? "warnings" : "info"].push(rule.message)
+          result[
+            rule.severity === "error" ? "errors" : rule.severity === "warning" ? "warnings" : "info"
+          ].push(rule.message)
           if (rule.severity === "error") {
             result.isValid = false
           }
@@ -90,7 +92,7 @@ export const TIME_VALIDATION_RULES: ValidationRule<TimeEntry>[] = [
       return entry.clockInTime <= now
     },
     message: "Clock-in time cannot be in the future",
-    severity: "error"
+    severity: "error",
   },
   {
     name: "reasonable_clock_in_time",
@@ -100,7 +102,7 @@ export const TIME_VALIDATION_RULES: ValidationRule<TimeEntry>[] = [
       return entry.clockInTime >= maxPastTime
     },
     message: "Clock-in time cannot be more than 24 hours in the past",
-    severity: "error"
+    severity: "error",
   },
   {
     name: "clock_out_after_clock_in",
@@ -109,7 +111,7 @@ export const TIME_VALIDATION_RULES: ValidationRule<TimeEntry>[] = [
       return entry.clockOutTime > entry.clockInTime
     },
     message: "Clock-out time must be after clock-in time",
-    severity: "error"
+    severity: "error",
   },
   {
     name: "reasonable_shift_duration",
@@ -120,7 +122,7 @@ export const TIME_VALIDATION_RULES: ValidationRule<TimeEntry>[] = [
       return duration <= maxDuration
     },
     message: "Shift duration cannot exceed 16 hours",
-    severity: "warning"
+    severity: "warning",
   },
   {
     name: "minimum_shift_duration",
@@ -131,7 +133,7 @@ export const TIME_VALIDATION_RULES: ValidationRule<TimeEntry>[] = [
       return duration >= minDuration
     },
     message: "Shift duration is less than 15 minutes",
-    severity: "warning"
+    severity: "warning",
   },
   {
     name: "weekend_shift_warning",
@@ -140,7 +142,7 @@ export const TIME_VALIDATION_RULES: ValidationRule<TimeEntry>[] = [
       return day !== 0 && day !== 6 // Not Sunday (0) or Saturday (6)
     },
     message: "Weekend shift detected - please confirm this is correct",
-    severity: "info"
+    severity: "info",
   },
   {
     name: "late_night_shift_warning",
@@ -149,11 +151,9 @@ export const TIME_VALIDATION_RULES: ValidationRule<TimeEntry>[] = [
       return hour >= 6 && hour <= 22 // Between 6 AM and 10 PM
     },
     message: "Late night or early morning shift detected",
-    severity: "info"
-  }
+    severity: "info",
+  },
 ]
-
-
 
 /**
  * Business logic validation rules
@@ -165,7 +165,7 @@ export const BUSINESS_VALIDATION_RULES: ValidationRule<TimeEntry>[] = [
       return !!entry.siteId && entry.siteId.trim().length > 0
     },
     message: "Site assignment is required",
-    severity: "error"
+    severity: "error",
   },
   {
     name: "user_identification_required",
@@ -173,7 +173,7 @@ export const BUSINESS_VALIDATION_RULES: ValidationRule<TimeEntry>[] = [
       return !!entry.userId && entry.userId.trim().length > 0
     },
     message: "User identification is required",
-    severity: "error"
+    severity: "error",
   },
   {
     name: "notes_length_limit",
@@ -182,7 +182,7 @@ export const BUSINESS_VALIDATION_RULES: ValidationRule<TimeEntry>[] = [
       return entry.notes.length <= 500
     },
     message: "Notes cannot exceed 500 characters",
-    severity: "error"
+    severity: "error",
   },
   {
     name: "notes_recommended",
@@ -191,27 +191,10 @@ export const BUSINESS_VALIDATION_RULES: ValidationRule<TimeEntry>[] = [
       return !!entry.notes && entry.notes.trim().length > 0
     },
     message: "Adding notes about your shift activities is recommended",
-    severity: "info"
-  }
+    severity: "info",
+  },
 ]
 
-/**
- * Calculate distance between two GPS coordinates using Haversine formula
- */
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371e3 // Earth's radius in meters
-  const φ1 = lat1 * Math.PI / 180
-  const φ2 = lat2 * Math.PI / 180
-  const Δφ = (lat2 - lat1) * Math.PI / 180
-  const Δλ = (lon2 - lon1) * Math.PI / 180
-
-  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ/2) * Math.sin(Δλ/2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-
-  return R * c
-}
 
 /**
  * Pre-configured validation engine for time tracking
@@ -221,8 +204,8 @@ export class TimeTrackingValidator extends ValidationEngine {
     super()
     this.registerRules("time_entry", [
       ...TIME_VALIDATION_RULES,
-    
-      ...BUSINESS_VALIDATION_RULES
+
+      ...BUSINESS_VALIDATION_RULES,
     ])
   }
 
@@ -236,14 +219,11 @@ export class TimeTrackingValidator extends ValidationEngine {
   /**
    * Quick validation for clock-in
    */
-  validateClockIn(
-    userId: string,
-    siteId: string
-  ): ValidationResult {
+  validateClockIn(userId: string, siteId: string): ValidationResult {
     const entry: TimeEntry = {
       userId,
       siteId,
-      clockInTime: new Date()
+      clockInTime: new Date(),
     }
     return this.validateTimeEntry(entry)
   }
@@ -251,16 +231,12 @@ export class TimeTrackingValidator extends ValidationEngine {
   /**
    * Quick validation for clock-out
    */
-  validateClockOut(
-    userId: string,
-    siteId: string,
-    clockInTime: Date
-  ): ValidationResult {
+  validateClockOut(userId: string, siteId: string, clockInTime: Date): ValidationResult {
     const entry: TimeEntry = {
       userId,
       siteId,
       clockInTime,
-      clockOutTime: new Date()
+      clockOutTime: new Date(),
     }
     return this.validateTimeEntry(entry)
   }
@@ -284,8 +260,8 @@ export class RealTimeValidator {
    * Validate a field with debouncing
    */
   validateField(
-    fieldName: string, 
-    value: any, 
+    fieldName: string,
+    value: any,
     callback: (result: ValidationResult) => void,
     debounceMs = 300
   ): void {
@@ -312,7 +288,7 @@ export class RealTimeValidator {
    * Clear all debounce timers
    */
   cleanup(): void {
-    this.debounceTimers.forEach(timer => clearTimeout(timer))
+    this.debounceTimers.forEach((timer) => clearTimeout(timer))
     this.debounceTimers.clear()
   }
 }
@@ -339,13 +315,13 @@ export class BatchValidator {
       entriesWithWarnings: number
     }
   } {
-    const results = entries.map(entry => this.validateTimeEntry(entry))
-    
+    const results = entries.map((entry) => this.validator.validateTimeEntry(entry))
+
     const summary = {
       totalEntries: entries.length,
-      validEntries: results.filter(r => r.isValid).length,
-      entriesWithErrors: results.filter(r => r.errors.length > 0).length,
-      entriesWithWarnings: results.filter(r => r.warnings.length > 0).length
+      validEntries: results.filter((r) => r.isValid).length,
+      entriesWithErrors: results.filter((r) => r.errors.length > 0).length,
+      entriesWithWarnings: results.filter((r) => r.warnings.length > 0).length,
     }
 
     return { results, summary }
@@ -359,12 +335,12 @@ export class BatchValidator {
     reason: string
   }> {
     const duplicates: Array<{ indices: number[]; reason: string }> = []
-    
+
     for (let i = 0; i < entries.length; i++) {
       for (let j = i + 1; j < entries.length; j++) {
         const entry1 = entries[i]
         const entry2 = entries[j]
-        
+
         // Check for same user, site, and overlapping times
         if (
           entry1.userId === entry2.userId &&
@@ -373,12 +349,12 @@ export class BatchValidator {
         ) {
           duplicates.push({
             indices: [i, j],
-            reason: "Potential duplicate entries with same user, site, and similar times"
+            reason: "Potential duplicate entries with same user, site, and similar times",
           })
         }
       }
     }
-    
+
     return duplicates
   }
 }

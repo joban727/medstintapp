@@ -1,207 +1,279 @@
-import { auth } from "@clerk/nextjs/server"
-import { eq, sql } from "drizzle-orm"
-import { type NextRequest, NextResponse } from "next/server"
+"use server"
+
+import { NextRequest } from "next/server"
 import { z } from "zod"
+import { eq, and, desc } from "drizzle-orm"
 import { db } from "@/database/connection-pool"
-import { rotations, users } from "@/database/schema"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { rotationTemplates, programs, clinicalSites, users } from "@/database/schema"
+import { getSchoolContext } from "@/lib/school-utils"
+import {
+    createSuccessResponse,
+    createErrorResponse,
+    HTTP_STATUS,
+    withErrorHandling,
+} from "@/lib/api-response"
+import type { UserRole } from "@/types"
 
-
-const createRotationSchema = z.object({
-  studentId: z.string().min(1, "Student ID is required"),
-  clinicalSiteId: z.string().min(1, "Clinical site ID is required"),
-  preceptorId: z.string().min(1, "Preceptor ID is required"),
-  supervisorId: z.string().optional(),
-  specialty: z.string().min(1, "Specialty is required"),
-  startDate: z.string().min(1, "Start date is required"),
-  endDate: z.string().min(1, "End date is required"),
-  requiredHours: z.number().min(1, "Required hours must be at least 1"),
-  objectives: z.string().optional(),
+// Validation schemas
+const createRotationTemplateSchema = z.object({
+    name: z.string().min(1, "Name is required"),
+    description: z.string().optional(),
+    specialty: z.string().min(1, "Specialty is required"),
+    defaultDurationWeeks: z.number().min(1, "Duration must be at least 1 week"),
+    defaultRequiredHours: z.number().min(1, "Required hours must be at least 1"),
+    defaultClinicalSiteId: z.string().optional().nullable(),
+    objectives: z.array(z.string()).optional(),
+    programId: z.string().min(1, "Program ID is required"),
+    sortOrder: z.number().optional(),
 })
 
-export async function POST(request: NextRequest) {
-  try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+const updateRotationTemplateSchema = z.object({
+    id: z.string().min(1, "Template ID is required"),
+    name: z.string().optional(),
+    description: z.string().optional().nullable(),
+    specialty: z.string().optional(),
+    defaultDurationWeeks: z.number().min(1).optional(),
+    defaultRequiredHours: z.number().min(1).optional(),
+    defaultClinicalSiteId: z.string().optional().nullable(),
+    objectives: z.array(z.string()).optional(),
+    isActive: z.boolean().optional(),
+    sortOrder: z.number().optional(),
+})
+
+// GET /api/rotation-templates - List rotation templates
+export const GET = withErrorHandling(async (request: NextRequest) => {
+    const context = await getSchoolContext()
+    const { searchParams } = new URL(request.url)
+
+    const programId = searchParams.get("programId")
+    const activeOnly = searchParams.get("activeOnly") === "true"
+
+    // Build conditions
+    const conditions = []
+
+    // Filter by school
+    if (context.schoolId && context.userRole !== "SUPER_ADMIN") {
+        conditions.push(eq(rotationTemplates.schoolId, context.schoolId))
     }
 
-    // Get the current user to verify they are a school admin
-    const currentUser = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+    // Filter by program if specified
+    if (programId) {
+        conditions.push(eq(rotationTemplates.programId, programId))
+    }
 
-    if (!currentUser.length || currentUser[0].role !== "SCHOOL_ADMIN") {
-      return NextResponse.json(
-        { message: "Only school administrators can create rotation templates" },
-        { status: 403 }
-      )
+    // Filter active only if specified
+    if (activeOnly) {
+        conditions.push(eq(rotationTemplates.isActive, true))
+    }
+
+    const templates = await db
+        .select({
+            id: rotationTemplates.id,
+            name: rotationTemplates.name,
+            description: rotationTemplates.description,
+            specialty: rotationTemplates.specialty,
+            defaultDurationWeeks: rotationTemplates.defaultDurationWeeks,
+            defaultRequiredHours: rotationTemplates.defaultRequiredHours,
+            defaultClinicalSiteId: rotationTemplates.defaultClinicalSiteId,
+            objectives: rotationTemplates.objectives,
+            isActive: rotationTemplates.isActive,
+            sortOrder: rotationTemplates.sortOrder,
+            schoolId: rotationTemplates.schoolId,
+            programId: rotationTemplates.programId,
+            programName: programs.name,
+            clinicalSiteName: clinicalSites.name,
+            createdBy: rotationTemplates.createdBy,
+            createdAt: rotationTemplates.createdAt,
+            updatedAt: rotationTemplates.updatedAt,
+        })
+        .from(rotationTemplates)
+        .leftJoin(programs, eq(rotationTemplates.programId, programs.id))
+        .leftJoin(clinicalSites, eq(rotationTemplates.defaultClinicalSiteId, clinicalSites.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(rotationTemplates.sortOrder, desc(rotationTemplates.createdAt))
+
+    // Parse objectives from JSON
+    const templatesWithParsedObjectives = templates.map((template) => ({
+        ...template,
+        objectives: template.objectives ? JSON.parse(template.objectives) : [],
+    }))
+
+    return createSuccessResponse({ templates: templatesWithParsedObjectives })
+})
+
+// POST /api/rotation-templates - Create a new rotation template
+export const POST = withErrorHandling(async (request: NextRequest) => {
+    const context = await getSchoolContext()
+
+    // Only admins can create templates
+    if (
+        ![
+            "SUPER_ADMIN" as UserRole,
+            "SCHOOL_ADMIN" as UserRole,
+        ].includes(context.userRole)
+    ) {
+        return createErrorResponse("Insufficient permissions", HTTP_STATUS.FORBIDDEN)
     }
 
     const body = await request.json()
-    const validatedData = createRotationSchema.parse(body)
+    const validatedData = createRotationTemplateSchema.parse(body)
 
-    // Check if preceptor exists and belongs to the same school
-    const preceptor = await db
-      .select()
-      .from(users)
-      .where(
-        sql`${users.id} = ${validatedData.preceptorId} AND ${users.schoolId} = ${currentUser[0].schoolId}`
-      )
-      .limit(1)
+    // Verify program belongs to school
+    const [program] = await db
+        .select()
+        .from(programs)
+        .where(eq(programs.id, validatedData.programId))
+        .limit(1)
 
-    if (!preceptor.length) {
-      return NextResponse.json(
-        { message: "Invalid preceptor or preceptor not found in your school" },
-        { status: 400 }
-      )
+    if (!program) {
+        return createErrorResponse("Program not found", HTTP_STATUS.NOT_FOUND)
     }
 
-    // Create the rotation
-    const newRotation = await db
-      .insert(rotations)
-      .values({
-        id: crypto.randomUUID(),
-        studentId: validatedData.studentId,
-        clinicalSiteId: validatedData.clinicalSiteId,
-        preceptorId: validatedData.preceptorId,
-        supervisorId: validatedData.supervisorId,
-        specialty: validatedData.specialty,
-        startDate: new Date(validatedData.startDate),
-        endDate: new Date(validatedData.endDate),
-        requiredHours: validatedData.requiredHours,
-        objectives: validatedData.objectives,
-        status: "SCHEDULED",
-        completedHours: 0,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning()
+    if (program.schoolId !== context.schoolId && context.userRole !== "SUPER_ADMIN") {
+        return createErrorResponse("Access denied to this program", HTTP_STATUS.FORBIDDEN)
+    }
 
-    return NextResponse.json(newRotation[0], { status: 201 })
-  } catch (error) {
-    console.error("Error creating rotation template:", error)
+    // Verify clinical site if provided
+    if (validatedData.defaultClinicalSiteId) {
+        const [site] = await db
+            .select()
+            .from(clinicalSites)
+            .where(eq(clinicalSites.id, validatedData.defaultClinicalSiteId))
+            .limit(1)
 
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
+        if (!site) {
+            return createErrorResponse("Clinical site not found", HTTP_STATUS.NOT_FOUND)
+        }
+    }
+
+    const [newTemplate] = await db
+        .insert(rotationTemplates)
+        .values({
+            schoolId: program.schoolId,
+            programId: validatedData.programId,
+            name: validatedData.name,
+            description: validatedData.description,
+            specialty: validatedData.specialty,
+            defaultDurationWeeks: validatedData.defaultDurationWeeks,
+            defaultRequiredHours: validatedData.defaultRequiredHours,
+            defaultClinicalSiteId: validatedData.defaultClinicalSiteId,
+            objectives: validatedData.objectives ? JSON.stringify(validatedData.objectives) : null,
+            sortOrder: validatedData.sortOrder ?? 0,
+            createdBy: context.userId,
+        })
+        .returning()
+
+    return createSuccessResponse(
         {
-          message: "Validation error",
-          errors: error.issues,
+            ...newTemplate,
+            objectives: validatedData.objectives || [],
         },
-        { status: 400 }
-      )
-    }
-
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateRotationCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in rotation-templates/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
-  }
-}
-
-export async function GET() {
-  try {
-    // Try to get cached response
-    const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:rotation-templates/route.ts',
-      async () => {
-        // Original function logic will be wrapped here
-        return await executeOriginalLogic()
-      },
-      300 // 5 minutes TTL
+        "Rotation template created successfully",
+        HTTP_STATUS.CREATED
     )
-    
-    if (cached) {
-      return cached
-    }
-  } catch (cacheError) {
-    console.warn('Cache error in rotation-templates/route.ts:', cacheError)
-    // Continue with original logic if cache fails
-  }
-  
-  async function executeOriginalLogic() {
+})
 
-  try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+// PUT /api/rotation-templates - Update an existing rotation template
+export const PUT = withErrorHandling(async (request: NextRequest) => {
+    const context = await getSchoolContext()
 
-    // Get current user with role
-    const currentUser = await db.select().from(users).where(eq(users.id, userId)).limit(1)
-
-    if (!currentUser.length) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    // Only admins can update templates
+    if (
+        ![
+            "SUPER_ADMIN" as UserRole,
+            "SCHOOL_ADMIN" as UserRole,
+        ].includes(context.userRole)
+    ) {
+        return createErrorResponse("Insufficient permissions", HTTP_STATUS.FORBIDDEN)
     }
 
-    // Return rotations based on user role
-    let rotationsList:
-      | (typeof rotations.$inferSelect)[]
-      | {
-          id: string
-          studentId: string
-          clinicalSiteId: string
-          preceptorId: string
-          supervisorId: string | null
-          specialty: string
-          startDate: Date
-          endDate: Date
-          requiredHours: number
-          completedHours: number
-          status: string
-          objectives: string | null
-          createdAt: Date
-          updatedAt: Date
-        }[]
-    switch (currentUser[0].role) {
-      case "SCHOOL_ADMIN":
-        // Get rotations where any participant belongs to the admin's school
-        rotationsList = await db
-          .select({
-            id: rotations.id,
-            studentId: rotations.studentId,
-            clinicalSiteId: rotations.clinicalSiteId,
-            preceptorId: rotations.preceptorId,
-            supervisorId: rotations.supervisorId,
-            specialty: rotations.specialty,
-            startDate: rotations.startDate,
-            endDate: rotations.endDate,
-            requiredHours: rotations.requiredHours,
-            completedHours: rotations.completedHours,
-            status: rotations.status,
-            objectives: rotations.objectives,
-            createdAt: rotations.createdAt,
-            updatedAt: rotations.updatedAt,
-          })
-          .from(rotations)
-          .innerJoin(users, eq(rotations.studentId, users.id))
-          .where(eq(users.schoolId, currentUser[0].schoolId || ""))
-        break
-      case "CLINICAL_PRECEPTOR":
-        // Preceptors can see rotations they're assigned to
-        rotationsList = await db
-          .select()
-          .from(rotations)
-          .where(eq(rotations.preceptorId, currentUser[0].id))
-        break
-      default:
-        // For students and supervisors, show their own rotations
-        rotationsList = await db
-          .select()
-          .from(rotations)
-          .where(
-            sql`${rotations.studentId} = ${currentUser[0].id} OR ${rotations.preceptorId} = ${currentUser[0].id} OR ${rotations.supervisorId} = ${currentUser[0].id}`
-          )
-        break
-    }
-    return NextResponse.json(rotationsList)
-  } catch (error) {
-    console.error("Error fetching rotations:", error)
-    return NextResponse.json({ error: "Failed to fetch rotations" }, { status: 500 })
-  }
+    const body = await request.json()
+    const validatedData = updateRotationTemplateSchema.parse(body)
 
-  }
-}
+    // Get existing template
+    const [existingTemplate] = await db
+        .select()
+        .from(rotationTemplates)
+        .where(eq(rotationTemplates.id, validatedData.id))
+        .limit(1)
+
+    if (!existingTemplate) {
+        return createErrorResponse("Rotation template not found", HTTP_STATUS.NOT_FOUND)
+    }
+
+    // Verify ownership
+    if (existingTemplate.schoolId !== context.schoolId && context.userRole !== "SUPER_ADMIN") {
+        return createErrorResponse("Access denied to this template", HTTP_STATUS.FORBIDDEN)
+    }
+
+    // Build update object
+    const updateData: Record<string, unknown> = {
+        updatedAt: new Date(),
+    }
+
+    if (validatedData.name !== undefined) updateData.name = validatedData.name
+    if (validatedData.description !== undefined) updateData.description = validatedData.description
+    if (validatedData.specialty !== undefined) updateData.specialty = validatedData.specialty
+    if (validatedData.defaultDurationWeeks !== undefined) updateData.defaultDurationWeeks = validatedData.defaultDurationWeeks
+    if (validatedData.defaultRequiredHours !== undefined) updateData.defaultRequiredHours = validatedData.defaultRequiredHours
+    if (validatedData.defaultClinicalSiteId !== undefined) updateData.defaultClinicalSiteId = validatedData.defaultClinicalSiteId
+    if (validatedData.objectives !== undefined) updateData.objectives = JSON.stringify(validatedData.objectives)
+    if (validatedData.isActive !== undefined) updateData.isActive = validatedData.isActive
+    if (validatedData.sortOrder !== undefined) updateData.sortOrder = validatedData.sortOrder
+
+    const [updatedTemplate] = await db
+        .update(rotationTemplates)
+        .set(updateData)
+        .where(eq(rotationTemplates.id, validatedData.id))
+        .returning()
+
+    return createSuccessResponse(
+        {
+            ...updatedTemplate,
+            objectives: updatedTemplate.objectives ? JSON.parse(updatedTemplate.objectives) : [],
+        },
+        "Rotation template updated successfully"
+    )
+})
+
+// DELETE /api/rotation-templates - Delete a rotation template
+export const DELETE = withErrorHandling(async (request: NextRequest) => {
+    const context = await getSchoolContext()
+
+    // Only admins can delete templates
+    if (
+        ![
+            "SUPER_ADMIN" as UserRole,
+            "SCHOOL_ADMIN" as UserRole,
+        ].includes(context.userRole)
+    ) {
+        return createErrorResponse("Insufficient permissions", HTTP_STATUS.FORBIDDEN)
+    }
+
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
+
+    if (!id) {
+        return createErrorResponse("Template ID is required", HTTP_STATUS.BAD_REQUEST)
+    }
+
+    // Get existing template
+    const [existingTemplate] = await db
+        .select()
+        .from(rotationTemplates)
+        .where(eq(rotationTemplates.id, id))
+        .limit(1)
+
+    if (!existingTemplate) {
+        return createErrorResponse("Rotation template not found", HTTP_STATUS.NOT_FOUND)
+    }
+
+    // Verify ownership
+    if (existingTemplate.schoolId !== context.schoolId && context.userRole !== "SUPER_ADMIN") {
+        return createErrorResponse("Access denied to this template", HTTP_STATUS.FORBIDDEN)
+    }
+
+    await db.delete(rotationTemplates).where(eq(rotationTemplates.id, id))
+
+    return createSuccessResponse({ id }, "Rotation template deleted successfully")
+})

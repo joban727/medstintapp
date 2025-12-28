@@ -105,9 +105,7 @@ export default async function Plans() {
                           Tokens
                         </span>
                         <span className="font-semibold">
-                          {/* TODO: Extend Subscription type to include this limits field. */}
-                          {(activeSub as { limits?: { tokens?: number } })?.limits?.tokens || "N/A"}{" "}
-                          per month
+                          {activeSub.limits?.tokens || "N/A"} per month
                         </span>
                       </div>
 

@@ -385,11 +385,15 @@ export function validateEnvironment(): {
     }
 
     if (!process.env.NEXT_PUBLIC_APP_URL) {
-      warnings.push("NEXT_PUBLIC_APP_URL not set - may affect redirects")
+      errors.push("NEXT_PUBLIC_APP_URL is required for production")
     }
 
-    if (!process.env.REDIS_URL && getProductionConfig().scaling.sessionStoreType === "redis") {
-      errors.push("Redis URL is required for production session storage")
+    if (getProductionConfig().scaling.sessionStoreType === "redis" && !process.env.REDIS_URL) {
+      errors.push("REDIS_URL is required when session store type is 'redis'")
+    }
+
+    if (getProductionConfig().database.replicationEnabled && !process.env.DATABASE_URL_READ) {
+      warnings.push("Replication is enabled but DATABASE_URL_READ is not set - falling back to primary for reads")
     }
 
     if (!process.env.MONITORING_API_KEY) {

@@ -24,6 +24,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useTheme } from "next-themes"
+import { useMemo } from "react"
+
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
 
 const footerSections = [
   {
@@ -106,26 +111,32 @@ export const MedStintFooterEnhanced = () => {
             <div className="flex flex-col items-center justify-between gap-8 rounded-xl bg-slate-100 dark:bg-slate-800 p-8 md:flex-row">
               <div className="flex-1 text-center md:text-left">
                 <div className="flex items-center gap-3 mb-4">
-                  <Image 
+                  <Image
                     src="/logo-medstint.svg"
-                    alt="MedStint Logo" 
-                    width={40} 
-                    height={40} 
+                    alt="MedStint Logo"
+                    width={40}
+                    height={40}
                     className="h-10 w-10"
                   />
                   <div>
-                    <h3 className="font-bold text-xl text-slate-900 dark:text-white">MedStint Newsletter</h3>
-                    <p className="text-slate-600 dark:text-slate-400 text-sm">Stay connected with medical education innovation</p>
+                    <h3 className="font-bold text-xl text-slate-900 dark:text-white">
+                      MedStint Newsletter
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400 text-sm">
+                      Stay connected with medical education innovation
+                    </p>
                   </div>
                 </div>
                 <p className="text-slate-600 dark:text-slate-400">
-                  Get the latest insights on medical education technology, best practices, and industry trends delivered to your inbox.
+                  Get the latest insights on medical education technology, best practices, and
+                  industry trends delivered to your inbox.
                 </p>
               </div>
               <div className="flex w-full max-w-sm gap-2 md:w-auto">
                 <Input
                   type="email"
                   placeholder="Enter your email"
+                  aria-label="Enter your email"
                   className="border-slate-300 bg-white text-slate-900 placeholder:text-slate-500 focus:border-slate-400 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-400"
                 />
                 <Button className="bg-gradient-to-r from-cyan-600 to-teal-600 text-white hover:from-cyan-700 hover:to-teal-700 whitespace-nowrap">
@@ -145,35 +156,41 @@ export const MedStintFooterEnhanced = () => {
             <div className="lg:col-span-4">
               <div className="mb-6">
                 <Link href="/" className="flex items-center gap-4">
-                  <Image 
+                  <Image
                     src="/logo-medstint.svg"
-                    alt="MedStint Logo" 
-                    width={48} 
-                    height={48} 
+                    alt="MedStint Logo"
+                    width={48}
+                    height={48}
                     className="h-12 w-12"
                   />
                   <div>
                     <h4 className="font-bold text-2xl bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent">
                       MedStint
                     </h4>
-                    <p className="text-slate-400 text-sm font-medium">Medical Education Management</p>
-                    <p className="text-cyan-400 text-xs font-semibold">Empowering Healthcare Education Excellence</p>
+                    <p className="text-slate-400 text-sm font-medium">
+                      Medical Education Management
+                    </p>
+                    <p className="text-cyan-400 text-xs font-semibold">
+                      Empowering Healthcare Education Excellence
+                    </p>
                   </div>
                 </Link>
               </div>
-
               <p className="mb-6 text-slate-300 leading-relaxed">
-                <strong className="text-white">Transforming medical education through innovation and excellence.</strong> 
-                Our comprehensive platform streamlines clinical rotations, competency tracking, and student management 
-                for healthcare institutions worldwide.
+                <strong className="text-white">
+                  Transforming medical education through innovation and excellence.
+                </strong>{" "}
+                Our comprehensive platform streamlines clinical rotations, competency tracking, and
+                student management for healthcare institutions worldwide.
               </p>
 
               {/* Mission Statement */}
               <div className="mb-8 rounded-lg bg-slate-800/50 p-4 border border-slate-700">
                 <h5 className="font-semibold text-cyan-400 mb-2">Our Mission</h5>
                 <p className="text-slate-300 text-sm">
-                  To empower healthcare education institutions with cutting-edge technology that enhances 
-                  learning outcomes, improves operational efficiency, and ensures student success.
+                  To empower healthcare education institutions with cutting-edge technology that
+                  enhances learning outcomes, improves operational efficiency, and ensures student
+                  success.
                 </p>
               </div>
 
@@ -181,7 +198,7 @@ export const MedStintFooterEnhanced = () => {
               <div className="mb-8 space-y-3">
                 <div className="flex items-center gap-3">
                   <Mail className="h-4 w-4 text-cyan-400" />
-                  <span className="text-slate-300 hover:text-white transition-colors">
+                  <span className="text-slate-300 hover:text-white transition-colors duration-200">
                     <a href="mailto:contact@medstint.com">contact@medstint.com</a>
                   </span>
                 </div>
@@ -225,11 +242,11 @@ export const MedStintFooterEnhanced = () => {
                         <li key={link.name}>
                           <Link
                             href={link.href}
-                            className="flex items-center text-slate-300 transition-colors hover:text-white hover:underline group"
+                            className="flex items-center text-slate-300 transition-colors duration-200 hover:text-white hover:underline group"
                           >
-                            <span className="w-2 h-2 bg-cyan-500 rounded-full mr-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <span className="w-2 h-2 bg-cyan-500 rounded-full mr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                             {link.name}
-                            <ExternalLink className="ml-1 h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+                            <ExternalLink className="ml-1 h-3 w-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
                           </Link>
                         </li>
                       ))}
@@ -243,7 +260,10 @@ export const MedStintFooterEnhanced = () => {
           {/* Enhanced Features Cards */}
           <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {brandFeatures.map((feature, index) => (
-              <Card key={index} className="border-slate-700 bg-slate-800/50 hover:bg-slate-800/70 transition-colors">
+              <Card
+                key={index}
+                className="border-slate-700 bg-slate-800/50 hover:bg-slate-800/70 transition-colors duration-200"
+              >
                 <CardContent className="p-6">
                   <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-r from-cyan-700 to-teal-700">
                     <feature.icon className="h-6 w-6 text-white" />
@@ -263,18 +283,17 @@ export const MedStintFooterEnhanced = () => {
           <div className="mx-auto max-w-7xl">
             <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
               <div className="flex items-center gap-4">
-                <Image 
+                <Image
                   src="/logo-medstint.svg"
-                  alt="MedStint" 
-                  width={24} 
-                  height={24} 
+                  alt="MedStint"
+                  width={24}
+                  height={24}
                   className="h-6 w-6"
                 />
                 <p className="text-slate-400 text-sm">
-                  © {new Date().getFullYear()} MedStint. All rights reserved.
+                  © {useMemo(() => new Date().getFullYear(), [])} MedStint. All rights reserved.
                 </p>
               </div>
-              
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2">
                   <Stethoscope className="h-4 w-4 text-cyan-400" />
@@ -285,7 +304,7 @@ export const MedStintFooterEnhanced = () => {
                     <Link
                       key={link.name}
                       href={link.href}
-                      className="text-slate-400 text-sm hover:text-white transition-colors"
+                      className="text-slate-400 text-sm hover:text-white transition-colors duration-200"
                     >
                       {link.name}
                     </Link>
@@ -293,7 +312,6 @@ export const MedStintFooterEnhanced = () => {
                 </div>
               </div>
             </div>
-            
             {/* Brand Tagline */}
             <div className="mt-4 text-center">
               <p className="text-cyan-400 text-sm font-medium">

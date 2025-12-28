@@ -1,10 +1,21 @@
+import type { UserRole } from "@/types"
+import { logger } from "@/lib/logger"
 import { and, desc, eq, gte, isNull, lte } from "drizzle-orm"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "../../../database/connection-pool"
+import { ValidationRules } from "@/lib/clock-validation"
 import { rotations, timeRecords, users } from "../../../database/schema"
 import { logAuditEvent } from "../../../lib/rbac-middleware"
 import { getSchoolContext } from "../../../lib/school-utils"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  createValidationErrorResponse,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+  withErrorHandling,
+} from "../../../lib/api-response"
 
 // Validation schemas
 const createTimeRecordSchema = z.object({
@@ -30,12 +41,13 @@ const clockInSchema = z.object({
 })
 
 // GET /api/time-records - Get time records with filtering
-export async function GET(request: NextRequest) {
+export const GET = withErrorHandling(async (request: NextRequest) => {
   try {
     const context = await getSchoolContext()
     const { searchParams } = new URL(request.url)
 
     const studentId = searchParams.get("studentId")
+    const schoolIdParam = searchParams.get("schoolId")
     const rotationId = searchParams.get("rotationId")
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
@@ -47,7 +59,7 @@ export async function GET(request: NextRequest) {
     const conditions = []
 
     // Role-based filtering
-    if (context.userRole === "STUDENT") {
+    if (context.userRole === ("STUDENT" as UserRole)) {
       conditions.push(eq(timeRecords.studentId, context.userId))
     } else if (studentId) {
       conditions.push(eq(timeRecords.studentId, studentId))
@@ -67,6 +79,13 @@ export async function GET(request: NextRequest) {
 
     if (status) {
       conditions.push(eq(timeRecords.status, status as "PENDING" | "APPROVED" | "REJECTED"))
+    }
+
+    // Add schoolId condition if we have a valid one
+    if (context.userRole === ("STUDENT" as UserRole) && context.schoolId) {
+      conditions.push(eq(users.schoolId, context.schoolId))
+    } else if (schoolIdParam) {
+      conditions.push(eq(users.schoolId, schoolIdParam))
     }
 
     // Execute query with joins
@@ -97,8 +116,7 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .offset(offset)
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       data: records,
       pagination: {
         limit,
@@ -107,13 +125,16 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Error fetching time records:", error)
-    return NextResponse.json({ error: "Failed to fetch time records" }, { status: 500 })
+    logger.error({ route: "GET /api/time-records", error: error as Error }, "Error fetching time records")
+    return createErrorResponse(
+      ERROR_MESSAGES.INTERNAL_ERROR,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    )
   }
-}
+})
 
 // POST /api/time-records - Create new time record or clock in
-export async function POST(request: NextRequest) {
+export const POST = withErrorHandling(async (request: NextRequest) => {
   try {
     const context = await getSchoolContext()
     const body = await request.json()
@@ -130,12 +151,12 @@ export async function POST(request: NextRequest) {
         .limit(1)
 
       if (!rotation) {
-        return NextResponse.json({ error: "Rotation not found" }, { status: 404 })
+        return createErrorResponse("Rotation not found", HTTP_STATUS.NOT_FOUND)
       }
 
       // Students can only clock in for their own rotations
-      if (context.userRole === "STUDENT" && rotation.studentId !== context.userId) {
-        return NextResponse.json({ error: "Access denied" }, { status: 403 })
+      if (context.userRole === ("STUDENT" as UserRole) && rotation.studentId !== context.userId) {
+        return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
       }
 
       // Check if student is already clocked in
@@ -152,7 +173,7 @@ export async function POST(request: NextRequest) {
         .limit(1)
 
       if (existingRecord) {
-        return NextResponse.json({ error: "Student is already clocked in" }, { status: 400 })
+        return createErrorResponse("Student is already clocked in", HTTP_STATUS.BAD_REQUEST)
       }
 
       // Create new time record
@@ -191,8 +212,7 @@ export async function POST(request: NextRequest) {
         status: "SUCCESS",
       })
 
-      return NextResponse.json({
-        success: true,
+      return createSuccessResponse({
         data: newRecord,
         message: "Successfully clocked in",
       })
@@ -209,12 +229,23 @@ export async function POST(request: NextRequest) {
       .limit(1)
 
     if (!rotation) {
-      return NextResponse.json({ error: "Rotation not found" }, { status: 404 })
+      return createErrorResponse("Rotation not found", HTTP_STATUS.NOT_FOUND)
     }
 
     // Students can only create records for their own rotations
-    if (context.userRole === "STUDENT" && rotation.studentId !== context.userId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 })
+    if (context.userRole === ("STUDENT" as UserRole) && rotation.studentId !== context.userId) {
+      return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
+    }
+
+    if (context.userRole === ("STUDENT" as UserRole)) {
+      const referenceTime = new Date(validatedData.clockIn)
+      const submissionWindow = ValidationRules.validateStudentSubmissionWindow(referenceTime)
+      if (!submissionWindow.valid) {
+        return createErrorResponse(
+          submissionWindow.reason || "Submission window elapsed",
+          HTTP_STATUS.BAD_REQUEST
+        )
+      }
     }
 
     // Calculate total hours if both clock in and out are provided
@@ -265,50 +296,90 @@ export async function POST(request: NextRequest) {
       status: "SUCCESS",
     })
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       data: newRecord,
       message: "Time record created successfully",
     })
   } catch (error) {
     console.error("Error creating time record:", error)
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation failed", details: error.issues },
-        { status: 400 }
+      return createValidationErrorResponse(
+        ERROR_MESSAGES.VALIDATION_ERROR,
+        error.issues.map((err) => ({
+          field: err.path.join("."),
+          code: err.code,
+          details: err.message,
+        }))
       )
     }
-    return NextResponse.json({ error: "Failed to create time record" }, { status: 500 })
+    return createErrorResponse(
+      ERROR_MESSAGES.INTERNAL_ERROR,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    )
   }
-}
+})
 
 // PUT /api/time-records - Update time record (clock out, approve, etc.)
-export async function PUT(request: NextRequest) {
+export const PUT = withErrorHandling(async (request: NextRequest) => {
   try {
     const context = await getSchoolContext()
     const body = await request.json()
-    const { id, ...updateData } = body
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
 
     if (!id) {
-      return NextResponse.json({ error: "Time record ID is required" }, { status: 400 })
+      return createErrorResponse("Time record ID is required", HTTP_STATUS.BAD_REQUEST)
     }
 
-    const validatedData = updateTimeRecordSchema.parse(updateData)
+    // Validate request body
+    const validationResult = updateTimeRecordSchema.safeParse(body)
+    if (!validationResult.success) {
+      return createValidationErrorResponse(
+        ERROR_MESSAGES.VALIDATION_ERROR,
+        validationResult.error.issues.map((err) => ({
+          field: err.path.join("."),
+          code: err.code,
+          details: err.message,
+        }))
+      )
+    }
+
+    const updateData = validationResult.data
 
     // Get existing record
-    const [existingRecord] = await db
+    const existingRecord = await db
       .select()
       .from(timeRecords)
       .where(eq(timeRecords.id, id))
       .limit(1)
 
-    if (!existingRecord) {
-      return NextResponse.json({ error: "Time record not found" }, { status: 404 })
+    if (!existingRecord.length) {
+      return createErrorResponse("Time record not found", HTTP_STATUS.NOT_FOUND)
     }
 
-    // Check permissions
-    if (context.userRole === "STUDENT" && existingRecord.studentId !== context.userId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 })
+    const record = existingRecord[0]
+
+    // Check permissions and submission window
+    if (context.userRole === "STUDENT") {
+      if (record.studentId !== context.userId || record.status !== "PENDING") {
+        return createErrorResponse("Cannot modify approved time records", HTTP_STATUS.FORBIDDEN)
+      }
+      if (!record.clockIn) {
+        return createErrorResponse("Invalid time record: missing clock in time", HTTP_STATUS.BAD_REQUEST)
+      }
+      const windowResult = ValidationRules.validateStudentSubmissionWindow(record.clockIn)
+      if (!windowResult.valid) {
+        return createErrorResponse(
+          windowResult.reason || "Submission window elapsed",
+          HTTP_STATUS.FORBIDDEN
+        )
+      }
+    } else if (
+      !["CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "SCHOOL_ADMIN", "SUPER_ADMIN"].includes(
+        context.userRole
+      )
+    ) {
+      return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
     }
 
     // Prepare update values
@@ -316,36 +387,68 @@ export async function PUT(request: NextRequest) {
       updatedAt: new Date(),
     }
 
-    if (validatedData.clockOut) {
-      updateValues.clockOut = new Date(validatedData.clockOut)
+    if (updateData.clockOut) {
+      updateValues.clockOut = new Date(updateData.clockOut)
 
       // Recalculate total hours
-      const clockInTime = new Date(existingRecord.clockIn)
-      const clockOutTime = new Date(validatedData.clockOut)
+      if (!record.clockIn) {
+        return createErrorResponse("Invalid time record: missing clock in time", HTTP_STATUS.BAD_REQUEST)
+      }
+      const clockInTime = new Date(record.clockIn)
+      const clockOutTime = new Date(updateData.clockOut)
       const diffMs = clockOutTime.getTime() - clockInTime.getTime()
       updateValues.totalHours = (diffMs / (1000 * 60 * 60)).toFixed(2)
+
+      // Auto-approve on student clock-out when enabled and validation passes
+      const autoApprove = (process.env.AUTO_APPROVE_ON_CLOCK_OUT ?? "true").toLowerCase() === "true"
+      if (autoApprove && context.userRole === ("STUDENT" as UserRole)) {
+        const validation = ValidationRules.validateClockOutTime(clockInTime, clockOutTime)
+        if (validation.valid) {
+          updateValues.status = "APPROVED"
+          updateValues.approvedAt = new Date()
+        }
+      }
     }
 
-    if (validatedData.activities) {
-      updateValues.activities = JSON.stringify(validatedData.activities)
+    if (updateData.activities) {
+      updateValues.activities = JSON.stringify(updateData.activities)
     }
 
-    if (validatedData.notes !== undefined) {
-      updateValues.notes = validatedData.notes
+    if (updateData.notes !== undefined) {
+      updateValues.notes = updateData.notes
     }
 
     // Only supervisors/preceptors can approve/reject
     if (
-      validatedData.status &&
+      updateData.status &&
       ["CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "SCHOOL_ADMIN", "SUPER_ADMIN"].includes(
         context.userRole
       )
     ) {
-      updateValues.status = validatedData.status
-      if (validatedData.status === "APPROVED") {
+      updateValues.status = updateData.status
+      if (updateData.status === "APPROVED") {
         updateValues.approvedBy = context.userId
         updateValues.approvedAt = new Date()
       }
+    }
+
+    // Audit auto-approval occurring via student PUT clock-out
+    if (updateValues.status === "APPROVED" && context.userRole === ("STUDENT" as UserRole)) {
+      await logAuditEvent({
+        userId: context.userId,
+        action: "TIME_RECORD_AUTO_APPROVED",
+        resource: "TIME_RECORD",
+        resourceId: id,
+        details: {
+          rotationId: record.rotationId,
+          totalHours: updateValues.totalHours,
+        },
+        ipAddress:
+          request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
+        userAgent: request.headers.get("user-agent") || undefined,
+        severity: "LOW",
+        status: "SUCCESS",
+      })
     }
 
     const [updatedRecord] = await db
@@ -355,10 +458,10 @@ export async function PUT(request: NextRequest) {
       .returning()
 
     // Log audit event
-    const auditAction = validatedData.clockOut
+    const auditAction = updateData.clockOut
       ? "CLOCK_OUT"
-      : validatedData.status
-        ? `TIME_RECORD_${validatedData.status}`
+      : updateData.status
+        ? `TIME_RECORD_${updateData.status}`
         : "UPDATE_TIME_RECORD"
 
     await logAuditEvent({
@@ -367,46 +470,52 @@ export async function PUT(request: NextRequest) {
       resource: "TIME_RECORD",
       resourceId: id,
       details: {
-        studentId: existingRecord.studentId,
-        rotationId: existingRecord.rotationId,
+        studentId: record.studentId,
+        rotationId: record.rotationId,
         updatedFields: Object.keys(updateValues).filter((key) => key !== "updatedAt"),
-        clockOut: validatedData.clockOut,
-        status: validatedData.status,
+        clockOut: updateData.clockOut,
+        status: updateData.status,
         totalHours: updateValues.totalHours,
       },
       ipAddress:
         request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
       userAgent: request.headers.get("user-agent") || undefined,
-      severity: validatedData.status ? "MEDIUM" : "LOW",
+      severity: updateData.status ? "MEDIUM" : "LOW",
       status: "SUCCESS",
     })
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       data: updatedRecord,
       message: "Time record updated successfully",
     })
   } catch (error) {
     console.error("Error updating time record:", error)
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation failed", details: error.issues },
-        { status: 400 }
+      return createValidationErrorResponse(
+        ERROR_MESSAGES.VALIDATION_ERROR,
+        error.issues.map((err) => ({
+          field: err.path.join("."),
+          code: err.code,
+          details: err.message,
+        }))
       )
     }
-    return NextResponse.json({ error: "Failed to update time record" }, { status: 500 })
+    return createErrorResponse(
+      ERROR_MESSAGES.INTERNAL_ERROR,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    )
   }
-}
+})
 
 // DELETE /api/time-records - Delete time record
-export async function DELETE(request: NextRequest) {
+export const DELETE = withErrorHandling(async (request: NextRequest) => {
   try {
     const context = await getSchoolContext()
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
 
     if (!id) {
-      return NextResponse.json({ error: "Time record ID is required" }, { status: 400 })
+      return createErrorResponse("Time record ID is required", HTTP_STATUS.BAD_REQUEST)
     }
 
     // Get existing record
@@ -417,20 +526,23 @@ export async function DELETE(request: NextRequest) {
       .limit(1)
 
     if (!existingRecord) {
-      return NextResponse.json({ error: "Time record not found" }, { status: 404 })
+      return createErrorResponse("Time record not found", HTTP_STATUS.NOT_FOUND)
     }
 
     // Only allow deletion by student (if pending) or admin/supervisor
-    if (context.userRole === "STUDENT") {
+    if (context.userRole === ("STUDENT" as UserRole)) {
       if (existingRecord.studentId !== context.userId || existingRecord.status !== "PENDING") {
-        return NextResponse.json({ error: "Cannot delete approved time records" }, { status: 403 })
+        return createErrorResponse("Cannot delete approved time records", HTTP_STATUS.FORBIDDEN)
       }
     } else if (
-      !["CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "SCHOOL_ADMIN", "SUPER_ADMIN"].includes(
-        context.userRole
-      )
+      ![
+        "CLINICAL_PRECEPTOR" as UserRole,
+        "CLINICAL_SUPERVISOR" as UserRole,
+        "SCHOOL_ADMIN" as UserRole,
+        "SUPER_ADMIN" as UserRole,
+      ].includes(context.userRole)
     ) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+      return createErrorResponse("Insufficient permissions", HTTP_STATUS.FORBIDDEN)
     }
 
     await db.delete(timeRecords).where(eq(timeRecords.id, id))
@@ -455,12 +567,15 @@ export async function DELETE(request: NextRequest) {
       status: "SUCCESS",
     })
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       message: "Time record deleted successfully",
     })
   } catch (error) {
     console.error("Error deleting time record:", error)
-    return NextResponse.json({ error: "Failed to delete time record" }, { status: 500 })
+    return createErrorResponse(
+      ERROR_MESSAGES.INTERNAL_ERROR,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    )
   }
-}
+})
+

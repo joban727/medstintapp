@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { createErrorResponse, withErrorHandling, HTTP_STATUS } from "@/lib/api-response"
 
 // Mock function to generate PDF report
 const generatePDFReport = async (data: any, type: string) => {
@@ -10,6 +11,8 @@ const generatePDFReport = async (data: any, type: string) => {
 <<
 /Type /Catalog
 /Pages 2 0 R
+/Title (MedStint Report)
+/Creator (MedStint)
 >>
 endobj
 
@@ -108,79 +111,72 @@ const generateExcelReport = async (data: any, type: string) => {
   return csvData
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    
-    const format = searchParams.get("format") || "pdf"
-    const type = searchParams.get("type") || "summary"
-    const from = searchParams.get("from")
-    const to = searchParams.get("to")
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  const { searchParams } = new URL(request.url)
 
-    if (!from || !to) {
-      return NextResponse.json(
-        { error: "Date range (from and to) parameters are required" },
-        { status: 400 }
-      )
-    }
+  const format = searchParams.get("format") || "pdf"
+  const type = searchParams.get("type") || "summary"
+  const from = searchParams.get("from")
+  const to = searchParams.get("to")
 
-    // Fetch the same data that would be used in the comprehensive report
-    // Mock data for testing - in production, this would come from your database
-    const mockReportData = {
-      summary: {
-        // Empty summary - no mock data to prevent displaying fake information
-      },
-      timeTracking: {
-        // Empty time tracking - no mock data to prevent displaying fake information
-      },
-      competencyProgress: {
-        // Empty competency progress - no mock data to prevent displaying fake information
-      },
-      studentPerformance: {
-        // Empty student performance - no mock data to prevent displaying fake information
-      },
-    }
-    let reportBuffer: Buffer
-    let contentType: string
-    let fileExtension: string
-
-     switch (format.toLowerCase()) {
-       case "pdf":
-         reportBuffer = await generatePDFReport(mockReportData, type)
-         contentType = "application/pdf"
-         fileExtension = "pdf"
-         break
-       case "csv":
-         reportBuffer = await generateCSVReport(mockReportData, type)
-         contentType = "text/csv"
-         fileExtension = "csv"
-         break
-       case "excel":
-         reportBuffer = await generateExcelReport(mockReportData, type)
-         contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-         fileExtension = "xlsx"
-         break
-       default:
-         return NextResponse.json(
-           { error: "Unsupported format. Use pdf, csv, or excel" },
-           { status: 400 }
-         )
-     }
-
-    const fileName = `medstint-${type}-report-${new Date().toISOString().split("T")[0]}.${fileExtension}`
-
-    return new NextResponse(reportBuffer, {
-      headers: {
-        "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${fileName}"`,
-        "Content-Length": reportBuffer.length.toString(),
-      },
-    })
-  } catch (error) {
-    console.error("Failed to export report:", error)
-    return NextResponse.json(
-      { error: "Failed to export report" },
-      { status: 500 }
+  if (!from || !to) {
+    return createErrorResponse(
+      "Date range (from and to) parameters are required",
+      HTTP_STATUS.BAD_REQUEST
     )
   }
-}
+
+  // Fetch the same data that would be used in the comprehensive report
+  // Mock data for testing - in production, this would come from your database
+  const mockReportData = {
+    summary: {
+      // Empty summary - no mock data to prevent displaying fake information
+    },
+    timeTracking: {
+      // Empty time tracking - no mock data to prevent displaying fake information
+    },
+    competencyProgress: {
+      // Empty competency progress - no mock data to prevent displaying fake information
+    },
+    studentPerformance: {
+      // Empty student performance - no mock data to prevent displaying fake information
+    },
+  }
+  let reportBuffer: Buffer
+  let contentType: string
+  let fileExtension: string
+
+  switch (format.toLowerCase()) {
+    case "pdf":
+      reportBuffer = await generatePDFReport(mockReportData, type)
+      contentType = "application/pdf"
+      fileExtension = "pdf"
+      break
+    case "csv":
+      reportBuffer = await generateCSVReport(mockReportData, type)
+      contentType = "text/csv"
+      fileExtension = "csv"
+      break
+    case "excel":
+      reportBuffer = await generateExcelReport(mockReportData, type)
+      contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      fileExtension = "xlsx"
+      break
+    default:
+      return createErrorResponse(
+        "Unsupported format. Use pdf, csv, or excel",
+        HTTP_STATUS.BAD_REQUEST
+      )
+  }
+
+  const fileName = `medstint-${type}-report-${new Date().toISOString().split("T")[0]}.${fileExtension}`
+
+  return new NextResponse(new Uint8Array(reportBuffer), {
+    headers: {
+      "Content-Type": contentType,
+      "Content-Disposition": `attachment; filename="${fileName}"`,
+      "Content-Length": reportBuffer.length.toString(),
+    },
+  })
+})
+

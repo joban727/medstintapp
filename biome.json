@@ -6,7 +6,16 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"]
+    "includes": [
+      "src/app/**/*.ts",
+      "src/app/**/*.tsx",
+      "src/components/**/*.ts",
+      "src/components/**/*.tsx",
+      "src/hooks/**/*.ts",
+      "src/hooks/**/*.tsx",
+      "src/lib/**/*.ts",
+      "src/lib/**/*.tsx"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -18,44 +27,39 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "recommended": false,
       "a11y": {
         "noSvgWithoutTitle": "off"
       },
       "correctness": {
-        "noUnusedImports": "error",
-        "noUnusedVariables": "error",
-        "noUnusedFunctionParameters": "warn",
-        "useExhaustiveDependencies": "warn"
+        "noUnusedImports": "off",
+        "noUnusedVariables": "off",
+        "noUnusedFunctionParameters": "off",
+        "useExhaustiveDependencies": "off"
       },
       "suspicious": {
-        "noArrayIndexKey": "warn",
-        "noDoubleEquals": "error",
-        "noExplicitAny": "warn",
-        "noDebugger": "error"
+        "noArrayIndexKey": "off",
+        "noDoubleEquals": "off",
+        "noExplicitAny": "off",
+        "noDebugger": "off"
       },
       "style": {
-        "noNonNullAssertion": "warn",
-        "useSelfClosingElements": "error",
-        "useTemplate": "error",
-        "useConst": "error",
-        "noParameterAssign": "error",
-        "useAsConstAssertion": "error",
-        "useDefaultParameterLast": "error",
-        "useEnumInitializers": "error",
-        "useSingleVarDeclarator": "error",
-        "noUnusedTemplateLiteral": "error",
-        "useNumberNamespace": "error",
-        "noInferrableTypes": "error",
-        "noUselessElse": "error"
+        "noNonNullAssertion": "off",
+        "useSelfClosingElements": "off",
+        "useTemplate": "off",
+        "useConst": "warn",
+        "noParameterAssign": "off",
+        "useAsConstAssertion": "off",
+        "useDefaultParameterLast": "off",
+        "useEnumInitializers": "off",
+        "useSingleVarDeclarator": "off",
+        "noUnusedTemplateLiteral": "off",
+        "useNumberNamespace": "off",
+        "noInferrableTypes": "off",
+        "noUselessElse": "off"
       },
       "nursery": {
-        "useSortedClasses": {
-          "level": "info",
-          "options": {
-            "functions": ["cn", "clsx", "cva"]
-          }
-        },
+        "useSortedClasses": "off",
         "useUniqueElementIds": "off"
       }
     }

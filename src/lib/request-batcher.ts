@@ -13,7 +13,7 @@ interface BatchRequest<T = any> {
   resolve: (value: T) => void
   reject: (error: Error) => void
   timestamp: number
-  priority: 'high' | 'medium' | 'low'
+  priority: "high" | "medium" | "low"
 }
 
 interface BatchConfig {
@@ -36,8 +36,8 @@ const DEFAULT_BATCH_CONFIG: BatchConfig = {
   priorityLevels: {
     high: 50, // Clock operations get 50ms max wait
     medium: 200, // Status checks get 200ms
-    low: 1000 // Other requests get 1s
-  }
+    low: 1000, // Other requests get 1s
+  },
 }
 
 export class RequestBatcher {
@@ -67,29 +67,30 @@ export class RequestBatcher {
       method?: string
       body?: any
       headers?: Record<string, string>
-      priority?: 'high' | 'medium' | 'low'
+      priority?: "high" | "medium" | "low"
       skipBatching?: boolean
     } = {}
   ): Promise<T> {
     const {
-      method = 'GET',
+      method = "GET",
       body,
       headers = {},
-      priority = 'medium',
-      skipBatching = false
+      priority = "medium",
+      skipBatching = false,
     } = options
 
     // Skip batching for high-priority clock operations if requested
-    if (skipBatching || (priority === 'high' && endpoint.includes('/clock'))) {
+    if (skipBatching || (priority === "high" && endpoint.includes("/clock"))) {
       return this.executeRequest<T>(endpoint, { method, body, headers })
     }
 
     // Create deduplication key
     const deduplicationKey = this.createDeduplicationKey(endpoint, method, body)
-    
+
     // Check for existing identical request
     if (this.config.enableDeduplication && this.deduplicationCache.has(deduplicationKey)) {
-      return this.deduplicationCache.get(deduplicationKey)!
+      const existing = this.deduplicationCache.get(deduplicationKey)
+      if (existing) return existing
     }
 
     // Create promise for this request
@@ -103,7 +104,7 @@ export class RequestBatcher {
         resolve,
         reject,
         timestamp: Date.now(),
-        priority
+        priority,
       }
 
       this.addToBatch(request)
@@ -112,7 +113,7 @@ export class RequestBatcher {
     // Cache for deduplication
     if (this.config.enableDeduplication) {
       this.deduplicationCache.set(deduplicationKey, requestPromise)
-      
+
       // Clean up cache after request completes
       requestPromise.finally(() => {
         setTimeout(() => {
@@ -129,12 +130,12 @@ export class RequestBatcher {
    */
   private addToBatch<T>(request: BatchRequest<T>): void {
     const batchKey = this.createBatchKey(request.endpoint, request.method)
-    
+
     if (!this.pendingRequests.has(batchKey)) {
       this.pendingRequests.set(batchKey, [])
     }
 
-    const batch = this.pendingRequests.get(batchKey)!
+    const batch = this.pendingRequests.get(batchKey) || []
     batch.push(request)
 
     // Sort by priority and timestamp
@@ -152,21 +153,23 @@ export class RequestBatcher {
   /**
    * Schedule batch execution based on priority and timing
    */
-  private scheduleBatchExecution(batchKey: string, priority: 'high' | 'medium' | 'low'): void {
-    const batch = this.pendingRequests.get(batchKey)!
-    
+  private scheduleBatchExecution(batchKey: string, priority: "high" | "medium" | "low"): void {
+    const batch = this.pendingRequests.get(batchKey) || []
+
     // Clear existing timer
     if (this.batchTimers.has(batchKey)) {
-      clearTimeout(this.batchTimers.get(batchKey)!)
+      const existingTimer = this.batchTimers.get(batchKey)
+      if (existingTimer) clearTimeout(existingTimer)
     }
 
     // Determine timeout based on priority and batch size
     let timeout = this.config.priorityLevels[priority]
-    
+
     // Execute immediately if batch is full or has high priority items that are old
-    const shouldExecuteImmediately = 
+    const shouldExecuteImmediately =
       batch.length >= this.config.maxBatchSize ||
-      (priority === 'high' && batch.some(r => Date.now() - r.timestamp > this.config.priorityLevels.high))
+      (priority === "high" &&
+        batch.some((r) => Date.now() - r.timestamp > this.config.priorityLevels.high))
 
     if (shouldExecuteImmediately) {
       timeout = 0
@@ -210,12 +213,13 @@ export class RequestBatcher {
 
     for (const request of batch) {
       const groupKey = this.createDeduplicationKey(request.endpoint, request.method, request.body)
-      
-      if (!groups.has(groupKey)) {
-        groups.set(groupKey, [])
+
+      let group = groups.get(groupKey)
+      if (!group) {
+        group = []
+        groups.set(groupKey, group)
       }
-      
-      groups.get(groupKey)!.push(request)
+      group.push(request)
     }
 
     return groups
@@ -228,23 +232,20 @@ export class RequestBatcher {
     if (requests.length === 0) return
 
     const firstRequest = requests[0]
-    
+
     try {
       // Execute the request once for all identical requests
-      const result = await this.executeRequest(
-        firstRequest.endpoint,
-        {
-          method: firstRequest.method,
-          body: firstRequest.body,
-          headers: firstRequest.headers
-        }
-      )
+      const result = await this.executeRequest(firstRequest.endpoint, {
+        method: firstRequest.method,
+        body: firstRequest.body,
+        headers: firstRequest.headers,
+      })
 
       // Resolve all requests in the group with the same result
-      requests.forEach(request => request.resolve(result))
+      requests.forEach((request) => request.resolve(result))
     } catch (error) {
       // Reject all requests in the group with the same error
-      requests.forEach(request => request.reject(error as Error))
+      requests.forEach((request) => request.reject(error as Error))
     }
   }
 
@@ -264,17 +265,17 @@ export class RequestBatcher {
     const fetchOptions: RequestInit = {
       method,
       headers: {
-        'Content-Type': 'application/json',
-        ...headers
-      }
+        "Content-Type": "application/json",
+        ...headers,
+      },
     }
 
-    if (body && method !== 'GET') {
+    if (body && method !== "GET") {
       fetchOptions.body = JSON.stringify(body)
     }
 
     const response = await fetch(endpoint, fetchOptions)
-    
+
     if (!response.ok) {
       throw new Error(`Request failed: ${response.status} ${response.statusText}`)
     }
@@ -293,7 +294,7 @@ export class RequestBatcher {
    * Create a key for deduplicating identical requests
    */
   private createDeduplicationKey(endpoint: string, method: string, body?: any): string {
-    const bodyHash = body ? JSON.stringify(body) : ''
+    const bodyHash = body ? JSON.stringify(body) : ""
     return `${method}:${endpoint}:${bodyHash}`
   }
 
@@ -305,13 +306,15 @@ export class RequestBatcher {
     totalPendingRequests: number
     cacheSize: number
   } {
-    const totalPendingRequests = Array.from(this.pendingRequests.values())
-      .reduce((sum, batch) => sum + batch.length, 0)
+    const totalPendingRequests = Array.from(this.pendingRequests.values()).reduce(
+      (sum, batch) => sum + batch.length,
+      0
+    )
 
     return {
       pendingBatches: this.pendingRequests.size,
       totalPendingRequests,
-      cacheSize: this.deduplicationCache.size
+      cacheSize: this.deduplicationCache.size,
     }
   }
 
@@ -320,13 +323,13 @@ export class RequestBatcher {
    */
   clear(): void {
     // Clear all timers
-    this.batchTimers.forEach(timer => clearTimeout(timer))
+    this.batchTimers.forEach((timer) => clearTimeout(timer))
     this.batchTimers.clear()
 
     // Reject all pending requests
-    this.pendingRequests.forEach(batch => {
-      batch.forEach(request => {
-        request.reject(new Error('Request batcher cleared'))
+    this.pendingRequests.forEach((batch) => {
+      batch.forEach((request) => {
+        request.reject(new Error("Request batcher cleared"))
       })
     })
     this.pendingRequests.clear()
@@ -346,7 +349,7 @@ export async function batchedFetch<T>(
     method?: string
     body?: any
     headers?: Record<string, string>
-    priority?: 'high' | 'medium' | 'low'
+    priority?: "high" | "medium" | "low"
     skipBatching?: boolean
   } = {}
 ): Promise<T> {
@@ -364,8 +367,8 @@ export async function batchedClockRequest<T>(
 ): Promise<T> {
   return requestBatcher.batchRequest<T>(endpoint, {
     ...options,
-    priority: 'high',
-    skipBatching: true // Clock operations should not be batched for accuracy
+    priority: "high",
+    skipBatching: true, // Clock operations should not be batched for accuracy
   })
 }
 
@@ -379,6 +382,6 @@ export async function batchedStatusRequest<T>(
 ): Promise<T> {
   return requestBatcher.batchRequest<T>(endpoint, {
     ...options,
-    priority: 'medium'
+    priority: "medium",
   })
 }

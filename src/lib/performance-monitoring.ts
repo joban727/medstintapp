@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef } from "react"
 
 interface PerformanceMetrics {
   componentName: string
@@ -15,15 +15,17 @@ export function usePerformanceMonitoring(componentName: string) {
   useEffect(() => {
     // Component mounted
     mountTime.current = performance.now() - startTime.current
-    
-    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+
+    if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
       console.log(`[Performance] ${componentName} mounted in ${mountTime.current.toFixed(2)}ms`)
     }
 
     return () => {
       // Component unmounted
-      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-        console.log(`[Performance] ${componentName} unmounted after ${performance.now() - startTime.current}ms`)
+      if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+        console.log(
+          `[Performance] ${componentName} unmounted after ${performance.now() - startTime.current}ms`
+        )
       }
     }
   }, [componentName])
@@ -31,11 +33,11 @@ export function usePerformanceMonitoring(componentName: string) {
   useEffect(() => {
     // Track render time
     renderTime.current = performance.now()
-    
+
     // Use requestAnimationFrame to measure actual render time
     requestAnimationFrame(() => {
       const actualRenderTime = performance.now() - renderTime.current
-      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
         console.log(`[Performance] ${componentName} rendered in ${actualRenderTime.toFixed(2)}ms`)
       }
     })
@@ -51,8 +53,8 @@ export function usePerformanceMonitoring(componentName: string) {
       componentName,
       mountTime: mountTime.current,
       renderTime: renderTime.current,
-      hydrationTime: typeof window !== 'undefined' ? mountTime.current : undefined
-    })
+      hydrationTime: typeof window !== "undefined" ? mountTime.current : undefined,
+    }),
   }
 }
 
@@ -64,11 +66,13 @@ export function measureComponentPerformance<T extends (...args: any[]) => any>(
     const start = performance.now()
     const result = fn(...args)
     const end = performance.now()
-    
-    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-      console.log(`[Performance] ${componentName} function executed in ${(end - start).toFixed(2)}ms`)
+
+    if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+      console.log(
+        `[Performance] ${componentName} function executed in ${(end - start).toFixed(2)}ms`
+      )
     }
-    
+
     return result
   }) as T
 }

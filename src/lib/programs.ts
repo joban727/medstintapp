@@ -1,12 +1,27 @@
 // Use Web Crypto API for browser compatibility
-const randomUUID =
-  typeof window !== "undefined"
-    ? () => window.crypto.randomUUID()
-    : require("node:crypto").randomUUID
+const randomUUID = (() => {
+  if (typeof window !== "undefined" && window.crypto && window.crypto.randomUUID) {
+    return () => window.crypto.randomUUID()
+  }
+  // Server-side or fallback
+  try {
+    const crypto = require("node:crypto")
+    return crypto.randomUUID
+  } catch {
+    // Fallback for environments without crypto
+    return () => {
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+        const r = (Math.random() * 16) | 0
+        const v = c === "x" ? r : (r & 0x3) | 0x8
+        return v.toString(16)
+      })
+    }
+  }
+})()
 
-import { and, count, desc, eq, like } from "drizzle-orm"
-import { db } from "@/database/db"
-import { programs, users } from "@/database/schema"
+import { and, count, desc, eq, like, sql } from "drizzle-orm"
+import { db } from "@/database/connection-pool"
+import { programs, users, cohorts } from "@/database/schema"
 import { getSchoolContext } from "@/lib/school-utils"
 
 export interface Program {
@@ -20,6 +35,7 @@ export interface Program {
   updatedAt: Date | null
   stats?: {
     totalStudents: number
+    totalCohorts: number
   }
 }
 
@@ -62,6 +78,7 @@ export async function getSchoolPrograms(
         createdAt: programs.createdAt,
         updatedAt: programs.updatedAt,
         studentCount: count(users.id),
+        cohortCount: sql<number>`(SELECT COUNT(*) FROM ${cohorts} WHERE ${cohorts.programId} = ${programs.id})`,
       })
       .from(programs)
       .leftJoin(users, eq(users.programId, programs.id))
@@ -75,6 +92,7 @@ export async function getSchoolPrograms(
       ...program,
       stats: {
         totalStudents: program.studentCount,
+        totalCohorts: Number(program.cohortCount),
       },
     }))
   }

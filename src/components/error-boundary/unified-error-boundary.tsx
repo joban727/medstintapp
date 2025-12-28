@@ -11,7 +11,7 @@ export interface ErrorBoundaryConfig {
   maxRetries?: number
   showDetails?: boolean
   enableChunkErrorHandling?: boolean
-  fallbackType?: 'minimal' | 'dashboard' | 'fullscreen'
+  fallbackType?: "minimal" | "dashboard" | "fullscreen"
   onError?: (error: Error, errorInfo: ErrorInfo) => void
 }
 
@@ -38,7 +38,7 @@ interface State {
 
 /**
  * Unified Error Boundary Component
- * 
+ *
  * Consolidates all error boundary functionality into a single, configurable component
  * that can handle different error scenarios and UI requirements.
  */
@@ -47,15 +47,15 @@ class UnifiedErrorBoundary extends Component<Props, State> {
 
   constructor(props: Props) {
     super(props)
-    
+
     // Default configuration
     this.config = {
       maxRetries: 3,
       showDetails: process.env.NODE_ENV === "development",
       enableChunkErrorHandling: true,
-      fallbackType: 'dashboard',
-      onError: undefined,
-      ...props.config
+      fallbackType: "dashboard",
+      onError: () => { },
+      ...props.config,
     }
 
     this.state = {
@@ -66,7 +66,12 @@ class UnifiedErrorBoundary extends Component<Props, State> {
     }
   }
 
-  static getDerivedStateFromError(error: Error): Partial<State> {
+  static getDerivedStateFromError(error: Error): Partial<State> | null {
+    // Ignore NEXT_REDIRECT errors to allow Next.js to handle redirects
+    if (error.message === "NEXT_REDIRECT" || error.message.includes("NEXT_REDIRECT")) {
+      return null
+    }
+
     return {
       hasError: true,
       error,
@@ -106,7 +111,7 @@ class UnifiedErrorBoundary extends Component<Props, State> {
 
   handleRetry = () => {
     const { error } = this.state
-    
+
     // For chunk loading errors, reload the page
     if (this.config.enableChunkErrorHandling && error && this.isChunkError(error)) {
       window.location.reload()
@@ -144,7 +149,7 @@ class UnifiedErrorBoundary extends Component<Props, State> {
 
     return (
       <div className="flex min-h-[200px] items-center justify-center p-4">
-        <div className="text-center space-y-4">
+        <div className="text-center gap-4">
           <AlertTriangle className="h-8 w-8 text-red-500 mx-auto" />
           <div>
             <h3 className="font-medium text-gray-900">
@@ -180,7 +185,7 @@ class UnifiedErrorBoundary extends Component<Props, State> {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
-              <AlertTriangle className="h-8 w-8 text-red-600" />
+              <AlertTriangle className="h-8 w-8 text-error" />
             </div>
             <CardTitle className="text-2xl">
               {isChunkError ? "Loading Error" : "Something went wrong"}
@@ -191,7 +196,7 @@ class UnifiedErrorBoundary extends Component<Props, State> {
                 : "We encountered an error while loading this section."}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="gap-4">
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription className="text-sm">{errorMessage}</AlertDescription>
@@ -199,10 +204,10 @@ class UnifiedErrorBoundary extends Component<Props, State> {
 
             {this.config.showDetails && this.state.errorInfo && (
               <details className="text-sm">
-                <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+                <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground transition-color duration-200s duration-200">
                   Technical Details
                 </summary>
-                <pre className="mt-2 overflow-auto rounded bg-muted p-2 text-xs">
+                <pre className="mt-2 overflow-auto rounded-md bg-muted p-2 text-xs">
                   {error?.stack}
                 </pre>
               </details>
@@ -212,7 +217,9 @@ class UnifiedErrorBoundary extends Component<Props, State> {
               {canRetry && (
                 <Button onClick={this.handleRetry} variant="default" className="flex-1">
                   <RefreshCw className="mr-2 h-4 w-4" />
-                  {isChunkError ? "Reload Page" : `Try Again (${this.config.maxRetries - this.state.retryCount} left)`}
+                  {isChunkError
+                    ? "Reload Page"
+                    : `Try Again (${this.config.maxRetries - this.state.retryCount} left)`}
                 </Button>
               )}
               <Button onClick={this.handleReset} variant="outline" className="flex-1">
@@ -224,8 +231,8 @@ class UnifiedErrorBoundary extends Component<Props, State> {
             {!canRetry && !isChunkError && (
               <Alert variant="destructive">
                 <AlertDescription className="text-sm">
-                  Maximum retry attempts reached. Please refresh the page or contact support if
-                  the problem persists.
+                  Maximum retry attempts reached. Please refresh the page or contact support if the
+                  problem persists.
                 </AlertDescription>
               </Alert>
             )}
@@ -245,7 +252,7 @@ class UnifiedErrorBoundary extends Component<Props, State> {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-              <AlertTriangle className="h-6 w-6 text-red-600" />
+              <AlertTriangle className="h-6 w-6 text-error" />
             </div>
             <CardTitle className="font-semibold text-xl">
               {isChunkError ? "Loading Error" : "Something went wrong"}
@@ -256,7 +263,7 @@ class UnifiedErrorBoundary extends Component<Props, State> {
                 : "An unexpected error occurred. Please try refreshing the page."}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="gap-4">
             {this.config.showDetails && error && (
               <div className="rounded-md bg-gray-50 p-3">
                 <p className="font-medium text-gray-900 text-sm">Error Details:</p>
@@ -290,7 +297,7 @@ class UnifiedErrorBoundary extends Component<Props, State> {
         const FallbackComponent = this.props.fallback
         return (
           <FallbackComponent
-            error={error || new Error('Unknown error')}
+            error={error || new Error("Unknown error")}
             retry={this.handleRetry}
             canRetry={canRetry}
             retryCount={this.state.retryCount}
@@ -301,11 +308,11 @@ class UnifiedErrorBoundary extends Component<Props, State> {
 
       // Use built-in fallback based on configuration
       switch (this.config.fallbackType) {
-        case 'minimal':
+        case "minimal":
           return this.renderMinimalFallback()
-        case 'fullscreen':
+        case "fullscreen":
           return this.renderFullscreenFallback()
-        case 'dashboard':
+        case "dashboard":
         default:
           return this.renderDashboardFallback()
       }
@@ -326,17 +333,18 @@ export const useErrorHandler = () => {
 
 // Hook for functional components to handle chunk loading errors
 export const useChunkErrorHandler = () => {
-  React.useEffect(() => {
-    const handleChunkError = (event: ErrorEvent) => {
-      if (event.error?.name === "ChunkLoadError" || event.message?.includes("Loading chunk")) {
-        console.error("Chunk loading error detected, reloading page...")
-        window.location.reload()
-      }
+  // Stable event handler with useEffectEvent (React 19.2+)
+  const onChunkError = React.useEffectEvent((event: ErrorEvent) => {
+    if (event.error?.name === "ChunkLoadError" || event.message?.includes("Loading chunk")) {
+      console.error("Chunk loading error detected, reloading page...")
+      window.location.reload()
     }
+  })
 
-    window.addEventListener("error", handleChunkError)
-    return () => window.removeEventListener("error", handleChunkError)
-  }, [])
+  React.useEffect(() => {
+    window.addEventListener("error", onChunkError)
+    return () => window.removeEventListener("error", onChunkError)
+  }, []) // No dependencies needed - onChunkError always has fresh state
 }
 
 // Higher-order component for wrapping components with error boundary
@@ -346,7 +354,7 @@ export function withErrorBoundary<P extends object>(
 ) {
   const WrappedComponent = React.forwardRef<any, P>((props, ref) => (
     <UnifiedErrorBoundary config={config}>
-      <Component {...props} ref={ref} />
+      <Component {...(props as P)} ref={ref} />
     </UnifiedErrorBoundary>
   ))
 
@@ -357,23 +365,23 @@ export function withErrorBoundary<P extends object>(
 // Predefined configurations for common use cases
 export const ErrorBoundaryConfigs = {
   minimal: {
-    fallbackType: 'minimal' as const,
+    fallbackType: "minimal" as const,
     maxRetries: 1,
     showDetails: false,
   },
   dashboard: {
-    fallbackType: 'dashboard' as const,
+    fallbackType: "dashboard" as const,
     maxRetries: 3,
     showDetails: process.env.NODE_ENV === "development",
   },
   fullscreen: {
-    fallbackType: 'fullscreen' as const,
+    fallbackType: "fullscreen" as const,
     maxRetries: 3,
     showDetails: process.env.NODE_ENV === "development",
     enableChunkErrorHandling: true,
   },
   student: {
-    fallbackType: 'dashboard' as const,
+    fallbackType: "dashboard" as const,
     maxRetries: 3,
     showDetails: process.env.NODE_ENV === "development",
     onError: (error: Error, errorInfo: ErrorInfo) => {

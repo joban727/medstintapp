@@ -5,6 +5,7 @@
  */
 
 import { toast } from 'sonner'
+import { openMapService } from '@/lib/openmap-service'
 
 export interface LocationCoordinates {
   latitude: number
@@ -66,7 +67,7 @@ class UnifiedLocationService {
     cacheKey: 'default'
   }
 
-  private constructor() {}
+  private constructor() { }
 
   static getInstance(): UnifiedLocationService {
     if (!UnifiedLocationService.instance) {
@@ -140,10 +141,10 @@ class UnifiedLocationService {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude, accuracy, altitude, altitudeAccuracy, heading, speed } = position.coords
-          
+
           // Validate coordinates
-          if (typeof latitude !== 'number' || typeof longitude !== 'number' || 
-              latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+          if (typeof latitude !== 'number' || typeof longitude !== 'number' ||
+            latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
             reject(new Error('Invalid coordinates received from geolocation'))
             return
           }
@@ -182,6 +183,7 @@ class UnifiedLocationService {
             default:
               errorMessage = 'Unknown geolocation error'
           }
+          console.warn('⚠️ [UnifiedLocationService] Geolocation error:', errorMessage)
           reject(new Error(errorMessage))
         },
         positionOptions
@@ -190,26 +192,25 @@ class UnifiedLocationService {
   }
 
   /**
-   * Lookup facility information for given coordinates
+   * Lookup facility based on coordinates
    */
-  private async lookupFacility(coordinates: LocationCoordinates): Promise<FacilityInfo | null> {
+  private async lookupFacility(location: LocationData): Promise<FacilityInfo | null> {
     try {
-      // Import OpenMapService dynamically to avoid circular dependencies
-      const { OpenMapService } = await import('@/lib/openmap-service')
-      const openMapService = OpenMapService.getInstance()
-      
-      const result = await openMapService.lookupFacility(coordinates, 500)
-      
+      const result = await openMapService.lookupFacility({
+        latitude: location.latitude,
+        longitude: location.longitude
+      })
+
       if (result.success && result.facility) {
         return {
-          id: result.facility.id,
+          id: result.facility.osmId,
           name: result.facility.name,
           address: result.facility.address,
           type: result.facility.type,
-          distance: result.distance
+          distance: result.facility.distance
         }
       }
-      
+
       return null
     } catch (error) {
       console.warn('Facility lookup failed:', error)
@@ -258,9 +259,9 @@ class UnifiedLocationService {
   async captureLocation(options: LocationCaptureOptions = {}): Promise<LocationState> {
     const opts = { ...this.DEFAULT_OPTIONS, ...options }
     const cacheKey = opts.cacheKey || 'default'
-    
+
     console.log('🌍 [UnifiedLocationService] Starting location capture with options:', opts)
-    
+
     // Check cache first
     if (opts.maximumAge && opts.maximumAge > 0) {
       const cached = this.getCachedLocation(cacheKey)
@@ -291,7 +292,7 @@ class UnifiedLocationService {
       // Check permission status
       const permissionStatus = await this.getPermissionStatus()
       console.log('🔐 [UnifiedLocationService] Permission status:', permissionStatus)
-      
+
       if (!permissionStatus.isSupported) {
         throw new Error('Geolocation is not supported by this browser')
       }
@@ -317,9 +318,9 @@ class UnifiedLocationService {
       // Determine accuracy level
       const accuracyLevel = this.getAccuracyLevel(locationData.accuracy)
 
-      console.log('📏 [UnifiedLocationService] Accuracy analysis:', { 
-        accuracy: locationData.accuracy, 
-        level: accuracyLevel 
+      console.log('📏 [UnifiedLocationService] Accuracy analysis:', {
+        accuracy: locationData.accuracy,
+        level: accuracyLevel
       })
 
       // Perform facility lookup if required
@@ -376,8 +377,19 @@ class UnifiedLocationService {
       return locationState
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to capture location'
-      console.error('❌ [UnifiedLocationService] Location capture failed:', errorMessage)
+      const raw = error instanceof Error ? error.message : 'Failed to capture location'
+      const isDenied = /denied|permission/i.test(raw)
+      const isUnavailable = /unavailable/i.test(raw)
+      const isTimeout = /timeout/i.test(raw)
+      const friendly = isDenied
+        ? 'Location access denied. Please enable permissions in browser settings.'
+        : isTimeout
+          ? 'Location request timed out. You can still use manual clock-in/out.'
+          : isUnavailable
+            ? 'Location information unavailable. Try moving to an open area or check device GPS.'
+            : raw
+
+      console.warn('⚠️ [UnifiedLocationService] Location capture issue:', friendly)
 
       const errorState: LocationState = {
         coordinates: null,
@@ -385,33 +397,19 @@ class UnifiedLocationService {
         accuracyLevel: null,
         facility: null,
         isLoading: false,
-        error: errorMessage,
+        error: friendly,
         lastUpdated: new Date(),
-        hasPermission: false
+        hasPermission: !isDenied
       }
 
-      // Cache the error state temporarily (shorter cache time)
       this.setCachedLocation(cacheKey, errorState)
 
-      // Show user-friendly error messages
-      if (error instanceof Error) {
-        if (error.message.includes('denied') || error.message.includes('permission')) {
-          toast.error('Location access denied', {
-            description: 'Please enable location permissions in your browser settings'
-          })
-        } else if (error.message.includes('unavailable')) {
-          toast.error('Location unavailable', {
-            description: 'Please check your GPS/location services'
-          })
-        } else if (error.message.includes('timeout')) {
-          toast.error('Location request timed out', {
-            description: 'Please try again or check your connection'
-          })
-        } else {
-          toast.error('Failed to capture location', {
-            description: 'Please try again or check your location settings'
-          })
-        }
+      if (isDenied) {
+        toast.error('Location access denied', {
+          description: 'Please enable location permissions in your browser settings'
+        })
+      } else if (isTimeout) {
+        toast.warning('Location request timed out. You can still use manual clock-in/out.')
       }
 
       return errorState
@@ -463,16 +461,16 @@ class UnifiedLocationService {
 
       const result = await response.json()
       console.log('✅ [UnifiedLocationService] Location sent successfully:', result)
-      
+
       return true
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send location'
       console.error('❌ [UnifiedLocationService] Failed to send location:', errorMessage)
-      
+
       toast.error('Failed to save location', {
         description: errorMessage
       })
-      
+
       return false
     }
   }

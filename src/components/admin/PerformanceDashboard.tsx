@@ -2,7 +2,6 @@
  * Performance Monitoring Dashboard
  * Real-time database and query performance monitoring for Neon PostgreSQL
  */
-
 "use client"
 
 import {
@@ -92,33 +91,39 @@ export default function PerformanceDashboard() {
   const [refreshing, setRefreshing] = useState(false)
   const [timeRange, setTimeRange] = useState("24")
 
-  const fetchMetrics = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoading(true)
-    setRefreshing(true)
-    setError(null)
+  const fetchMetrics = useCallback(
+    async (showLoading = true) => {
+      if (showLoading) setLoading(true)
+      setRefreshing(true)
+      setError(null)
 
-    try {
-      const response = await fetch(
-        `/api/admin/performance?hours=${timeRange}&recommendations=true&indexes=true`
-      )
+      try {
+        const response = await fetch(
+          `/api/admin/performance?hours=${timeRange}&recommendations=true&indexes=true`
+        )
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const data = await response.json().catch((err) => {
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
+        })
+
+        setMetrics(data)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to fetch metrics")
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
       }
-
-      const data = await response.json()
-      setMetrics(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch metrics")
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [timeRange])
+    },
+    [timeRange]
+  )
 
   useEffect(() => {
     fetchMetrics()
-
     // Auto-refresh every 30 seconds
     const interval = setInterval(() => fetchMetrics(false), 30000)
     return () => clearInterval(interval)
@@ -162,7 +167,7 @@ export default function PerformanceDashboard() {
   if (loading && !metrics) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center gap-3">
           <RefreshCw className="h-6 w-6 animate-spin text-medical-blue" />
           <span className="text-text-secondary text-lg">Loading performance metrics...</span>
         </div>
@@ -188,16 +193,18 @@ export default function PerformanceDashboard() {
   if (!metrics) return null
 
   return (
-    <div className="space-y-6">
+    <div className="gap-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-bold text-3xl tracking-tight text-text-primary">Performance Dashboard</h1>
+          <h1 className="font-bold text-3xl tracking-tight text-text-primary">
+            Performance Dashboard
+          </h1>
           <p className="text-text-secondary text-lg">
             Real-time database and query performance monitoring
           </p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
@@ -227,7 +234,7 @@ export default function PerformanceDashboard() {
       {/* Overview Cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex items-center justify-between gap-0 pb-2">
             <CardTitle className="font-medium text-sm">Database Health</CardTitle>
             {getHealthStatusIcon(metrics.database.health.status)}
           </CardHeader>
@@ -240,7 +247,7 @@ export default function PerformanceDashboard() {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex items-center justify-between gap-0 pb-2">
             <CardTitle className="font-medium text-sm">Total Queries</CardTitle>
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -253,7 +260,7 @@ export default function PerformanceDashboard() {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex items-center justify-between gap-0 pb-2">
             <CardTitle className="font-medium text-sm">Avg Query Time</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -268,7 +275,7 @@ export default function PerformanceDashboard() {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex items-center justify-between gap-0 pb-2">
             <CardTitle className="font-medium text-sm">Connection Pool</CardTitle>
             <Database className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -288,9 +295,12 @@ export default function PerformanceDashboard() {
           <TrendingUp className="h-5 w-5 text-medical-blue" />
           <AlertTitle className="text-text-primary">Performance Recommendations</AlertTitle>
           <AlertDescription className="text-text-secondary">
-            <ul className="mt-3 list-inside list-disc space-y-2">
+            <ul className="mt-3 list-inside list-disc gap-2">
               {metrics.recommendations.map((rec, _index) => (
-                <li key={`recommendation-${rec.replace(/\s+/g, '-').toLowerCase()}-${rec.length}`} className="text-base">
+                <li
+                  key={`recommendation-${rec.replace(/\s+/g, "-").toLowerCase()}-${rec.length}`}
+                  className="text-base"
+                >
                   {rec}
                 </li>
               ))}
@@ -300,14 +310,14 @@ export default function PerformanceDashboard() {
       )}
 
       {/* Detailed Metrics */}
-      <Tabs defaultValue="queries" className="space-y-4">
+      <Tabs defaultValue="queries" className="gap-4">
         <TabsList>
           <TabsTrigger value="queries">Query Performance</TabsTrigger>
           <TabsTrigger value="endpoints">Endpoint Performance</TabsTrigger>
           <TabsTrigger value="indexes">Index Analysis</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="queries" className="space-y-4">
+        <TabsContent value="queries" className="gap-4">
           <Card>
             <CardHeader>
               <CardTitle>Slow Queries</CardTitle>
@@ -320,11 +330,14 @@ export default function PerformanceDashboard() {
                   No slow queries detected in the selected time range.
                 </p>
               ) : (
-                <div className="space-y-4">
+                <div className="gap-4">
                   {metrics.queries.slowQueries.slice(0, 10).map((query, _index) => (
-                    <div key={`slow-query-${query.query_type}-${query.table_name}-${query.execution_time_ms}`} className="rounded-lg border p-4">
+                    <div
+                      key={`slow-query-${query.query_type}-${query.table_name}-${query.execution_time_ms}`}
+                      className="rounded-lg border p-4"
+                    >
                       <div className="mb-2 flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center gap-2">
                           <Badge variant="outline">{query.query_type}</Badge>
                           <Badge variant="secondary">{query.table_name}</Badge>
                           {query.endpoint && <Badge variant="outline">{query.endpoint}</Badge>}
@@ -334,7 +347,7 @@ export default function PerformanceDashboard() {
                         </div>
                       </div>
                       <div className="mb-2 flex items-center justify-between">
-                        <span className="font-medium text-red-600">
+                        <span className="font-medium text-error">
                           {formatExecutionTime(query.execution_time_ms)}
                         </span>
                         <div className="text-muted-foreground text-sm">
@@ -343,7 +356,7 @@ export default function PerformanceDashboard() {
                         </div>
                       </div>
                       {query.query_sample && (
-                        <pre className="overflow-x-auto rounded bg-gray-50 p-2 text-xs">
+                        <pre className="overflow-x-auto rounded-md bg-gray-50 p-2 text-xs">
                           {query.query_sample.substring(0, 200)}
                           {query.query_sample.length > 200 && "..."}
                         </pre>
@@ -356,7 +369,7 @@ export default function PerformanceDashboard() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="endpoints" className="space-y-4">
+        <TabsContent value="endpoints" className="gap-4">
           <Card>
             <CardHeader>
               <CardTitle>Endpoint Performance</CardTitle>
@@ -366,11 +379,11 @@ export default function PerformanceDashboard() {
               {metrics.queries.endpointPerformance.length === 0 ? (
                 <p className="text-muted-foreground">No endpoint performance data available.</p>
               ) : (
-                <div className="space-y-3">
+                <div className="gap-3">
                   {metrics.queries.endpointPerformance.map((endpoint, _index) => (
                     <div
                       key={`endpoint-${endpoint.endpoint}-${endpoint.count}-${endpoint.avgTime}`}
-                      className="flex items-center justify-between rounded border p-3"
+                      className="flex items-center justify-between rounded-md border p-3"
                     >
                       <div>
                         <div className="font-medium">{endpoint.endpoint}</div>
@@ -390,7 +403,7 @@ export default function PerformanceDashboard() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="indexes" className="space-y-4">
+        <TabsContent value="indexes" className="gap-4">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
@@ -401,14 +414,17 @@ export default function PerformanceDashboard() {
                 {metrics.indexes.usage.length === 0 ? (
                   <p className="text-muted-foreground">No index usage data available.</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="gap-2">
                     {metrics.indexes.usage.slice(0, 10).map((index, _i) => (
-                      <div key={`index-usage-${index.indexname}-${index.tablename}-${index.idx_scan}`} className="flex items-center justify-between rounded border p-2">
+                      <div
+                        key={`index-usage-${index.indexname}-${index.tablename}-${index.idx_scan}`}
+                        className="flex items-center justify-between rounded-md border p-2"
+                      >
                         <div>
                           <div className="font-medium text-sm">{index.indexname}</div>
                           <div className="text-muted-foreground text-xs">{index.tablename}</div>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center gap-2">
                           <Badge
                             variant={
                               index.usage_category === "HIGH_USAGE"
@@ -440,9 +456,12 @@ export default function PerformanceDashboard() {
                 {metrics.indexes.effectiveness.length === 0 ? (
                   <p className="text-muted-foreground">No index effectiveness data available.</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="gap-2">
                     {metrics.indexes.effectiveness.slice(0, 10).map((table, _i) => (
-                      <div key={`index-effectiveness-${table.tablename}-${table.seq_scan}-${table.idx_scan}`} className="flex items-center justify-between rounded border p-2">
+                      <div
+                        key={`index-effectiveness-${table.tablename}-${table.seq_scan}-${table.idx_scan}`}
+                        className="flex items-center justify-between rounded-md border p-2"
+                      >
                         <div>
                           <div className="font-medium text-sm">{table.tablename}</div>
                           <div className="text-muted-foreground text-xs">

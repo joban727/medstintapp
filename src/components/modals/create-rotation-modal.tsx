@@ -2,7 +2,7 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Loader2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
@@ -33,17 +33,20 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { safeFetchApi } from "@/lib/safe-fetch"
+
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
 
 const createRotationSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  description: z.string().min(1, "Description is required"),
+  studentId: z.string().min(1, "Student is required"),
   specialty: z.string().min(1, "Specialty is required"),
   clinicalSiteId: z.string().min(1, "Clinical site is required"),
-  preceptorId: z.string().min(1, "Preceptor is required"),
-  startDate: z.string().min(1, "Start date is required"),
-  endDate: z.string().min(1, "End date is required"),
-  maxStudents: z.string().min(1, "Max students is required"),
-  requirements: z.string().optional(),
+  preceptorId: z.string().optional(), // Made optional to simplify onboarding
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  requiredHours: z.string().optional(),
 })
 
 type CreateRotationFormData = z.infer<typeof createRotationSchema>
@@ -63,6 +66,13 @@ interface ClinicalSite {
   specialty?: string
 }
 
+interface Student {
+  id: string
+  name: string
+  email?: string
+  studentId?: string
+}
+
 interface CreateRotationModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -71,23 +81,24 @@ interface CreateRotationModalProps {
 
 export function CreateRotationModal({ open, onOpenChange, onSuccess }: CreateRotationModalProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [preceptors, setPreceptors] = useState<Preceptor[]>([])
   const [clinicalSites, setClinicalSites] = useState<ClinicalSite[]>([])
+  const [students, setStudents] = useState<Student[]>([])
   const [dataError, setDataError] = useState<string | null>(null)
+  const [showDetails, setShowDetails] = useState(false)
 
   const form = useForm<CreateRotationFormData>({
     resolver: zodResolver(createRotationSchema),
     defaultValues: {
-      title: "",
-      description: "",
+      studentId: "",
       specialty: "",
       clinicalSiteId: "",
       preceptorId: "",
       startDate: "",
       endDate: "",
-      maxStudents: "",
-      requirements: "",
+      requiredHours: "",
     },
   })
 
@@ -98,24 +109,45 @@ export function CreateRotationModal({ open, onOpenChange, onSuccess }: CreateRot
 
     try {
       // Fetch preceptors
-      const preceptorsResponse = await fetch("/api/preceptors")
-      if (!preceptorsResponse.ok) {
-        throw new Error("Failed to fetch preceptors")
+      const preceptorsResult = await safeFetchApi<{ preceptors: Preceptor[] }>("/api/preceptors")
+      if (!preceptorsResult.success) {
+        throw new Error(preceptorsResult.error || "Failed to fetch preceptors")
       }
-      const preceptorsData = await preceptorsResponse.json()
-      setPreceptors(preceptorsData.preceptors || [])
+      setPreceptors(preceptorsResult.data?.preceptors || [])
 
-      // Fetch clinical sites from competencies endpoint
-      const sitesResponse = await fetch("/api/competencies")
-      if (!sitesResponse.ok) {
-        throw new Error("Failed to fetch clinical sites")
+      // Fetch clinical sites from the dedicated clinical sites endpoint
+      const sitesResult = await safeFetchApi<{ clinicalSites: any[] }>(
+        "/api/clinical-sites?isActive=true&limit=200"
+      )
+      if (!sitesResult.success) {
+        throw new Error(sitesResult.error || "Failed to fetch clinical sites")
       }
-      const sitesData = await sitesResponse.json()
-      setClinicalSites(sitesData.clinicalSites || [])
+      const rawSites = sitesResult.data?.clinicalSites ?? []
+      const normalizedSites: ClinicalSite[] = Array.isArray(rawSites)
+        ? rawSites.map((s: any) => ({
+          id: String(s?.id ?? s?.siteId ?? s?.value ?? ""),
+          name: String(s?.name ?? s?.title ?? s?.label ?? "Unnamed Site"),
+          type: s?.type ?? s?.siteType ?? undefined,
+          specialty: Array.isArray(s?.specialties)
+            ? s.specialties.join(", ")
+            : (s?.specialty ?? undefined),
+        }))
+        : []
+      setClinicalSites(normalizedSites)
+
+      // Fetch students (school-scoped)
+      const studentsResult = await safeFetchApi<{ students: Student[] }>(
+        "/api/students?active=true&limit=200"
+      )
+      if (!studentsResult.success) {
+        throw new Error(studentsResult.error || "Failed to fetch students")
+      }
+      setStudents(Array.isArray(studentsResult.data?.students) ? studentsResult.data!.students : [])
     } catch (error) {
-      console.error("Error fetching data:", error)
-      setDataError(error instanceof Error ? error.message : "Failed to load data")
-      toast.error("Failed to load preceptors and clinical sites")
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+      console.error("[CreateRotationModal] Operation failed:", error)
+      setDataError(errorMessage)
+      toast.error(errorMessage)
     } finally {
       setIsLoadingData(false)
     }
@@ -124,11 +156,22 @@ export function CreateRotationModal({ open, onOpenChange, onSuccess }: CreateRot
   useEffect(() => {
     if (open) {
       fetchData()
+      setShowDetails(false)
     }
   }, [open, fetchData])
 
+  // Auto-expand if there are errors in hidden fields
+  const { errors } = form.formState
+  useEffect(() => {
+    if (errors.startDate || errors.endDate || errors.requiredHours) {
+      setShowDetails(true)
+    }
+  }, [errors.startDate, errors.endDate, errors.requiredHours])
+
   const onSubmit = async (data: CreateRotationFormData) => {
+    setIsSubmitting(true)
     setIsLoading(true)
+
     try {
       const response = await fetch("/api/rotations", {
         method: "POST",
@@ -136,13 +179,21 @@ export function CreateRotationModal({ open, onOpenChange, onSuccess }: CreateRot
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ...data,
-          maxStudents: Number.parseInt(data.maxStudents),
+          studentId: data.studentId,
+          specialty: data.specialty,
+          clinicalSiteId: data.clinicalSiteId,
+          preceptorId: data.preceptorId,
+          startDate: data.startDate ? new Date(data.startDate).toISOString() : undefined,
+          endDate: data.endDate ? new Date(data.endDate).toISOString() : undefined,
+          requiredHours: data.requiredHours ? Number.parseFloat(data.requiredHours) : undefined,
         }),
       })
 
       if (!response.ok) {
-        const error = await response.json()
+        const error = await response.json().catch((err) => {
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
+        })
         throw new Error(error.message || "Failed to create rotation")
       }
 
@@ -151,39 +202,60 @@ export function CreateRotationModal({ open, onOpenChange, onSuccess }: CreateRot
       onOpenChange(false)
       onSuccess?.()
     } catch (error) {
-      console.error("Error creating rotation:", error)
-      toast.error(error instanceof Error ? error.message : "Failed to create rotation")
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+      console.error("[CreateRotationModal] Operation failed:", error)
+      toast.error(errorMessage)
     } finally {
+      setIsSubmitting(false)
       setIsLoading(false)
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Create New Rotation</DialogTitle>
           <DialogDescription>
-            Add a new clinical rotation to your program. Fill in all required information below.
+            Create a clinical rotation with essential details only.
           </DialogDescription>
           {dataError && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-red-600 text-sm">
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-error text-sm">
               {dataError}
             </div>
           )}
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="gap-4" noValidate>
+            {/* Essential Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="title"
+                name="studentId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Title</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Internal Medicine Rotation" {...field} />
-                    </FormControl>
+                    <FormLabel>Student</FormLabel>
+                    <Select
+                      aria-label="Select student"
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                      disabled={isLoadingData}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={isLoadingData ? "Loading students..." : "Select student"}
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {students.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name} {s.studentId ? `(${s.studentId})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -194,25 +266,30 @@ export function CreateRotationModal({ open, onOpenChange, onSuccess }: CreateRot
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Specialty</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      aria-label="Select specialty"
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select specialty" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="internal-medicine">Internal Medicine</SelectItem>
-                        <SelectItem value="surgery">Surgery</SelectItem>
-                        <SelectItem value="pediatrics">Pediatrics</SelectItem>
-                        <SelectItem value="emergency-medicine">Emergency Medicine</SelectItem>
-                        <SelectItem value="family-medicine">Family Medicine</SelectItem>
-                        <SelectItem value="psychiatry">Psychiatry</SelectItem>
-                        <SelectItem value="obstetrics-gynecology">
-                          Obstetrics & Gynecology
-                        </SelectItem>
-                        <SelectItem value="radiology">Radiology</SelectItem>
-                        <SelectItem value="anesthesiology">Anesthesiology</SelectItem>
-                        <SelectItem value="pathology">Pathology</SelectItem>
+                        <SelectItem value="General Radiology">General Radiology</SelectItem>
+                        <SelectItem value="MRI">MRI</SelectItem>
+                        <SelectItem value="Ultrasound / Sonography">Ultrasound / Sonography</SelectItem>
+                        <SelectItem value="CT Scan">CT Scan</SelectItem>
+                        <SelectItem value="Nuclear Medicine">Nuclear Medicine</SelectItem>
+                        <SelectItem value="Mammography">Mammography</SelectItem>
+                        <SelectItem value="Interventional Radiology">Interventional Radiology</SelectItem>
+                        <SelectItem value="Fluoroscopy">Fluoroscopy</SelectItem>
+                        <SelectItem value="Mobile Radiography">Mobile Radiography</SelectItem>
+                        <SelectItem value="Surgical Radiography">Surgical Radiography</SelectItem>
+                        <SelectItem value="Trauma Radiography">Trauma Radiography</SelectItem>
+                        <SelectItem value="Pediatric Radiology">Pediatric Radiology</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -220,25 +297,6 @@ export function CreateRotationModal({ open, onOpenChange, onSuccess }: CreateRot
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Describe the rotation objectives and activities..."
-                      className="min-h-[80px]"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -305,67 +363,72 @@ export function CreateRotationModal({ open, onOpenChange, onSuccess }: CreateRot
                 )}
               />
             </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <FormField
-                control={form.control}
-                name="startDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Start Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+            {/* Optional Details Toggle */}
+            <div className="flex items-center">
+              <Button
+                type="button"
+                variant="ghost"
+                className="p-0 h-auto font-medium text-primary hover:text-primary/80 hover:bg-transparent"
+                onClick={() => setShowDetails(!showDetails)}
+              >
+                {showDetails ? (
+                  <ChevronDown className="mr-2 h-4 w-4" />
+                ) : (
+                  <ChevronRight className="mr-2 h-4 w-4" />
                 )}
-              />
-              <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>End Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="maxStudents"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Max Students</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="1" max="20" placeholder="e.g., 4" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                {showDetails ? "Hide Schedule & Hours" : "Add Schedule & Hours (Optional)"}
+              </Button>
             </div>
 
-            <FormField
-              control={form.control}
-              name="requirements"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Requirements (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Any specific requirements or prerequisites..."
-                      className="min-h-[60px]"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
+            {showDetails && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Date</FormLabel>
+                      <FormControl>
+                        <Input type="datetime-local" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Date</FormLabel>
+                      <FormControl>
+                        <Input type="datetime-local" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="requiredHours"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Required Hours</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          placeholder="e.g., 160"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
             <DialogFooter>
               <Button
                 type="button"

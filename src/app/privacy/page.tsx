@@ -4,8 +4,8 @@ import Link from "next/link"
 import { Button } from "../../components/ui/button"
 
 export const metadata: Metadata = {
-  title: "Privacy Policy - MedStint",
-  description: "Privacy Policy for MedStint",
+  title: "Privacy Policy | MedStint",
+  description: "Privacy policy for the MedStint platform",
 }
 
 export default function PrivacyPage() {

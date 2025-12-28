@@ -47,12 +47,12 @@ interface OnboardingAnalytics {
   }>
 }
 
-const _COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"]
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"]
 
 export function OnboardingAnalyticsDashboard() {
   const [analytics, setAnalytics] = useState<OnboardingAnalytics | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string>("")
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -60,9 +60,19 @@ export function OnboardingAnalyticsDashboard() {
         setLoading(true)
         const response = await fetch("/api/analytics/onboarding")
         if (!response.ok) {
-          throw new Error("Failed to fetch analytics data")
+          const errorData = await response
+            .json()
+            .catch((err) => {
+              console.error("Failed to parse JSON response:", err)
+              throw new Error("Invalid response format")
+            })
+            .catch(() => ({}))
+          throw new Error(errorData.error || errorData.message || "Failed to fetch analytics data")
         }
-        const data = await response.json()
+        const data = await response.json().catch((err) => {
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
+        })
         setAnalytics(data)
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred")
@@ -76,11 +86,11 @@ export function OnboardingAnalyticsDashboard() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="gap-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={`onboarding-skeleton-${i + 1}`}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex items-center justify-between gap-0 pb-2">
                 <Skeleton className="h-4 w-24" />
                 <Skeleton className="h-4 w-4" />
               </CardHeader>
@@ -139,11 +149,11 @@ export function OnboardingAnalyticsDashboard() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="gap-6">
       {/* Overview Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex items-center justify-between gap-0 pb-2">
             <CardTitle className="font-medium text-sm">Total Sessions</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -152,9 +162,8 @@ export function OnboardingAnalyticsDashboard() {
             <p className="text-muted-foreground text-xs">All onboarding sessions</p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex items-center justify-between gap-0 pb-2">
             <CardTitle className="font-medium text-sm">Completion Rate</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -163,9 +172,8 @@ export function OnboardingAnalyticsDashboard() {
             <Progress value={analytics.completionRate} className="mt-2" />
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex items-center justify-between gap-0 pb-2">
             <CardTitle className="font-medium text-sm">Avg. Completion Time</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -176,9 +184,8 @@ export function OnboardingAnalyticsDashboard() {
             <p className="text-muted-foreground text-xs">Time to complete onboarding</p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex items-center justify-between gap-0 pb-2">
             <CardTitle className="font-medium text-sm">Completed Sessions</CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -255,7 +262,7 @@ export function OnboardingAnalyticsDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="gap-4">
             {analytics.stepBreakdown.map((step) => (
               <div
                 key={step.step}
@@ -287,11 +294,11 @@ export function OnboardingAnalyticsDashboard() {
           <CardDescription>Latest onboarding sessions and their current status</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
+          <div className="gap-2">
             {analytics.recentSessions.map((session) => (
               <div
                 key={session.id}
-                className="flex items-center justify-between rounded border p-3"
+                className="flex items-center justify-between rounded-md border p-3"
               >
                 <div className="flex items-center gap-3">
                   <div className="font-mono text-sm">{session.id.slice(0, 8)}...</div>

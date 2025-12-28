@@ -1,8 +1,26 @@
+import type { UserRole } from "@/types"
 import { currentUser } from "@clerk/nextjs/server"
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "../../../database/connection-pool"
+
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
 import {
   assessments,
   competencies,
@@ -13,6 +31,13 @@ import {
   reportCache,
   users,
 } from "../../../database/schema"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  withErrorHandlingAsync,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+} from "../../../lib/api-response"
 
 // Validation schemas
 const reportQuerySchema = z.object({
@@ -241,10 +266,10 @@ async function generateAssessmentSummaryReport(
 
 // GET - Generate and retrieve reports
 export async function GET(request: NextRequest) {
-  try {
+  return withErrorHandlingAsync(async () => {
     const user = await currentUser()
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     const { searchParams } = new URL(request.url)
@@ -277,7 +302,7 @@ export async function GET(request: NextRequest) {
     )
 
     if (!authorized) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+      return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
     }
 
     // Check cache first
@@ -289,7 +314,7 @@ export async function GET(request: NextRequest) {
       .limit(1)
 
     if (cached.length > 0) {
-      return NextResponse.json(JSON.parse(cached[0].data))
+      return createSuccessResponse(JSON.parse(cached[0].data))
     }
 
     // Generate report based on type
@@ -314,7 +339,7 @@ export async function GET(request: NextRequest) {
         reportData = await generateAssessmentSummaryReport(validatedQuery, allowedStudentIds || [])
         break
       default:
-        return NextResponse.json({ error: "Invalid report type" }, { status: 400 })
+        return createErrorResponse("Invalid report type", HTTP_STATUS.BAD_REQUEST)
     }
 
     // Cache the result
@@ -329,24 +354,24 @@ export async function GET(request: NextRequest) {
       updatedAt: new Date(),
     })
 
-    return NextResponse.json(reportData)
-  } catch (error) {
-    console.error("Error generating report:", error)
-    return NextResponse.json({ error: "Failed to generate report" }, { status: 500 })
-  }
+    return createSuccessResponse(reportData)
+  })
 }
 
 // POST - Schedule report generation
 export async function POST(request: NextRequest) {
-  try {
+  return withErrorHandlingAsync(async () => {
     const user = await currentUser()
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     const userRole = user.publicMetadata?.role as string
-    if (userRole !== "SCHOOL_ADMIN" && userRole !== "CLINICAL_SUPERVISOR") {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    if (
+      userRole !== ("SCHOOL_ADMIN" as UserRole) &&
+      userRole !== ("CLINICAL_SUPERVISOR" as UserRole)
+    ) {
+      return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
     }
 
     const body = await request.json()
@@ -356,40 +381,33 @@ export async function POST(request: NextRequest) {
     // For now, we'll just return a success response
     const scheduleId = `schedule_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       scheduleId,
       message: "Report scheduled successfully",
       schedule: validatedData,
     })
-  } catch (error) {
-    console.error("Error scheduling report:", error)
-    return NextResponse.json({ error: "Failed to schedule report" }, { status: 500 })
-  }
+  })
 }
 
 // DELETE - Clear report cache
 export async function DELETE(_request: NextRequest) {
-  try {
+  return withErrorHandlingAsync(async () => {
     const user = await currentUser()
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     const userRole = user.publicMetadata?.role as string
-    if (userRole !== "SCHOOL_ADMIN") {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    if (userRole !== ("SCHOOL_ADMIN" as UserRole)) {
+      return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
     }
 
     // Clear expired cache entries
     const _deleted = await db.delete(reportCache).where(lte(reportCache.expiresAt, new Date()))
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       message: "Cache cleared successfully",
     })
-  } catch (error) {
-    console.error("Error clearing cache:", error)
-    return NextResponse.json({ error: "Failed to clear cache" }, { status: 500 })
-  }
+  })
 }
+

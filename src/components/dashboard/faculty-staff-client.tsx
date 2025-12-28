@@ -44,6 +44,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { cn } from "@/lib/utils"
+import {
+  MobileDataCard,
+  MobileDataField,
+  ResponsiveTableWrapper,
+} from "@/components/ui/responsive-table"
+
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
 
 interface PreceptorData {
   id: string
@@ -70,566 +80,454 @@ interface FacultyData {
   lastActive: string
 }
 
+interface ClinicalSiteOption {
+  id: string
+  name: string
+}
+
 interface FacultyStaffClientProps {
   preceptorData: PreceptorData[]
   facultyData: FacultyData[]
+  clinicalSites: ClinicalSiteOption[]
 }
 
 const specialtyColors: Record<string, string> = {
-  "Internal Medicine": "bg-blue-100 text-blue-800",
-  Surgery: "bg-red-100 text-red-800",
-  Pediatrics: "bg-green-100 text-green-800",
-  "Emergency Medicine": "bg-orange-100 text-orange-800",
-  "Family Medicine": "bg-purple-100 text-purple-800",
-  "General Medicine": "bg-gray-100 text-gray-800",
+  "General Radiology": "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  MRI: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+  "Ultrasound / Sonography": "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  "CT Scan": "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+  "Nuclear Medicine": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+  Mammography: "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-400",
+  "Interventional Radiology": "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  Fluoroscopy: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400",
+  "Mobile Radiography": "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400",
+  "Surgical Radiography": "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400",
+  "Trauma Radiography": "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400",
+  "Pediatric Radiology": "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400",
+  Other: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
 }
 
-const roleColors: Record<string, string> = {
-  CLINICAL_SUPERVISOR: "bg-indigo-100 text-indigo-800",
-  SCHOOL_ADMIN: "bg-emerald-100 text-emerald-800",
-}
-
-export function FacultyStaffClient({ preceptorData, facultyData }: FacultyStaffClientProps) {
+export function FacultyStaffClient({ preceptorData, facultyData, clinicalSites }: FacultyStaffClientProps) {
   const [searchTerm, setSearchTerm] = useState("")
-  const [specialtyFilter, setSpecialtyFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [roleFilter, setRoleFilter] = useState("all")
-  const [isAddPreceptorModalOpen, setIsAddPreceptorModalOpen] = useState(false)
-  const [isAddFacultyModalOpen, setIsAddFacultyModalOpen] = useState(false)
+  const [specialtyFilter, setSpecialtyFilter] = useState("all")
+  const [showAddPreceptor, setShowAddPreceptor] = useState(false)
+  const [showAddFaculty, setShowAddFaculty] = useState(false)
 
   // Filter preceptors
   const filteredPreceptors = preceptorData.filter((preceptor) => {
     const matchesSearch =
       preceptor.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      preceptor.email.toLowerCase().includes(searchTerm.toLowerCase())
+      preceptor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      preceptor.specialty.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = statusFilter === "all" || preceptor.status === statusFilter
     const matchesSpecialty = specialtyFilter === "all" || preceptor.specialty === specialtyFilter
-    const matchesStatus =
-      statusFilter === "all" || preceptor.status.toLowerCase() === statusFilter.toLowerCase()
-
-    return matchesSearch && matchesSpecialty && matchesStatus
+    return matchesSearch && matchesStatus && matchesSpecialty
   })
 
   // Filter faculty
   const filteredFaculty = facultyData.filter((faculty) => {
     const matchesSearch =
       faculty.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      faculty.email.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesRole = roleFilter === "all" || faculty.role === roleFilter
-    const matchesStatus =
-      statusFilter === "all" || faculty.status.toLowerCase() === statusFilter.toLowerCase()
-
-    return matchesSearch && matchesRole && matchesStatus
+      faculty.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      faculty.department.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = statusFilter === "all" || faculty.status === statusFilter
+    return matchesSearch && matchesStatus
   })
 
-  // Calculate stats
-  const totalPreceptors = preceptorData.length
-  const totalFaculty = facultyData.length
-  const totalStaff = totalPreceptors + totalFaculty
-  const activePreceptors = preceptorData.filter((p) => p.status === "Active").length
-  const activeFaculty = facultyData.filter((f) => f.status === "Active").length
-  const totalStudents = preceptorData.reduce((sum, p) => sum + p.activeStudents, 0)
-  const totalCapacity = preceptorData.reduce((sum, p) => sum + p.maxCapacity, 0)
-  const avgRating =
-    preceptorData.length > 0
-      ? (preceptorData.reduce((sum, p) => sum + p.rating, 0) / preceptorData.length).toFixed(1)
-      : "0.0"
-
-  const handleAddPreceptorSuccess = () => {
-    // Refresh data or show success message
-    console.log("Preceptor added successfully")
-  }
-
-  const handleAddFacultySuccess = () => {
-    // Refresh data or show success message
-    console.log("Faculty added successfully")
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      active: {
+        variant: "default" as const,
+        label: "Active",
+        className:
+          "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50",
+      },
+      inactive: {
+        variant: "secondary" as const,
+        label: "Inactive",
+        className:
+          "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700",
+      },
+      pending: {
+        variant: "outline" as const,
+        label: "Pending",
+        className: "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400",
+      },
+    }
+    const config =
+      statusConfig[status.toLowerCase() as keyof typeof statusConfig] || statusConfig.active
+    return (
+      <Badge variant={config.variant} className={config.className}>
+        {config.label}
+      </Badge>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Total Staff</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{totalStaff}</div>
-            <p className="text-muted-foreground text-xs">
-              {totalPreceptors} preceptors, {totalFaculty} faculty
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Active Staff</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{activePreceptors + activeFaculty}</div>
-            <p className="text-muted-foreground text-xs">
-              {Math.round(((activePreceptors + activeFaculty) / totalStaff) * 100)}% active rate
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Students Supervised</CardTitle>
-            <GraduationCap className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{totalStudents}</div>
-            <p className="text-muted-foreground text-xs">{totalCapacity} total capacity</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Average Rating</CardTitle>
-            <Star className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{avgRating}</div>
-            <p className="text-muted-foreground text-xs">Based on student feedback</p>
-          </CardContent>
-        </Card>
+    <div className="space-y-6 stagger-children">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Faculty & Staff</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage preceptors, faculty members, and clinical staff
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setShowAddPreceptor(true)}
+            className="gap-2 shadow-lg hover:shadow-primary/20 transition-all"
+          >
+            <UserPlus className="h-4 w-4" />
+            Add Preceptor
+          </Button>
+          <Button
+            onClick={() => setShowAddFaculty(true)}
+            variant="outline"
+            className="gap-2 hover:bg-primary/10 hover:text-primary border-primary/20"
+          >
+            <Users className="h-4 w-4" />
+            Add Faculty
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 items-center space-x-2">
-          <Search className="h-4 w-4 text-muted-foreground" />
+      <div className="flex flex-col gap-4 md:flex-row md:items-center glass-card-subtle p-4 rounded-lg">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search faculty and staff..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-sm"
+            className="pl-10 bg-background/50 backdrop-blur-sm"
           />
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap gap-2">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="Status" />
+            <SelectTrigger className="w-full sm:w-[180px] bg-background/50 backdrop-blur-sm min-h-[44px]">
+              <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={specialtyFilter} onValueChange={setSpecialtyFilter}>
+            <SelectTrigger className="w-full sm:w-[180px] bg-background/50 backdrop-blur-sm min-h-[44px]">
+              <SelectValue placeholder="Filter by specialty" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Specialties</SelectItem>
+              <SelectItem value="General Radiology">General Radiology</SelectItem>
+              <SelectItem value="MRI">MRI</SelectItem>
+              <SelectItem value="Ultrasound / Sonography">Ultrasound / Sonography</SelectItem>
+              <SelectItem value="CT Scan">CT Scan</SelectItem>
+              <SelectItem value="Nuclear Medicine">Nuclear Medicine</SelectItem>
+              <SelectItem value="Mammography">Mammography</SelectItem>
+              <SelectItem value="Interventional Radiology">Interventional Radiology</SelectItem>
+              <SelectItem value="Fluoroscopy">Fluoroscopy</SelectItem>
+              <SelectItem value="Mobile Radiography">Mobile Radiography</SelectItem>
+              <SelectItem value="Surgical Radiography">Surgical Radiography</SelectItem>
+              <SelectItem value="Trauma Radiography">Trauma Radiography</SelectItem>
+              <SelectItem value="Pediatric Radiology">Pediatric Radiology</SelectItem>
+              <SelectItem value="Other">Other</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* Tabs for different staff types */}
-      <Tabs defaultValue="all" className="space-y-4">
-        <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="all">All Staff ({totalStaff})</TabsTrigger>
-            <TabsTrigger value="preceptors">Preceptors ({totalPreceptors})</TabsTrigger>
-            <TabsTrigger value="faculty">Faculty ({totalFaculty})</TabsTrigger>
-          </TabsList>
-          <div className="flex space-x-2">
-            <Button onClick={() => setIsAddPreceptorModalOpen(true)}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add Preceptor
-            </Button>
-            <Button onClick={() => setIsAddFacultyModalOpen(true)}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add Faculty
-            </Button>
-          </div>
-        </div>
-
-        <TabsContent value="all" className="space-y-4">
-          {/* Combined view with both preceptors and faculty */}
-          <Card>
-            <CardHeader>
-              <CardTitle>All Faculty & Staff</CardTitle>
-              <CardDescription>
-                Showing {filteredPreceptors.length + filteredFaculty.length} staff members
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Specialty/Department</TableHead>
-                    <TableHead>Clinical Site</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {/* Preceptors */}
-                  {filteredPreceptors.map((preceptor) => (
-                    <TableRow key={`preceptor-${preceptor.id}`}>
-                      <TableCell>
-                        <div className="flex items-center space-x-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={`/avatars/${preceptor.id}.jpg`} />
-                            <AvatarFallback>
-                              {preceptor.name
-                                ?.split(" ")
-                                .map((n) => n[0])
-                                .join("") || "?"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium">{preceptor.name || "Unknown"}</div>
-                            <div className="text-muted-foreground text-sm">{preceptor.email}</div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className="bg-blue-100 text-blue-800">Clinical Preceptor</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            specialtyColors[preceptor.specialty] || "bg-gray-100 text-gray-800"
-                          }
-                        >
-                          {preceptor.specialty}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Building className="mr-1 h-4 w-4 text-muted-foreground" />
-                          {preceptor.clinicalSite}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={preceptor.status === "Active" ? "default" : "secondary"}>
-                          {preceptor.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit Profile
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Calendar className="mr-2 h-4 w-4" />
-                              Manage Schedule
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {/* Faculty */}
-                  {filteredFaculty.map((faculty) => (
-                    <TableRow key={`faculty-${faculty.id}`}>
-                      <TableCell>
-                        <div className="flex items-center space-x-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={`/avatars/${faculty.id}.jpg`} />
-                            <AvatarFallback>
-                              {faculty.name
-                                ?.split(" ")
-                                .map((n) => n[0])
-                                .join("") || "?"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium">{faculty.name || "Unknown"}</div>
-                            <div className="text-muted-foreground text-sm">{faculty.email}</div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={roleColors[faculty.role] || "bg-gray-100 text-gray-800"}>
-                          {faculty.role === "CLINICAL_SUPERVISOR"
-                            ? "Clinical Supervisor"
-                            : "School Admin"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className="bg-gray-100 text-gray-800">{faculty.department}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center text-muted-foreground">
-                          <Building className="mr-1 h-4 w-4" />
-                          School Campus
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={faculty.status === "Active" ? "default" : "secondary"}>
-                          {faculty.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit Profile
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Shield className="mr-2 h-4 w-4" />
-                              Manage Permissions
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
+      {/* Tabs */}
+      <Tabs defaultValue="preceptors" className="space-y-4">
+        <TabsList className="bg-background/50 backdrop-blur-sm p-1 rounded-lg">
+          <TabsTrigger
+            value="preceptors"
+            className="gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+          >
+            <GraduationCap className="h-4 w-4" />
+            Preceptors ({filteredPreceptors.length})
+          </TabsTrigger>
+          <TabsTrigger
+            value="faculty"
+            className="gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+          >
+            <Users className="h-4 w-4" />
+            Faculty ({filteredFaculty.length})
+          </TabsTrigger>
+        </TabsList>
 
         <TabsContent value="preceptors" className="space-y-4">
-          <div className="mb-4 flex items-center space-x-2">
-            <Select value={specialtyFilter} onValueChange={setSpecialtyFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by specialty" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Specialties</SelectItem>
-                <SelectItem value="Internal Medicine">Internal Medicine</SelectItem>
-                <SelectItem value="Surgery">Surgery</SelectItem>
-                <SelectItem value="Pediatrics">Pediatrics</SelectItem>
-                <SelectItem value="Emergency Medicine">Emergency Medicine</SelectItem>
-                <SelectItem value="Family Medicine">Family Medicine</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Card>
+          <Card className="glass-card overflow-hidden">
             <CardHeader>
               <CardTitle>Clinical Preceptors</CardTitle>
               <CardDescription>
-                Showing {filteredPreceptors.length} of {preceptorData.length} preceptors
+                Manage clinical preceptors and their student assignments
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Preceptor</TableHead>
-                    <TableHead>Specialty</TableHead>
-                    <TableHead>Clinical Site</TableHead>
-                    <TableHead>Students</TableHead>
-                    <TableHead>Rating</TableHead>
-                    <TableHead>Experience</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredPreceptors.map((preceptor) => (
-                    <TableRow key={preceptor.id}>
-                      <TableCell>
-                        <div className="flex items-center space-x-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={`/avatars/${preceptor.id}.jpg`} />
-                            <AvatarFallback>
-                              {preceptor.name
-                                ?.split(" ")
-                                .map((n) => n[0])
-                                .join("") || "?"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium">{preceptor.name || "Unknown"}</div>
-                            <div className="text-muted-foreground text-sm">{preceptor.email}</div>
+            <CardContent className="p-0">
+              {/* Mobile Card View for Preceptors */}
+              <div className="block md:hidden p-4 space-y-3">
+                {filteredPreceptors.map((preceptor) => (
+                  <MobileDataCard key={`mobile-preceptor-${preceptor.id}`}>
+                    <div className="flex items-start justify-between gap-2 pb-2 border-b border-border/30">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                            {preceptor.name?.split(" ").map((n) => n[0]).join("") || "P"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{preceptor.name || "Unknown"}</div>
+                          <div className="text-muted-foreground text-xs truncate">{preceptor.email}</div>
+                        </div>
+                      </div>
+                      {getStatusBadge(preceptor.status)}
+                    </div>
+                    <MobileDataField label="Specialty">
+                      <Badge variant="secondary" className={cn("text-xs", specialtyColors[preceptor.specialty] || "bg-gray-100")}>
+                        {preceptor.specialty}
+                      </Badge>
+                    </MobileDataField>
+                    <MobileDataField label="Site">
+                      <span className="truncate">{preceptor.clinicalSite}</span>
+                    </MobileDataField>
+                    <MobileDataField label="Students">
+                      <span>{preceptor.activeStudents}/{preceptor.maxCapacity}</span>
+                    </MobileDataField>
+                    <MobileDataField label="Rating">
+                      <div className="flex items-center gap-1">
+                        <Star className="h-3 w-3 text-yellow-500 fill-current" />
+                        {preceptor.rating.toFixed(1)}
+                      </div>
+                    </MobileDataField>
+                  </MobileDataCard>
+                ))}
+              </div>
+              {/* Desktop Table */}
+              <ResponsiveTableWrapper className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-b border-border/50">
+                      <TableHead>Preceptor</TableHead>
+                      <TableHead>Specialty</TableHead>
+                      <TableHead>Clinical Site</TableHead>
+                      <TableHead>Students</TableHead>
+                      <TableHead>Rating</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-[70px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredPreceptors.map((preceptor) => (
+                      <TableRow
+                        key={preceptor.id}
+                        className="group hover:bg-muted/30 transition-colors duration-200 border-b border-border/50"
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8 ring-2 ring-background group-hover:ring-primary/20 transition-all">
+                              <AvatarImage src={`/avatars/${preceptor.id}.jpg`} />
+                              <AvatarFallback className="bg-primary/10 text-primary">
+                                {preceptor.name
+                                  ?.split(" ")
+                                  .map((n) => n[0])
+                                  .join("") || "P"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="font-medium group-hover:text-primary transition-colors">
+                                {preceptor.name || "Unknown"}
+                              </div>
+                              <div className="text-sm text-muted-foreground">{preceptor.email}</div>
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            specialtyColors[preceptor.specialty] || "bg-gray-100 text-gray-800"
-                          }
-                        >
-                          {preceptor.specialty}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Building className="mr-1 h-4 w-4 text-muted-foreground" />
-                          {preceptor.clinicalSite}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-center">
-                          <div className="font-medium">
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              specialtyColors[preceptor.specialty] ||
+                              "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+                            )}
+                          >
+                            {preceptor.specialty}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Building className="h-4 w-4 text-muted-foreground" />
+                            {preceptor.clinicalSite}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground" />
                             {preceptor.activeStudents}/{preceptor.maxCapacity}
                           </div>
-                          <div className="text-muted-foreground text-xs">active/capacity</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Star className="mr-1 h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          <span className="font-medium">{preceptor.rating}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-center">
-                          <div className="font-medium">{preceptor.yearsExperience} years</div>
-                          <div className="text-muted-foreground text-xs">
-                            {preceptor.completedEvaluations} evaluations
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                            {preceptor.rating.toFixed(1)}
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={preceptor.status === "Active" ? "default" : "secondary"}>
-                          {preceptor.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit Profile
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Calendar className="mr-2 h-4 w-4" />
-                              Manage Schedule
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(preceptor.status)}</TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="glass-card-subtle">
+                              <DropdownMenuItem className="gap-2 cursor-pointer focus:bg-primary/10 focus:text-primary">
+                                <Eye className="h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="gap-2 cursor-pointer focus:bg-primary/10 focus:text-primary">
+                                <Edit className="h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="gap-2 cursor-pointer focus:bg-primary/10 focus:text-primary">
+                                <Calendar className="h-4 w-4" />
+                                Schedule
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ResponsiveTableWrapper>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="faculty" className="space-y-4">
-          <div className="mb-4 flex items-center space-x-2">
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="CLINICAL_SUPERVISOR">Clinical Supervisor</SelectItem>
-                <SelectItem value="SCHOOL_ADMIN">School Admin</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Card>
+          <Card className="glass-card overflow-hidden">
             <CardHeader>
               <CardTitle>Faculty Members</CardTitle>
-              <CardDescription>
-                Showing {filteredFaculty.length} of {facultyData.length} faculty members
-              </CardDescription>
+              <CardDescription>Manage academic faculty and administrative staff</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Faculty Member</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Joined</TableHead>
-                    <TableHead>Last Active</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredFaculty.map((faculty) => (
-                    <TableRow key={faculty.id}>
-                      <TableCell>
-                        <div className="flex items-center space-x-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={`/avatars/${faculty.id}.jpg`} />
-                            <AvatarFallback>
-                              {faculty.name
-                                ?.split(" ")
-                                .map((n) => n[0])
-                                .join("") || "?"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium">{faculty.name || "Unknown"}</div>
-                            <div className="text-muted-foreground text-sm">{faculty.email}</div>
-                          </div>
+            <CardContent className="p-0">
+              {/* Mobile Card View for Faculty */}
+              <div className="block md:hidden p-4 space-y-3">
+                {filteredFaculty.map((faculty) => (
+                  <MobileDataCard key={`mobile-faculty-${faculty.id}`}>
+                    <div className="flex items-start justify-between gap-2 pb-2 border-b border-border/30">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                            {faculty.name?.split(" ").map((n) => n[0]).join("") || "F"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{faculty.name || "Unknown"}</div>
+                          <div className="text-muted-foreground text-xs truncate">{faculty.email}</div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={roleColors[faculty.role] || "bg-gray-100 text-gray-800"}>
-                          {faculty.role === "CLINICAL_SUPERVISOR"
-                            ? "Clinical Supervisor"
-                            : "School Admin"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className="bg-gray-100 text-gray-800">{faculty.department}</Badge>
-                      </TableCell>
-                      <TableCell>{faculty.joinedDate}</TableCell>
-                      <TableCell>{faculty.lastActive}</TableCell>
-                      <TableCell>
-                        <Badge variant={faculty.status === "Active" ? "default" : "secondary"}>
-                          {faculty.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit Profile
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Shield className="mr-2 h-4 w-4" />
-                              Manage Permissions
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
+                      </div>
+                      {getStatusBadge(faculty.status)}
+                    </div>
+                    <MobileDataField label="Role">
+                      <span>{faculty.role}</span>
+                    </MobileDataField>
+                    <MobileDataField label="Department">
+                      <span className="truncate">{faculty.department}</span>
+                    </MobileDataField>
+                    <MobileDataField label="Joined">
+                      <span>{faculty.joinedDate}</span>
+                    </MobileDataField>
+                  </MobileDataCard>
+                ))}
+              </div>
+              {/* Desktop Table */}
+              <ResponsiveTableWrapper className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-b border-border/50">
+                      <TableHead>Faculty Member</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Joined</TableHead>
+                      <TableHead>Last Active</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-[70px]"></TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredFaculty.map((faculty) => (
+                      <TableRow
+                        key={faculty.id}
+                        className="group hover:bg-muted/30 transition-colors duration-200 border-b border-border/50"
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8 ring-2 ring-background group-hover:ring-primary/20 transition-all">
+                              <AvatarImage src={`/avatars/${faculty.id}.jpg`} />
+                              <AvatarFallback className="bg-primary/10 text-primary">
+                                {faculty.name
+                                  ?.split(" ")
+                                  .map((n) => n[0])
+                                  .join("") || "F"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="font-medium group-hover:text-primary transition-colors">
+                                {faculty.name || "Unknown"}
+                              </div>
+                              <div className="text-sm text-muted-foreground">{faculty.email}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Shield className="h-4 w-4 text-muted-foreground" />
+                            {faculty.role}
+                          </div>
+                        </TableCell>
+                        <TableCell>{faculty.department}</TableCell>
+                        <TableCell>{faculty.joinedDate}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Activity className="h-4 w-4 text-muted-foreground" />
+                            {faculty.lastActive}
+                          </div>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(faculty.status)}</TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="glass-card-subtle">
+                              <DropdownMenuItem className="gap-2 cursor-pointer focus:bg-primary/10 focus:text-primary">
+                                <Eye className="h-4 w-4" />
+                                View Profile
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="gap-2 cursor-pointer focus:bg-primary/10 focus:text-primary">
+                                <Edit className="h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ResponsiveTableWrapper>
             </CardContent>
           </Card>
         </TabsContent>
@@ -637,15 +535,11 @@ export function FacultyStaffClient({ preceptorData, facultyData }: FacultyStaffC
 
       {/* Modals */}
       <AddPreceptorModal
-        open={isAddPreceptorModalOpen}
-        onOpenChange={setIsAddPreceptorModalOpen}
-        onSuccess={handleAddPreceptorSuccess}
+        open={showAddPreceptor}
+        onOpenChange={setShowAddPreceptor}
+        clinicalSites={clinicalSites}
       />
-      <AddFacultyModal
-        open={isAddFacultyModalOpen}
-        onOpenChange={setIsAddFacultyModalOpen}
-        onSuccess={handleAddFacultySuccess}
-      />
+      <AddFacultyModal open={showAddFaculty} onOpenChange={setShowAddFaculty} />
     </div>
   )
 }

@@ -3,7 +3,6 @@
 import * as AccordionPrimitive from "@radix-ui/react-accordion"
 import { Plus } from "lucide-react"
 import * as React from "react"
-
 import { cn } from "@/lib/utils"
 
 const Accordion = AccordionPrimitive.Root
@@ -18,6 +17,7 @@ const AccordionItem = React.forwardRef<
     {...props}
   />
 ))
+
 AccordionItem.displayName = "AccordionItem"
 
 const AccordionTrigger = React.forwardRef<
@@ -28,7 +28,7 @@ const AccordionTrigger = React.forwardRef<
     <AccordionPrimitive.Trigger
       ref={ref}
       className={cn(
-        "flex flex-1 items-center justify-between gap-4 py-4 font-medium transition-all [&[data-state=open]>svg]:rotate-[135deg] [&[data-state=open]>svg]:text-primary",
+        "flex flex-1 items-center justify-between gap-4 py-4 font-medium transition-all duration-200 [&[data-state=open]>svg]:rotate-[135deg] [&[data-state=open]>svg]:text-primary",
         className
       )}
       {...props}
@@ -38,6 +38,7 @@ const AccordionTrigger = React.forwardRef<
     </AccordionPrimitive.Trigger>
   </AccordionPrimitive.Header>
 ))
+
 AccordionTrigger.displayName = AccordionPrimitive.Trigger.displayName
 
 const AccordionContent = React.forwardRef<
@@ -46,7 +47,7 @@ const AccordionContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <AccordionPrimitive.Content
     ref={ref}
-    className="overflow-hidden text-sm transition-all data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
+    className="overflow-hidden text-sm transition-all duration-200 data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
     {...props}
   >
     <div className={cn("pt-0 pb-4 text-[16px] text-muted-foreground", className)}>{children}</div>

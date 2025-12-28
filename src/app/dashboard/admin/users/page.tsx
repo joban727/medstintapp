@@ -2,6 +2,24 @@ import { Edit, MoreHorizontal, Search, Trash2, UserPlus } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "../../../../components/ui/avatar"
 import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
+import type { UserRole } from "@/types"
+
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
 import {
   Card,
   CardContent,
@@ -87,7 +105,7 @@ export default async function UsersManagementPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">
-              {allUsers.filter((u) => u.role === "STUDENT").length}
+              {allUsers.filter((u) => u.role === ("STUDENT" as UserRole)).length}
             </div>
           </CardContent>
         </Card>
@@ -97,7 +115,7 @@ export default async function UsersManagementPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">
-              {allUsers.filter((u) => u.role === "CLINICAL_PRECEPTOR").length}
+              {allUsers.filter((u) => u.role === ("CLINICAL_PRECEPTOR" as UserRole)).length}
             </div>
           </CardContent>
         </Card>
@@ -107,7 +125,7 @@ export default async function UsersManagementPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">
-              {allUsers.filter((u) => u.role === "CLINICAL_SUPERVISOR").length}
+              {allUsers.filter((u) => u.role === ("CLINICAL_SUPERVISOR" as UserRole)).length}
             </div>
           </CardContent>
         </Card>
@@ -117,7 +135,13 @@ export default async function UsersManagementPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">
-              {allUsers.filter((u) => u.role === "SCHOOL_ADMIN" || u.role === "SUPER_ADMIN").length}
+              {
+                allUsers.filter(
+                  (u) =>
+                    u.role === ("SCHOOL_ADMIN" as UserRole) ||
+                    u.role === ("SUPER_ADMIN" as UserRole)
+                ).length
+              }
             </div>
           </CardContent>
         </Card>

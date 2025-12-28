@@ -9,8 +9,8 @@ interface LoadingSpinnerProps {
 export function LoadingSpinner({ size = "md", className, text }: LoadingSpinnerProps) {
   const sizeClasses = {
     sm: "w-4 h-4",
-    md: "w-6 h-6", 
-    lg: "w-8 h-8"
+    md: "w-6 h-6",
+    lg: "w-8 h-8",
   }
 
   return (
@@ -21,9 +21,7 @@ export function LoadingSpinner({ size = "md", className, text }: LoadingSpinnerP
           sizeClasses[size]
         )}
       />
-      {text && (
-        <span className="text-sm text-gray-600 animate-pulse">{text}</span>
-      )}
+      {text && <span className="text-sm text-gray-600 animate-pulse">{text}</span>}
     </div>
   )
 }

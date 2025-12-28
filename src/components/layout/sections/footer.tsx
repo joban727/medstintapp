@@ -1,6 +1,6 @@
 "use client"
 
-import { useId } from "react"
+import { useId, useMemo } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
@@ -81,7 +81,7 @@ export const FooterSection = () => {
         <div className="relative overflow-hidden rounded-xl border border-border bg-card/50 shadow-xl backdrop-blur-sm">
           <div className="relative p-8 lg:p-12">
             {/* Main Footer Content */}
-            <div className="space-y-8 lg:space-y-0">
+            <div className="gap-8 lg:gap-0">
               {/* Desktop Layout: Side by side */}
               <div className="hidden gap-12 lg:grid lg:grid-cols-6">
                 {/* Brand Section */}
@@ -101,7 +101,7 @@ export const FooterSection = () => {
                       <Link
                         key={item.name}
                         href={item.href}
-                        className="text-muted-foreground hover:text-foreground"
+                        className="text-muted-foreground hover:text-foreground transition-colors duration-200"
                       >
                         <span className="sr-only">{item.name}</span>
                         <item.icon className="h-5 w-5" />
@@ -115,12 +115,12 @@ export const FooterSection = () => {
                   {footerNavs.map((nav) => (
                     <div key={nav.label}>
                       <h4 className="mb-4 font-semibold text-foreground text-sm">{nav.label}</h4>
-                      <ul className="space-y-3">
+                      <ul className="gap-3">
                         {nav.items.map((item) => (
                           <li key={item.name}>
                             <Link
                               href={item.href}
-                              className="text-muted-foreground text-sm hover:text-foreground"
+                              className="text-muted-foreground text-sm hover:text-foreground transition-colors duration-200"
                             >
                               {item.name}
                             </Link>
@@ -133,7 +133,7 @@ export const FooterSection = () => {
               </div>
 
               {/* Mobile Layout: Stacked */}
-              <div className="space-y-8 lg:hidden">
+              <div className="gap-8 lg:hidden">
                 {/* Brand Section */}
                 <div>
                   <Link href="/" className="group mb-4 flex gap-2 font-bold">
@@ -151,7 +151,7 @@ export const FooterSection = () => {
                       <Link
                         key={item.name}
                         href={item.href}
-                        className="text-muted-foreground hover:text-foreground"
+                        className="text-muted-foreground hover:text-foreground transition-colors duration-200"
                       >
                         <span className="sr-only">{item.name}</span>
                         <item.icon className="h-5 w-5" />
@@ -165,12 +165,12 @@ export const FooterSection = () => {
                   {footerNavs.map((nav) => (
                     <div key={nav.label}>
                       <h4 className="mb-4 font-semibold text-foreground text-sm">{nav.label}</h4>
-                      <ul className="space-y-3">
+                      <ul className="gap-3">
                         {nav.items.map((item) => (
                           <li key={item.name}>
                             <Link
                               href={item.href}
-                              className="text-muted-foreground text-sm hover:text-foreground"
+                              className="text-muted-foreground text-sm hover:text-foreground transition-colors duration-200"
                             >
                               {item.name}
                             </Link>
@@ -196,7 +196,7 @@ export const FooterSection = () => {
                 </Badge>
               </div>
               <p className="text-muted-foreground text-sm">
-                © {new Date().getFullYear()} {site.name}. All rights reserved.
+                © {useMemo(() => new Date().getFullYear(), [])} {site.name}. All rights reserved.
               </p>
             </div>
           </div>

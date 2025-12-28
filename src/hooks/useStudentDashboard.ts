@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { toast } from 'sonner'
+import { useState, useEffect, useCallback } from "react"
+import { toast } from "sonner"
 
 export interface StudentDashboardData {
   student: {
@@ -22,7 +22,6 @@ export interface StudentDashboardData {
     school: {
       id: string
       name: string
-      accreditation: string
     } | null
   }
   currentRotation: {
@@ -103,61 +102,91 @@ export function useStudentDashboard(): UseStudentDashboardReturn {
     setError(null)
 
     try {
-      const response = await fetch('/api/student/dashboard')
-      
+      const response = await fetch("/api/student/dashboard")
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
       // Check if response has content before parsing JSON
       const text = await response.text()
-      if (!text || text.trim() === '') {
-        throw new Error('Empty response from server')
+      if (!text || text.trim() === "") {
+        throw new Error("Empty response from server")
       }
 
       let result
       try {
         result = JSON.parse(text)
       } catch (parseError) {
-        console.error('JSON parse error:', parseError)
-        console.error('Response text:', text.substring(0, 500)) // Log first 500 chars to avoid overwhelming logs
-        throw new Error('Invalid JSON response from server')
+        console.error("JSON parse error:", parseError)
+        console.error("Response text:", text.substring(0, 500)) // Log first 500 chars to avoid overwhelming logs
+        throw new Error("Invalid JSON response from server")
       }
 
       if (!result.success) {
-        throw new Error(result.error || result.message || 'Failed to fetch dashboard data')
+        throw new Error(result.error || result.message || "Failed to fetch dashboard data")
+      }
+
+      // Support API responses that wrap payload in `data`
+      const payload = result.data ?? result
+
+      if (!payload || !payload.student) {
+        throw new Error("Malformed response: missing student payload")
       }
 
       // Transform dates from strings to Date objects
       const transformedData: StudentDashboardData = {
-        ...result,
         student: {
-          ...result.student,
-          enrollmentDate: result.student.enrollmentDate ? new Date(result.student.enrollmentDate) : null,
-          expectedGraduation: result.student.expectedGraduation ? new Date(result.student.expectedGraduation) : null,
+          ...payload.student,
+          enrollmentDate: payload.student.enrollmentDate
+            ? new Date(payload.student.enrollmentDate)
+            : null,
+          expectedGraduation: payload.student.expectedGraduation
+            ? new Date(payload.student.expectedGraduation)
+            : null,
+          program: payload.student.program ?? payload.program ?? null,
+          school: payload.student.school ?? payload.school ?? null,
         },
-        currentRotation: result.currentRotation ? {
-          ...result.currentRotation,
-          startDate: new Date(result.currentRotation.startDate),
-          endDate: new Date(result.currentRotation.endDate),
-        } : null,
-        recentTimeRecords: result.recentTimeRecords.map((record: any) => ({
-          ...record,
-          date: new Date(record.date),
-          clockIn: new Date(record.clockIn),
-          clockOut: record.clockOut ? new Date(record.clockOut) : null,
-        })),
-        clockStatus: result.clockStatus ? {
-          ...result.clockStatus,
-          clockIn: new Date(result.clockStatus.clockIn),
-        } : null,
+        currentRotation: payload.currentRotation
+          ? {
+              ...payload.currentRotation,
+              startDate: new Date(payload.currentRotation.startDate),
+              endDate: new Date(payload.currentRotation.endDate),
+            }
+          : null,
+        assignedSites: Array.isArray(payload.assignedSites) ? payload.assignedSites : [],
+        recentTimeRecords: Array.isArray(payload.recentTimeRecords)
+          ? payload.recentTimeRecords.map((record: any) => ({
+              ...record,
+              date: new Date(record.date),
+              clockIn: new Date(record.clockIn),
+              clockOut: record.clockOut ? new Date(record.clockOut) : null,
+            }))
+          : [],
+        clockStatus: payload.clockStatus
+          ? {
+              ...payload.clockStatus,
+              clockIn: new Date(payload.clockStatus.clockIn),
+            }
+          : null,
+        statistics: payload.statistics ?? {
+          weeklyHours: 0,
+          weeklyCount: 0,
+          monthlyHours: 0,
+          monthlyCount: 0,
+          currentStreak: 0,
+          totalRequiredHours: 0,
+          totalRotations: 0,
+          progressPercentage: 0,
+          rotationProgress: 0,
+        },
       }
 
       setData(transformedData)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch dashboard data'
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch dashboard data"
       setError(errorMessage)
-      toast.error('Failed to load dashboard data', {
+      toast.error("Failed to load dashboard data", {
         description: errorMessage,
       })
     } finally {

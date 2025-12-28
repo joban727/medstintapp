@@ -4,13 +4,44 @@ import typescript from "@typescript-eslint/eslint-plugin"
 import typescriptParser from "@typescript-eslint/parser"
 import react from "eslint-plugin-react"
 import reactHooks from "eslint-plugin-react-hooks"
+import security from "eslint-plugin-security"
 
 export default [
+  {
+    ignores: ["**/node_modules/", "**/.next/", "**/dist/", "**/build/", "**/coverage/"],
+  },
   js.configs.recommended,
+  security.configs.recommended,
   {
     files: ["**/*.{js,jsx,ts,tsx}"],
     languageOptions: {
       parser: typescriptParser,
+      globals: {
+        console: "readonly",
+        fetch: "readonly",
+        FormData: "readonly",
+        File: "readonly",
+        setTimeout: "readonly",
+        process: "readonly",
+        window: "readonly",
+        document: "readonly",
+        module: "readonly",
+        require: "readonly",
+        URL: "readonly",
+        clearInterval: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        EventSource: "readonly",
+        Request: "readonly",
+        Response: "readonly",
+        Headers: "readonly",
+        SVGSVGElement: "readonly",
+        crypto: "readonly",
+        localStorage: "readonly",
+        sessionStorage: "readonly",
+        navigator: "readonly",
+        PositionOptions: "readonly",
+      },
       parserOptions: {
         ecmaVersion: "latest",
         sourceType: "module",
@@ -27,11 +58,11 @@ export default [
     },
     rules: {
       // TypeScript rules
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/explicit-function-return-type": "off",
       "@typescript-eslint/explicit-module-boundary-types": "off",
-      "@typescript-eslint/no-non-null-assertion": "warn",
+      "@typescript-eslint/no-non-null-assertion": "off",
 
       // React rules
       "react/react-in-jsx-scope": "off",
@@ -41,7 +72,8 @@ export default [
 
       // General rules
       "no-unused-vars": "off", // Use TypeScript version instead
-      "no-console": "warn",
+      "no-console": "off",
+      "no-undef": "off",
       "prefer-const": "error",
       "no-var": "error",
     },

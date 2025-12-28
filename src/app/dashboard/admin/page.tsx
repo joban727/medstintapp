@@ -9,28 +9,57 @@ import { SystemStatus } from "@/components/admin/system-status"
 import { DashboardStatsSkeleton } from "../../../components/dashboard/dashboard-loading"
 import { WelcomeBanner } from "../../../components/dashboard/welcome-banner"
 import { SchoolSelector } from "../../../components/school-selector"
-import type { User } from "../../../database/schema"
+import { PageContainer } from "@/components/ui/page-container"
+import { schools, type User } from "../../../database/schema"
+import type { UserRole } from "@/types"
 import { requireAnyRole } from "../../../lib/auth-clerk"
 
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
 export default async function AdminDashboardPage() {
   const user = await requireAnyRole(["SUPER_ADMIN"], "/dashboard")
 
   return (
-    <div className="space-y-6">
+    <PageContainer>
       {/* Welcome Banner for First-Time Users */}
       <WelcomeBanner userRole={user.role} userName={user.name || "Admin User"} />
 
       <Suspense fallback={<DashboardStatsSkeleton />}>
         <AdminDashboardContent user={user} />
       </Suspense>
-    </div>
+    </PageContainer>
   )
 }
 
-async function AdminDashboardContent({ user }: { user: User }) {
+async function AdminDashboardContent({ user }: {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: UserRole;
+    schoolId: string | null;
+    onboardingCompleted: boolean;
+    image?: string | null;
+  }
+}) {
   // Fetch real data for super admin dashboard with school awareness and error handling
-  let allUsers: User[] = []
-  let allSchools: typeof import("@/database/schema").schools.$inferSelect[] = []
+  // Using any[] for allUsers since getAllUsers returns a subset of User fields
+  let allUsers: any[] = []
+  let allSchools: typeof schools.$inferSelect[] = []
 
   try {
     const { getAllUsers, getAccessibleSchools } = await import("@/app/actions")
@@ -97,7 +126,7 @@ async function AdminDashboardContent({ user }: { user: User }) {
   const stats = {
     totalUsers: safeAllUsers.length,
     totalSchools: safeAllSchools.length,
-    totalStudents: safeAllUsers.filter((u) => u?.role === "STUDENT").length,
+    totalStudents: safeAllUsers.filter((u) => u?.role === ("STUDENT" as UserRole)).length,
     activeSessions,
   }
 

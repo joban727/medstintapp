@@ -67,10 +67,9 @@ const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
         "default-src": ["'self'"],
         "script-src": [
           "'self'",
-          "'unsafe-inline'",
-          "'unsafe-eval'",
           "https://clerk.medstint.com",
           "https://*.clerk.accounts.dev",
+          "https://js.stripe.com",
         ],
         "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         "font-src": ["'self'", "https://fonts.gstatic.com"],
@@ -223,7 +222,7 @@ export class InputValidator {
 
       return { valid: true }
     } catch (error) {
-      logger.error("Error validating request body", { error })
+      logger.error({ error: String(error) }, "Error validating request body")
       return { valid: false, reason: "Invalid request body" }
     }
   }
@@ -358,7 +357,7 @@ export class SecurityManager {
     // Basic request validation
     const basicValidation = this.inputValidator.validateRequest(req)
     if (!basicValidation.valid) {
-      logger.warn("Request validation failed", { reason: basicValidation.reason, url: req.url })
+      logger.warn({ reason: basicValidation.reason, url: req.url }, "Request validation failed")
       return {
         valid: false,
         reason: basicValidation.reason,
@@ -387,7 +386,7 @@ export class SecurityManager {
         req.cookies.get(this.config.csrf.cookieName)?.value
 
       if (!csrfToken || !this.csrfManager.validateToken(sessionId, csrfToken)) {
-        logger.warn("CSRF validation failed", { sessionId, hasToken: !!csrfToken })
+        logger.warn({ sessionId, hasToken: !!csrfToken }, "CSRF validation failed")
         return {
           valid: false,
           reason: "Invalid CSRF token",
@@ -403,10 +402,10 @@ export class SecurityManager {
     if (["POST", "PUT", "PATCH"].includes(req.method)) {
       const bodyValidation = await this.inputValidator.validateRequestBody(req.clone())
       if (!bodyValidation.valid) {
-        logger.warn("Request body validation failed", {
+        logger.warn({
           reason: bodyValidation.reason,
           url: req.url,
-        })
+        }, "Request body validation failed")
         return {
           valid: false,
           reason: bodyValidation.reason,

@@ -47,7 +47,7 @@ import {
   TableRow,
 } from "../../../../components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs"
-import { db } from "../../../../database/db"
+import { db } from "@/database/connection-pool"
 import { evaluations, rotations, users } from "../../../../database/schema"
 import { requireAnyRole } from "../../../../lib/auth-clerk"
 

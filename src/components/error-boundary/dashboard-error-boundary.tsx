@@ -101,7 +101,7 @@ class DashboardErrorBoundary extends Component<Props, State> {
                 We encountered an error while loading this section of the dashboard.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="gap-4">
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription className="text-sm">{errorMessage}</AlertDescription>
@@ -109,10 +109,10 @@ class DashboardErrorBoundary extends Component<Props, State> {
 
               {this.props.showDetails && this.state.errorInfo && (
                 <details className="text-sm">
-                  <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+                  <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground transition-color duration-200s duration-200">
                     Technical Details
                   </summary>
-                  <pre className="mt-2 overflow-auto rounded bg-muted p-2 text-xs">
+                  <pre className="mt-2 overflow-auto rounded-md bg-muted p-2 text-xs">
                     {this.state.error?.stack}
                   </pre>
                 </details>
@@ -120,12 +120,22 @@ class DashboardErrorBoundary extends Component<Props, State> {
 
               <div className="flex flex-col gap-2 sm:flex-row">
                 {canRetry && (
-                  <Button type="button" onClick={this.handleRetry} variant="default" className="flex-1">
+                  <Button
+                    type="button"
+                    onClick={this.handleRetry}
+                    variant="default"
+                    className="flex-1"
+                  >
                     <RefreshCw className="mr-2 h-4 w-4" />
                     Try Again ({this.maxRetries - this.state.retryCount} left)
                   </Button>
                 )}
-                <Button type="button" onClick={this.handleReset} variant="outline" className="flex-1">
+                <Button
+                  type="button"
+                  onClick={this.handleReset}
+                  variant="outline"
+                  className="flex-1"
+                >
                   <Home className="mr-2 h-4 w-4" />
                   Reset
                 </Button>
@@ -156,19 +166,4 @@ export const useErrorHandler = () => {
   return (error: Error) => {
     throw error
   }
-}
-
-// Higher-order component for wrapping components with error boundary
-export function withErrorBoundary<P extends object>(
-  Component: React.ComponentType<P>,
-  errorBoundaryProps?: Omit<Props, "children">
-) {
-  const WrappedComponent = (props: P) => (
-    <DashboardErrorBoundary {...errorBoundaryProps}>
-      <Component {...props} />
-    </DashboardErrorBoundary>
-  )
-
-  WrappedComponent.displayName = `withErrorBoundary(${Component.displayName || Component.name})`
-  return WrappedComponent
 }

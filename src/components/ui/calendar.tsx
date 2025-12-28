@@ -21,11 +21,11 @@ function Calendar({
     nav: "absolute top-0 flex w-full justify-between z-10",
     button_previous: cn(
       buttonVariants({ variant: "ghost" }),
-      "size-9 p-0 text-muted-foreground/80 hover:text-foreground"
+      "size-9 p-0 text-muted-foreground/80 hover:text-foreground transition-colors duration-200"
     ),
     button_next: cn(
       buttonVariants({ variant: "ghost" }),
-      "size-9 p-0 text-muted-foreground/80 hover:text-foreground"
+      "size-9 p-0 text-muted-foreground/80 hover:text-foreground transition-colors duration-200"
     ),
     weekday: "size-9 p-0 text-xs font-medium text-muted-foreground/80",
     day_button:

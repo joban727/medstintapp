@@ -14,6 +14,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 interface AdminHeaderProps {
   user: {
     name: string
@@ -33,31 +37,31 @@ export function AdminHeader({ user, className }: AdminHeaderProps) {
     minute: "2-digit",
   })
 
+  const displayEmail = user.email || "admin@medstint.com"
+
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn("gap-4", className)}>
       {/* Top Bar */}
-      <div className="flex items-center justify-between rounded-lg border bg-gradient-to-r from-blue-50 to-purple-50 p-4">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <Shield className="h-6 w-6 text-blue-600" />
-            <Badge variant="secondary" className="border-purple-200 bg-purple-100 text-purple-800">
-              Super Administrator
+      <div className="flex items-center justify-between rounded-lg border bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/50 dark:to-purple-950/50 p-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Shield className="h-6 w-6 text-medical-primary" />
+            <Badge variant="secondary" className="border-purple-200 dark:border-purple-800 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400">
+              Welcome to the MedStint administration portal.
             </Badge>
           </div>
-          <div className="hidden items-center space-x-2 text-muted-foreground text-sm md:flex">
+          <div className="hidden items-center gap-2 text-muted-foreground text-sm md:flex">
             <Clock className="h-4 w-4" />
             <span>{currentTime}</span>
           </div>
         </div>
-
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-4 w-4" />
             <span className="-top-1 -right-1 absolute flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white text-xs">
               3
             </span>
           </Button>
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -75,10 +79,10 @@ export function AdminHeader({ user, className }: AdminHeaderProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col space-y-1">
+                <div className="flex flex-col gap-1">
                   <p className="font-medium text-sm leading-none">{user.name}</p>
                   <p className="text-muted-foreground text-xs leading-none">
-                    {user.email || "admin@medstint.com"}
+                    {displayEmail}
                   </p>
                 </div>
               </DropdownMenuLabel>
@@ -92,15 +96,14 @@ export function AdminHeader({ user, className }: AdminHeaderProps) {
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-red-600">Sign out</DropdownMenuItem>
+              <DropdownMenuItem className="text-error">Sign out</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
-
       {/* Welcome Section */}
       <div className="flex items-center justify-between">
-        <div className="space-y-1">
+        <div className="gap-1">
           <h1 className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text font-bold text-3xl text-transparent tracking-tight">
             System Administration
           </h1>
@@ -108,9 +111,8 @@ export function AdminHeader({ user, className }: AdminHeaderProps) {
             Welcome back, {user.name}. Manage the entire MedStint platform.
           </p>
         </div>
-
-        <div className="hidden items-center space-x-2 text-muted-foreground text-sm lg:flex">
-          <div className="flex items-center space-x-1">
+        <div className="hidden items-center gap-2 text-muted-foreground text-sm lg:flex">
+          <div className="flex items-center gap-1">
             <div className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
             <span>System Online</span>
           </div>

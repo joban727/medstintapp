@@ -9,19 +9,24 @@ import {
   rotations,
   users,
 } from "../../../../../database/schema"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  withErrorHandling,
+  HTTP_STATUS,
+} from "@/lib/api-response"
 
+import type { UserRole } from "@/types"
 // GET /api/students/[userId]/analytics - Get analytics data for a student
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
-) {
-  try {
+export const GET = withErrorHandling(
+  async (request: NextRequest, { params }: { params: Promise<{ userId: string }> }) => {
     const { userId: currentUserId } = await auth()
     const { userId: studentId } = await params
 
     if (!currentUserId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse("Unauthorized", HTTP_STATUS.UNAUTHORIZED)
     }
+
     const { searchParams } = new URL(request.url)
     const timeframe = searchParams.get("timeframe") || "30" // days
 
@@ -29,12 +34,12 @@ export async function GET(
     const [currentUser] = await db.select().from(users).where(eq(users.id, currentUserId)).limit(1)
 
     if (!currentUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+      return createErrorResponse("User not found", HTTP_STATUS.NOT_FOUND)
     }
 
     // Students can only access their own data, others need appropriate permissions
-    if (currentUser.role === "STUDENT" && currentUser.id !== studentId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (currentUser.role === ("STUDENT" as UserRole as UserRole) && currentUser.id !== studentId) {
+      return createErrorResponse("Forbidden", HTTP_STATUS.FORBIDDEN)
     }
 
     // Calculate date range
@@ -61,19 +66,19 @@ export async function GET(
     const evaluationStats = await db
       .select({
         status: sql<string>`CASE 
-          WHEN ${evaluations.studentSignature} = true AND ${evaluations.evaluatorSignature} = true THEN 'COMPLETED'
-          WHEN ${evaluations.studentSignature} = true OR ${evaluations.evaluatorSignature} = true THEN 'PARTIAL'
-          ELSE 'PENDING'
-        END`.as("status"),
+        WHEN ${evaluations.studentSignature} = true AND ${evaluations.evaluatorSignature} = true THEN 'COMPLETED'
+        WHEN ${evaluations.studentSignature} = true OR ${evaluations.evaluatorSignature} = true THEN 'PARTIAL'
+        ELSE 'PENDING'
+      END`.as("status"),
         count: count(),
       })
       .from(evaluations)
       .where(and(eq(evaluations.studentId, studentId), gte(evaluations.createdAt, startDate)))
       .groupBy(sql`CASE 
-        WHEN ${evaluations.studentSignature} = true AND ${evaluations.evaluatorSignature} = true THEN 'COMPLETED'
-        WHEN ${evaluations.studentSignature} = true OR ${evaluations.evaluatorSignature} = true THEN 'PARTIAL'
-        ELSE 'PENDING'
-      END`)
+      WHEN ${evaluations.studentSignature} = true AND ${evaluations.evaluatorSignature} = true THEN 'COMPLETED'
+      WHEN ${evaluations.studentSignature} = true OR ${evaluations.evaluatorSignature} = true THEN 'PARTIAL'
+      ELSE 'PENDING'
+    END`)
 
     // Get rotation progress
     const rotationProgress = await db
@@ -126,24 +131,25 @@ export async function GET(
     const avgRotationProgress =
       rotationProgress.length > 0
         ? rotationProgress.reduce((sum, rotation) => {
-            const now = new Date()
-            const start = new Date(rotation.startDate)
-            const end = new Date(rotation.endDate)
-            const totalDays = Math.max(
-              1,
-              Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-            )
-            const elapsedDays = Math.max(
-              0,
-              Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-            )
-            const progress = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100))
-            return sum + progress
-          }, 0) / rotationProgress.length
+          // Skip rotations without dates
+          if (!rotation.startDate || !rotation.endDate) return sum
+          const now = new Date()
+          const start = new Date(rotation.startDate)
+          const end = new Date(rotation.endDate)
+          const totalDays = Math.max(
+            1,
+            Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+          )
+          const elapsedDays = Math.max(
+            0,
+            Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+          )
+          const progress = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100))
+          return sum + progress
+        }, 0) / rotationProgress.filter(r => r.startDate && r.endDate).length || 0
         : 0
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       timeframe: Number.parseInt(timeframe),
       analytics: {
         overview: {
@@ -168,8 +174,9 @@ export async function GET(
         })),
         rotationProgress: rotationProgress.map((rotation) => {
           const now = new Date()
-          const start = new Date(rotation.startDate)
-          const end = new Date(rotation.endDate)
+          // Handle nullable dates with fallbacks
+          const start = rotation.startDate ? new Date(rotation.startDate) : now
+          const end = rotation.endDate ? new Date(rotation.endDate) : now
           const totalDays = Math.max(
             1,
             Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
@@ -201,8 +208,5 @@ export async function GET(
         })),
       },
     })
-  } catch (error) {
-    console.error("Error fetching student analytics:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
+)

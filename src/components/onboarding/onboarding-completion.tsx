@@ -1,5 +1,5 @@
 // TODO: Add cache invalidation hooks for mutations
-"use client"
+"use client";
 
 import {
   ArrowRight,
@@ -12,7 +12,7 @@ import {
   Settings,
   UserPlus,
   Users,
-} from "lucide-react"
+} from "lucide-react";
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -20,7 +20,11 @@ import type { UserRole } from "../../types"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card"
-import { motion } from "../ui/motion"
+import { motion } from "framer-motion"
+
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
 
 interface UserData {
   id: string
@@ -99,6 +103,7 @@ export function OnboardingCompletion({
         },
       ]
     }
+
     return [
       {
         icon: <Calendar className="h-5 w-5" />,
@@ -151,11 +156,18 @@ export function OnboardingCompletion({
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch((err) => {
+          console.error('Failed to parse JSON response:', err)
+          throw new Error('Invalid response format')
+        })
         throw new Error(errorData.error || "Failed to complete onboarding")
       }
 
-      const _result = await response.json()
+      const _result = await response.json().catch((err) => {
+        console.error('Failed to parse JSON response:', err)
+        throw new Error('Invalid response format')
+      })
+
       toast.success("Welcome to MedStint! Redirecting to your dashboard...")
 
       // Clear any onboarding state from sessionStorage
@@ -213,18 +225,15 @@ export function OnboardingCompletion({
                 className="mx-auto mb-4"
               >
                 <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
-                  <CheckCircle className="h-12 w-12 text-green-600" />
+                  <CheckCircle className="h-12 w-12 text-healthcare-green" />
                 </div>
               </motion.div>
-
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
               >
-                <CardTitle className="mb-2 font-bold text-3xl text-gray-900">
-                  Welcome to MedStint!
-                </CardTitle>
+                <CardTitle className="text-center text-2xl">Welcome to MedStint!</CardTitle>
                 <CardDescription className="text-gray-600 text-lg">
                   {userType === "school"
                     ? `Your school has been successfully set up. You're now ready to manage your clinical education programs.`
@@ -232,7 +241,6 @@ export function OnboardingCompletion({
                 </CardDescription>
               </motion.div>
             </CardHeader>
-
             <CardContent className="p-8">
               {/* Summary Card */}
               <motion.div
@@ -246,9 +254,9 @@ export function OnboardingCompletion({
                     <div className="flex items-start gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-100">
                         {userType === "school" ? (
-                          <Building2 className="h-6 w-6 text-green-600" />
+                          <Building2 className="h-6 w-6 text-healthcare-green" />
                         ) : (
-                          <GraduationCap className="h-6 w-6 text-green-600" />
+                          <GraduationCap className="h-6 w-6 text-healthcare-green" />
                         )}
                       </div>
                       <div className="flex-1">
@@ -257,7 +265,7 @@ export function OnboardingCompletion({
                             ? "School Setup Complete"
                             : "Student Enrollment Complete"}
                         </h3>
-                        <div className="space-y-1 text-gray-600 text-sm">
+                        <div className="gap-1 text-gray-600 text-sm">
                           {userType === "school" ? (
                             <>
                               <p>
@@ -276,8 +284,8 @@ export function OnboardingCompletion({
                           ) : (
                             <>
                               <p>
-                                <span className="font-medium">Student:</span> {userData?.firstName}{" "}
-                                {userData?.lastName}
+                                <span className="font-medium">Student:</span>{" "}
+                                {userData?.firstName} {userData?.lastName}
                               </p>
                               <p>
                                 <span className="font-medium">School:</span>{" "}
@@ -307,7 +315,9 @@ export function OnboardingCompletion({
                 transition={{ delay: 0.8 }}
                 className="mb-8"
               >
-                <h3 className="mb-6 font-semibold text-gray-900 text-xl">Recommended Next Steps</h3>
+                <h3 className="mb-6 font-semibold text-gray-900 text-xl">
+                  Recommended Next Steps
+                </h3>
 
                 {/* High Priority Steps */}
                 {highPrioritySteps.length > 0 && (
@@ -316,29 +326,41 @@ export function OnboardingCompletion({
                       <Badge className="border-red-200 bg-red-100 text-red-800">
                         High Priority
                       </Badge>
-                      <span className="text-gray-600 text-sm">Complete these first</span>
+                      <span className="text-gray-600 text-sm">
+                        Complete these first
+                      </span>
                     </div>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {highPrioritySteps.map((step, index) => (
                         <motion.div
-                          key={`high-priority-${step.title.replace(/\s+/g, '-').toLowerCase()}-${step.href.split('/').pop()}`}
+                          key={`high-priority-${step.title
+                            .replace(/\s+/g, "-")
+                            .toLowerCase()}-${step.href.split("/").pop()}`}
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: 1 + index * 0.1 }}
                         >
                           <Card
-                            className="h-full cursor-pointer border-red-200 bg-red-50/30 transition-shadow hover:shadow-md"
+                            className="h-full cursor-pointer border-red-200 bg-red-50/30 transition-all duration-200 hover:shadow-md"
                             onClick={() => handleStepAction(step.href)}
                           >
                             <CardContent className="p-4">
                               <div className="flex items-start gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 text-red-600">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 text-error">
                                   {step.icon}
                                 </div>
                                 <div className="flex-1">
-                                  <h4 className="mb-1 font-medium text-gray-900">{step.title}</h4>
-                                  <p className="mb-3 text-gray-600 text-sm">{step.description}</p>
-                                  <Button size="sm" variant="outline" className="text-xs">
+                                  <h4 className="mb-1 font-medium text-gray-900">
+                                    {step.title}
+                                  </h4>
+                                  <p className="mb-3 text-gray-600 text-sm">
+                                    {step.description}
+                                  </p>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
                                     {step.action}
                                     <ArrowRight className="ml-1 h-3 w-3" />
                                   </Button>
@@ -357,43 +379,58 @@ export function OnboardingCompletion({
                   <div>
                     <div className="mb-4 flex items-center gap-2">
                       <Badge variant="outline">Additional Options</Badge>
-                      <span className="text-gray-600 text-sm">Complete when ready</span>
+                      <span className="text-gray-600 text-sm">
+                        Complete when ready
+                      </span>
                     </div>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {otherSteps.map((step, index) => (
                         <motion.div
-                          key={`other-step-${step.title.replace(/\s+/g, '-').toLowerCase()}-${step.priority}-${step.href.split('/').pop()}`}
+                          key={`other-step-${step.title
+                            .replace(/\s+/g, "-")
+                            .toLowerCase()}-${step.priority}-${step.href
+                              .split("/")
+                              .pop()}`}
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: 1.2 + index * 0.1 }}
                         >
                           <Card
-                            className="h-full cursor-pointer transition-shadow hover:shadow-md"
+                            className="h-full cursor-pointer transition-all duration-200 hover:shadow-md"
                             onClick={() => handleStepAction(step.href)}
                           >
                             <CardContent className="p-4">
                               <div className="flex items-start gap-3">
                                 <div
-                                  className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                                    step.priority === "medium"
-                                      ? "bg-yellow-100 text-yellow-600"
-                                      : "bg-green-100 text-green-600"
-                                  }`}
+                                  className={`flex h-10 w-10 items-center justify-center rounded-lg ${step.priority === "medium"
+                                    ? "bg-yellow-100 text-yellow-600"
+                                    : "bg-green-100 text-healthcare-green"
+                                    }`}
                                 >
                                   {step.icon}
                                 </div>
                                 <div className="flex-1">
                                   <div className="mb-1 flex items-center gap-2">
-                                    <h4 className="font-medium text-gray-900">{step.title}</h4>
+                                    <h4 className="font-medium text-gray-900">
+                                      {step.title}
+                                    </h4>
                                     <Badge
                                       variant="outline"
-                                      className={`text-xs ${getPriorityColor(step.priority)}`}
+                                      className={`text-xs ${getPriorityColor(
+                                        step.priority
+                                      )}`}
                                     >
                                       {step.priority}
                                     </Badge>
                                   </div>
-                                  <p className="mb-3 text-gray-600 text-sm">{step.description}</p>
-                                  <Button size="sm" variant="outline" className="text-xs">
+                                  <p className="mb-3 text-gray-600 text-sm">
+                                    {step.description}
+                                  </p>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
                                     {step.action}
                                     <ArrowRight className="ml-1 h-3 w-3" />
                                   </Button>
@@ -419,14 +456,13 @@ export function OnboardingCompletion({
                   onClick={handleContinue}
                   disabled={isRedirecting}
                   size="lg"
-                  className="bg-green-600 px-8 py-3 text-lg text-white hover:bg-green-700"
+                  className="bg-healthcare-green px-8 py-3 text-lg text-white hover:bg-green-700 transition-colors duration-200"
                 >
                   {isRedirecting ? (
                     "Redirecting to Dashboard..."
                   ) : (
                     <>
-                      Go to Dashboard
-                      <ArrowRight className="ml-2 h-5 w-5" />
+                      Go to Dashboard <ArrowRight className="ml-2 h-5 w-5" />
                     </>
                   )}
                 </Button>

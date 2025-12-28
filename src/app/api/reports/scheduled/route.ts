@@ -3,10 +3,19 @@ import { and, eq, or } from "drizzle-orm"
 import { nanoid } from "nanoid"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { db } from "../../../../database/db"
+import { db } from "@/database/connection-pool"
+import type { UserRole } from "@/types"
 import { scheduledReports } from "../../../../database/schema"
-import { cacheIntegrationService } from '@/lib/cache-integration'
-
+import { cacheIntegrationService } from "@/lib/cache-integration"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  createValidationErrorResponse,
+  withErrorHandling,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+} from "@/lib/api-response"
+import { generalApiLimiter } from "@/lib/rate-limiter"
 
 interface ScheduledReportData {
   name: string
@@ -70,7 +79,7 @@ async function getScheduledReports(userId?: string, userRole?: string) {
   try {
     // If not school admin, only show reports created by the user
     const reports =
-      userRole !== "SCHOOL_ADMIN" && userId
+      userRole !== ("SCHOOL_ADMIN" as UserRole) && userId
         ? await db.select().from(scheduledReports).where(eq(scheduledReports.createdBy, userId))
         : await db.select().from(scheduledReports)
     return reports.map((report) => ({
@@ -129,7 +138,7 @@ async function deleteScheduledReports(reportIds: string[], userId: string, userR
     let deleteCondition = idConditions.length === 1 ? idConditions[0] : or(...idConditions)
 
     // If not school admin, only allow deleting own reports
-    if (userRole !== "SCHOOL_ADMIN" && deleteCondition) {
+    if (userRole !== ("SCHOOL_ADMIN" as UserRole) && deleteCondition) {
       deleteCondition = and(deleteCondition, eq(scheduledReports.createdBy, userId))
     }
 
@@ -145,71 +154,96 @@ async function deleteScheduledReports(reportIds: string[], userId: string, userR
   }
 }
 
-export async function GET(_request: NextRequest) {
+export const GET = withErrorHandling(async (_request: NextRequest) => {
+  // Check rate limiting first
   try {
-    // Try to get cached response
+    const rateLimitResult = await generalApiLimiter.checkLimit(_request)
+    if (!rateLimitResult.allowed) {
+      const retryAfter = Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000)
+      return createErrorResponse("Too Many Requests", HTTP_STATUS.TOO_MANY_REQUESTS, {
+        details: "Rate limit exceeded. Please try again later.",
+        retryAfter: retryAfter,
+      })
+    }
+  } catch (rateLimitError) {
+    console.warn("Rate limiter error in reports/scheduled/route.ts:", rateLimitError)
+    // Continue with request if rate limiter fails
+  }
+
+  // Try to get cached response
+  try {
     const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:reports/scheduled/route.ts',
+      "api:reports/scheduled/route.ts",
       async () => {
-        // Original function logic will be wrapped here
         return await executeOriginalLogic()
       },
       300 // 5 minutes TTL
     )
-    
+
     if (cached) {
       return cached
     }
   } catch (cacheError) {
-    console.warn('Cache error in reports/scheduled/route.ts:', cacheError)
+    console.warn("Cache error in reports/scheduled/route.ts:", cacheError)
     // Continue with original logic if cache fails
   }
-  
-  async function executeOriginalLogic() {
 
-  try {
+  async function executeOriginalLogic() {
     const { userId, sessionClaims } = await auth()
 
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     const userRole = (sessionClaims?.metadata as UserMetadata)?.role
 
     if (!checkSchedulePermissions(userRole)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+      return createErrorResponse("Insufficient permissions", HTTP_STATUS.FORBIDDEN)
     }
 
     // Fetch reports from database
     const userReports = await getScheduledReports(userId, userRole)
 
-    return NextResponse.json({
+    return createSuccessResponse({
       reports: userReports,
       total: userReports.length,
     })
-  } catch (error) {
-    console.error("Error fetching scheduled reports:", error)
-    return NextResponse.json({ error: "Failed to fetch scheduled reports" }, { status: 500 })
   }
 
-  }
-}
+  return await executeOriginalLogic()
+})
 
-export async function POST(request: NextRequest) {
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  // Check rate limiting first
   try {
-    const { userId, sessionClaims } = await auth()
-
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const rateLimitResult = await generalApiLimiter.checkLimit(request)
+    if (!rateLimitResult.allowed) {
+      const retryAfter = Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000)
+      return createErrorResponse("Too Many Requests", HTTP_STATUS.TOO_MANY_REQUESTS, {
+        details: "Rate limit exceeded. Please try again later.",
+        retryAfter: retryAfter,
+      })
     }
+  } catch (rateLimitError) {
+    console.warn("Rate limiter error in reports/scheduled/route.ts POST:", rateLimitError)
+    // Continue with request if rate limiter fails
+  }
 
-    const userRole = (sessionClaims?.metadata as UserMetadata)?.role
+  const { userId, sessionClaims } = await auth()
 
-    if (!checkSchedulePermissions(userRole)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
+  if (!userId) {
+    return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
+  }
 
-    const body = await request.json()
+  const userRole = (sessionClaims?.metadata as UserMetadata)?.role
+
+  if (!checkSchedulePermissions(userRole)) {
+    return createErrorResponse("Insufficient permissions", HTTP_STATUS.FORBIDDEN)
+  }
+
+  const body = await request.json()
+
+  try {
     const validatedData = scheduledReportSchema.parse(body)
 
     const reportData = {
@@ -223,73 +257,83 @@ export async function POST(request: NextRequest) {
     const newReport = await createScheduledReport(reportData)
 
     if (!newReport) {
-      return NextResponse.json({ error: "Failed to create scheduled report" }, { status: 500 })
+      return createErrorResponse(
+        "Failed to create scheduled report",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR
+      )
     }
 
-    return NextResponse.json(
+    // Invalidate related caches
+    try {
+      await cacheIntegrationService.invalidateByTags(["reports"])
+    } catch (cacheError) {
+      console.warn("Cache invalidation error in reports/scheduled/route.ts:", cacheError)
+    }
+
+    return createSuccessResponse(
       {
         message: "Scheduled report created successfully",
         report: newReport,
       },
-      { status: 201 }
+      undefined,
+      HTTP_STATUS.CREATED
     )
   } catch (error) {
-    console.error("Error creating scheduled report:", error)
-
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid data", details: error.issues }, { status: 400 })
+      return createValidationErrorResponse("Validation failed", error.issues.map((e) => ({ field: e.path.join("."), code: e.code, details: e.message })))
     }
-
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateReportCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in reports/scheduled/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to create scheduled report" }, { status: 500 })
+    throw error
   }
-}
+})
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withErrorHandling(async (request: NextRequest) => {
+  // Check rate limiting first
   try {
-    const { userId, sessionClaims } = await auth()
-
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const rateLimitResult = await generalApiLimiter.checkLimit(request)
+    if (!rateLimitResult.allowed) {
+      const retryAfter = Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000)
+      return createErrorResponse("Too Many Requests", HTTP_STATUS.TOO_MANY_REQUESTS, {
+        details: "Rate limit exceeded. Please try again later.",
+        retryAfter: retryAfter,
+      })
     }
-
-    const userRole = (sessionClaims?.metadata as UserMetadata)?.role
-
-    if (!checkSchedulePermissions(userRole)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const reportIds = searchParams.get("ids")?.split(",") || []
-
-    if (reportIds.length === 0) {
-      return NextResponse.json({ error: "No report IDs provided" }, { status: 400 })
-    }
-
-    // Delete reports from database (with permission check)
-    const deletedCount = await deleteScheduledReports(reportIds, userId, userRole)
-
-    return NextResponse.json({
-      message: `${deletedCount} scheduled report(s) deleted successfully`,
-      deletedCount,
-    })
-  } catch (error) {
-    console.error("Error deleting scheduled reports:", error)
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateReportCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in reports/scheduled/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to delete scheduled reports" }, { status: 500 })
+  } catch (rateLimitError) {
+    console.warn("Rate limiter error in reports/scheduled/route.ts DELETE:", rateLimitError)
+    // Continue with request if rate limiter fails
   }
-}
+
+  const { userId, sessionClaims } = await auth()
+
+  if (!userId) {
+    return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
+  }
+
+  const userRole = (sessionClaims?.metadata as UserMetadata)?.role
+
+  if (!checkSchedulePermissions(userRole)) {
+    return createErrorResponse("Insufficient permissions", HTTP_STATUS.FORBIDDEN)
+  }
+
+  const { searchParams } = new URL(request.url)
+  const reportIds = searchParams.get("ids")?.split(",") || []
+
+  if (reportIds.length === 0) {
+    return createErrorResponse("No report IDs provided", HTTP_STATUS.BAD_REQUEST)
+  }
+
+  // Delete reports from database (with permission check)
+  const deletedCount = await deleteScheduledReports(reportIds, userId, userRole)
+
+  // Invalidate related caches
+  try {
+    await cacheIntegrationService.invalidateByTags(["reports"])
+  } catch (cacheError) {
+    console.warn("Cache invalidation error in reports/scheduled/route.ts:", cacheError)
+  }
+
+  return createSuccessResponse({
+    message: `${deletedCount} scheduled report(s) deleted successfully`,
+    deletedCount,
+  })
+})
+

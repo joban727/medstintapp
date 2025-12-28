@@ -7,6 +7,10 @@ import { Badge } from "./ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 interface School {
   id: string
   name: string
@@ -14,7 +18,6 @@ interface School {
   email: string | null
   phone: string | null
   website: string | null
-  accreditation: string
   isActive: boolean
   adminId: string | null
   createdAt: Date
@@ -51,7 +54,11 @@ export function SchoolSelector({
       if (schoolId === "all") {
         sessionStorage.removeItem("selectedSchoolId")
       } else {
-        sessionStorage.setItem("selectedSchoolId", schoolId)
+        try {
+          sessionStorage.setItem("selectedSchoolId", schoolId)
+        } catch (error) {
+          console.error("Failed to save selected school ID:", error)
+        }
       }
     }
 
@@ -66,8 +73,8 @@ export function SchoolSelector({
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Building2 className="h-5 w-5 text-blue-600" />
+            <div className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-medical-primary" />
               <CardTitle className="text-lg">School Context</CardTitle>
             </div>
             <Badge variant="outline" className="bg-purple-50 text-purple-700">
@@ -79,7 +86,7 @@ export function SchoolSelector({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="gap-4">
             <div>
               <label htmlFor={selectId} className="mb-2 block font-medium text-sm">
                 Active School Context
@@ -90,14 +97,14 @@ export function SchoolSelector({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-2">
                       <Users className="h-4 w-4" />
                       <span>All Schools (Global View)</span>
                     </div>
                   </SelectItem>
                   {schools.map((school) => (
                     <SelectItem key={school.id} value={school.id}>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4" />
                         <span>{school.name}</span>
                         {school.isActive && <CheckCircle className="h-3 w-3 text-green-500" />}
@@ -107,7 +114,6 @@ export function SchoolSelector({
                 </SelectContent>
               </Select>
             </div>
-
             {selectedSchoolData && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                 <div className="flex items-start justify-between">
@@ -116,7 +122,7 @@ export function SchoolSelector({
                     <p className="mt-1 text-blue-700 text-sm">
                       {selectedSchoolData.address || "Address not provided"}
                     </p>
-                    <p className="mt-1 text-blue-600 text-sm">
+                    <p className="mt-1 text-medical-primary text-sm">
                       {selectedSchoolData.email || "Email not provided"}
                     </p>
                   </div>
@@ -129,10 +135,9 @@ export function SchoolSelector({
                 </div>
               </div>
             )}
-
             {selectedSchool === "all" && (
               <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-purple-600" />
                   <span className="font-medium text-purple-900 text-sm">Global View Active</span>
                 </div>

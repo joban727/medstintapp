@@ -41,7 +41,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../../../components/ui/table"
-import { db } from "../../../../database/db"
+import { db } from "@/database/connection-pool"
 import { clinicalSites, rotations } from "../../../../database/schema"
 import { requireAnyRole } from "../../../../lib/auth-clerk"
 

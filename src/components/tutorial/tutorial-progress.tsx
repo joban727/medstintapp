@@ -73,16 +73,20 @@ const DEFAULT_BADGES: TutorialBadge[] = [
     icon: "👶",
     color: "bg-blue-500",
     rarity: "common",
-    requirements: { totalTutorials: 1 },
+    requirements: {
+      totalTutorials: 1,
+    },
   },
   {
     id: "quick-learner",
     name: "Quick Learner",
     description: "Complete a tutorial in under 5 minutes",
     icon: "⚡",
-    color: "bg-yellow-500",
+    color: "bg-warning",
     rarity: "rare",
-    requirements: { timeLimit: 5 },
+    requirements: {
+      timeLimit: 5,
+    },
   },
   {
     id: "perfectionist",
@@ -91,7 +95,9 @@ const DEFAULT_BADGES: TutorialBadge[] = [
     icon: "💎",
     color: "bg-purple-500",
     rarity: "epic",
-    requirements: { perfectScore: true },
+    requirements: {
+      perfectScore: true,
+    },
   },
   {
     id: "onboarding-master",
@@ -100,7 +106,9 @@ const DEFAULT_BADGES: TutorialBadge[] = [
     icon: "🎓",
     color: "bg-green-500",
     rarity: "epic",
-    requirements: { tutorialsCompleted: ["user-type", "school-profile", "programs", "rotations"] },
+    requirements: {
+      tutorialsCompleted: ["user-type", "school-profile", "programs", "rotations"],
+    },
   },
   {
     id: "tutorial-champion",
@@ -109,7 +117,9 @@ const DEFAULT_BADGES: TutorialBadge[] = [
     icon: "🏆",
     color: "bg-gold-500",
     rarity: "legendary",
-    requirements: { totalTutorials: 10 },
+    requirements: {
+      totalTutorials: 10,
+    },
   },
   {
     id: "speed-demon",
@@ -118,7 +128,10 @@ const DEFAULT_BADGES: TutorialBadge[] = [
     icon: "🔥",
     color: "bg-red-500",
     rarity: "legendary",
-    requirements: { timeLimit: 2, totalTutorials: 3 },
+    requirements: {
+      timeLimit: 2,
+      totalTutorials: 3,
+    },
   },
 ]
 
@@ -152,7 +165,13 @@ export function TutorialProgress({
     try {
       const savedProgress = localStorage.getItem(`tutorial-progress-${userId}`)
       if (savedProgress) {
-        const parsed = JSON.parse(savedProgress)
+        let parsed = null
+        try {
+          parsed = JSON.parse(savedProgress)
+        } catch (error) {
+          console.error("Failed to parse tutorial progress:", error)
+          return {}
+        }
         setProgress(
           parsed.map((p: any) => ({
             ...p,
@@ -171,7 +190,11 @@ export function TutorialProgress({
   const saveProgress = useCallback(
     (newProgress: TutorialProgress[]) => {
       try {
-        localStorage.setItem(`tutorial-progress-${userId}`, JSON.stringify(newProgress))
+        try {
+          localStorage.setItem(`tutorial-progress-${userId}`, JSON.stringify(newProgress))
+        } catch (error) {
+          console.error("Failed to save tutorial progress:", error)
+        }
       } catch (error) {
         console.error("Failed to save tutorial progress:", error)
       }
@@ -190,14 +213,12 @@ export function TutorialProgress({
       const sortedCompleted = completed.sort(
         (a, b) => (b.completedAt?.getTime() || 0) - (a.completedAt?.getTime() || 0)
       )
-
       let streakDays = 0
       let currentDate = new Date()
       currentDate.setHours(0, 0, 0, 0)
 
       for (const tutorial of sortedCompleted) {
         if (!tutorial.completedAt) continue
-
         const completedDate = new Date(tutorial.completedAt)
         completedDate.setHours(0, 0, 0, 0)
 
@@ -223,7 +244,6 @@ export function TutorialProgress({
 
       // Check for new badges
       const earnedBadges: TutorialBadge[] = []
-
       for (const badge of DEFAULT_BADGES) {
         const alreadyEarned = stats.badges.some((b) => b.id === badge.id)
         if (alreadyEarned) continue
@@ -244,9 +264,8 @@ export function TutorialProgress({
         }
 
         if (badge.requirements.timeLimit) {
-          const fastCompletions = completed.filter(
-            (p) => p.timeSpent <= badge.requirements.timeLimit! * 60
-          )
+          const limitSeconds = (badge.requirements.timeLimit ?? 0) * 60
+          const fastCompletions = completed.filter((p) => p.timeSpent <= limitSeconds)
           if (badge.requirements.totalTutorials) {
             shouldEarn = fastCompletions.length >= badge.requirements.totalTutorials
           } else {
@@ -268,7 +287,6 @@ export function TutorialProgress({
         setRecentBadges(earnedBadges)
         setShowBadgeAnimation(true)
         earnedBadges.forEach((badge) => onBadgeEarned?.(badge))
-
         setTimeout(() => setShowBadgeAnimation(false), 3000)
       }
 
@@ -333,7 +351,6 @@ export function TutorialProgress({
         currentStep: -1, // Mark as completed
         score,
       })
-
       onMilestoneReached?.(`tutorial-completed-${tutorialId}`)
     },
     [updateTutorialProgress, onMilestoneReached]
@@ -364,7 +381,7 @@ export function TutorialProgress({
   const formattedTime = Math.floor(stats.totalTimeSpent / 60)
 
   return (
-    <div className={cn("space-y-6", className)}>
+    <div className={cn("gap-6", className)}>
       {/* Badge Animation */}
       <AnimatePresence>
         {showBadgeAnimation && recentBadges.length > 0 && (
@@ -389,7 +406,9 @@ export function TutorialProgress({
                 {recentBadges[0].icon}
               </motion.div>
               <h3 className="mb-2 font-bold text-2xl text-gray-900">Badge Earned!</h3>
-              <h4 className="mb-2 font-semibold text-blue-600 text-lg">{recentBadges[0].name}</h4>
+              <h4 className="mb-2 font-semibold text-medical-primary text-lg">
+                {recentBadges[0].name}
+              </h4>
               <p className="mb-4 text-gray-600">{recentBadges[0].description}</p>
               <Badge variant="secondary" className={cn("text-white", recentBadges[0].color)}>
                 {recentBadges[0].rarity}
@@ -405,7 +424,7 @@ export function TutorialProgress({
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-blue-100 p-2">
-                <BookOpen className="h-5 w-5 text-blue-600" />
+                <BookOpen className="h-5 w-5 text-medical-primary" />
               </div>
               <div>
                 <p className="text-gray-600 text-sm">Completed</p>
@@ -421,7 +440,7 @@ export function TutorialProgress({
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-green-100 p-2">
-                <Target className="h-5 w-5 text-green-600" />
+                <Target className="h-5 w-5 text-healthcare-green" />
               </div>
               <div>
                 <p className="text-gray-600 text-sm">Completion Rate</p>
@@ -464,7 +483,7 @@ export function TutorialProgress({
       {stats.totalTutorials > 0 && (
         <Card>
           <CardContent className="p-6">
-            <div className="space-y-3">
+            <div className="gap-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold">Overall Progress</h3>
                 <span className="text-gray-600 text-sm">
@@ -491,7 +510,7 @@ export function TutorialProgress({
               {stats.badges.map((badge) => (
                 <motion.div
                   key={badge.id}
-                  className="rounded-lg border-2 border-gray-200 p-4 text-center transition-colors hover:border-blue-300"
+                  className="rounded-lg border-2 border-gray-200 p-4 text-center transition-colors duration-200 hover:border-blue-300"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
@@ -551,7 +570,7 @@ export function TutorialProgress({
                 <div
                   key={key}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg border-2 p-3 transition-colors",
+                    "flex items-center gap-3 rounded-lg border-2 p-3 transition-colors duration-200",
                     achieved ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"
                   )}
                 >
@@ -568,7 +587,7 @@ export function TutorialProgress({
                       {achievementConfig?.description}
                     </p>
                   </div>
-                  {achieved && <CheckCircle className="h-5 w-5 text-green-600" />}
+                  {achieved && <CheckCircle className="h-5 w-5 text-healthcare-green" />}
                 </div>
               )
             })}
@@ -578,8 +597,6 @@ export function TutorialProgress({
     </div>
   )
 }
-
-// Utility functions are already exported above
 
 // Hook for using tutorial progress
 export function useTutorialProgress(userId: string, userRole: UserRole) {

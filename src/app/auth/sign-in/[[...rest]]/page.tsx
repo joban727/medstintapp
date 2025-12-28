@@ -12,9 +12,13 @@ import {
 } from "../../../../components/ui/card"
 
 export const metadata: Metadata = {
-  title: "Sign In - MedStint",
+  title: "Sign In | MedStint",
+  description: "Sign in to your MedStint account",
 }
 
+// This is a simple sign-in page. The redirect after sign-in is controlled by:
+// 1. NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL in .env (set to /dashboard)
+// 2. The dashboard layout checks if user needs onboarding
 export default function SignInPage() {
   // Check if we have valid Clerk keys
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
@@ -56,7 +60,7 @@ export default function SignInPage() {
             routing="path"
             path="/auth/sign-in"
             signUpUrl="/auth/sign-up"
-            fallbackRedirectUrl="/onboarding/user-type"
+            fallbackRedirectUrl="/dashboard"
             appearance={{
               elements: {
                 formButtonPrimary: "bg-primary hover:bg-primary/90",

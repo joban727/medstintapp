@@ -4,12 +4,19 @@
  * Designed to minimize database overhead and reduce operational costs
  */
 
-import { and, eq, sql } from "drizzle-orm"
+import { and, eq, sql, count, avg, desc, between } from "drizzle-orm"
 import type { PgTransaction } from "drizzle-orm/pg-core"
 import { db } from "../database/connection-pool"
 // Import schema tables (assuming they exist)
 // Note: Adjust imports based on actual schema structure
-import { auditLogs, competencies, competencyAssignments, evaluations } from "../database/schema"
+import {
+  auditLogs,
+  competencies,
+  competencyAssignments,
+  evaluations,
+  users,
+  programs,
+} from "../database/schema"
 import { BatchProcessor, batchOperations } from "./batch-processor"
 import { analyticsTransactionBatcher } from "./transaction-batcher"
 
@@ -544,18 +551,18 @@ export class AnalyticsBulkOperations {
     dateRange: { start: Date; end: Date }
   ) {
     // Implementation for competency progress report
-    return await tx.execute(sql`
-      SELECT 
-        c.title as competency_title,
-        COUNT(ca.id) as total_assignments,
-        COUNT(CASE WHEN ca.status = 'completed' THEN 1 END) as completed_assignments,
-        AVG(ca.progress) as average_progress
-      FROM competencies c
-      LEFT JOIN competency_assignments ca ON c.id = ca.competency_id
-      WHERE ca.created_at BETWEEN ${dateRange.start} AND ${dateRange.end}
-      GROUP BY c.id, c.title
-      ORDER BY average_progress DESC
-    `)
+    return await tx
+      .select({
+        competencyTitle: competencies.name,
+        totalAssignments: count(competencyAssignments.id),
+        completedAssignments: sql<number>`count(CASE WHEN ${competencyAssignments.status} = 'COMPLETED' THEN 1 END)`,
+        averageProgress: avg(competencyAssignments.progressPercentage),
+      })
+      .from(competencies)
+      .leftJoin(competencyAssignments, eq(competencies.id, competencyAssignments.competencyId))
+      .where(between(competencyAssignments.createdAt, dateRange.start, dateRange.end))
+      .groupBy(competencies.id, competencies.name)
+      .orderBy(desc(sql`average_progress`))
   }
 
   private async generateUserActivityReport(
@@ -563,17 +570,17 @@ export class AnalyticsBulkOperations {
     dateRange: { start: Date; end: Date }
   ) {
     // Implementation for user activity report
-    return await tx.execute(sql`
-      SELECT 
-        u.email,
-        COUNT(al.id) as total_activities,
-        COUNT(DISTINCT DATE(al.timestamp)) as active_days
-      FROM users u
-      LEFT JOIN audit_logs al ON u.id = al.user_id
-      WHERE al.timestamp BETWEEN ${dateRange.start} AND ${dateRange.end}
-      GROUP BY u.id, u.email
-      ORDER BY total_activities DESC
-    `)
+    return await tx
+      .select({
+        email: users.email,
+        totalActivities: count(auditLogs.id),
+        activeDays: sql<number>`count(DISTINCT DATE(${auditLogs.createdAt}))`,
+      })
+      .from(users)
+      .leftJoin(auditLogs, eq(users.id, auditLogs.userId))
+      .where(between(auditLogs.createdAt, dateRange.start, dateRange.end))
+      .groupBy(users.id, users.email)
+      .orderBy(desc(sql`total_activities`))
   }
 
   private async generateProgramAnalyticsReport(
@@ -581,19 +588,19 @@ export class AnalyticsBulkOperations {
     dateRange: { start: Date; end: Date }
   ) {
     // Implementation for program analytics report
-    return await tx.execute(sql`
-      SELECT 
-        p.name as program_name,
-        COUNT(DISTINCT c.id) as total_competencies,
-        COUNT(DISTINCT ca.user_id) as enrolled_users,
-        AVG(ca.progress) as average_progress
-      FROM programs p
-      LEFT JOIN competencies c ON p.id = c.program_id
-      LEFT JOIN competency_assignments ca ON c.id = ca.competency_id
-      WHERE ca.created_at BETWEEN ${dateRange.start} AND ${dateRange.end}
-      GROUP BY p.id, p.name
-      ORDER BY enrolled_users DESC
-    `)
+    return await tx
+      .select({
+        programName: programs.name,
+        totalCompetencies: count(competencies.id),
+        enrolledUsers: sql<number>`count(DISTINCT ${competencyAssignments.userId})`,
+        averageProgress: avg(competencyAssignments.progressPercentage),
+      })
+      .from(programs)
+      .leftJoin(competencies, eq(programs.id, competencies.programId))
+      .leftJoin(competencyAssignments, eq(competencies.id, competencyAssignments.competencyId))
+      .where(between(competencyAssignments.createdAt, dateRange.start, dateRange.end))
+      .groupBy(programs.id, programs.name)
+      .orderBy(desc(sql`enrolled_users`))
   }
 }
 

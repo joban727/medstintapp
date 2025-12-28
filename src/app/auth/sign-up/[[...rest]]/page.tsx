@@ -12,7 +12,8 @@ import {
 } from "../../../../components/ui/card"
 
 export const metadata: Metadata = {
-  title: "Sign Up - MedStint",
+  title: "Sign Up | MedStint",
+  description: "Create a new MedStint account",
 }
 
 export default function SignUpPage() {

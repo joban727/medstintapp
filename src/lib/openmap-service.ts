@@ -4,8 +4,8 @@
  * with comprehensive authentication, error handling, and security measures
  */
 
-import { RetryManager } from './enhanced-error-handling'
-import { DataValidator } from './data-validation'
+import { RetryManager } from "./enhanced-error-handling"
+import { DataValidator } from "./data-validation"
 
 export interface LocationCoordinates {
   latitude: number
@@ -30,7 +30,7 @@ export interface FacilityInfo {
 export interface LocationLookupResult {
   success: boolean
   facility?: FacilityInfo
-  confidence: 'high' | 'medium' | 'low'
+  confidence: "high" | "medium" | "low"
   fallback?: {
     address: string
     coordinates: LocationCoordinates
@@ -88,32 +88,38 @@ export interface RateLimitEntry {
 }
 
 class OpenMapService {
-  private readonly NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org'
-  private readonly OVERPASS_BASE_URL = 'https://overpass-api.de/api/interpreter'
+  private readonly NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org"
+  private readonly OVERPASS_BASE_URL = "https://overpass-api.de/api/interpreter"
   private readonly DEFAULT_RADIUS = 500 // meters
   private readonly DEFAULT_CACHE_DURATION = 24 * 60 * 60 * 1000 // 24 hours
-  
+
   // Configuration
   private config: OpenMapConfig
-  
+
   // Medical facility types prioritized in search
   private readonly MEDICAL_FACILITY_TYPES = [
-    'hospital',
-    'clinic',
-    'doctors',
-    'medical_center',
-    'health_centre',
-    'pharmacy',
-    'dentist',
-    'veterinary'
+    "hospital",
+    "clinic",
+    "doctors",
+    "medical_center",
+    "health_centre",
+    "pharmacy",
+    "dentist",
+    "veterinary",
   ]
 
   // Enhanced caching system
   private cache = new Map<string, LocationCacheEntry>()
-  
+
   // Rate limiting
   private rateLimitStore = new Map<string, RateLimitEntry>()
-  
+
+  // Interval handles for cleanup tasks
+  private cacheCleanupInterval?: NodeJS.Timeout
+  private rateLimitCleanupInterval?: NodeJS.Timeout
+  private shutdownHooksAttached = false
+  private disposed = false
+
   // API metrics
   private metrics: ApiMetrics = {
     totalRequests: 0,
@@ -123,82 +129,91 @@ class OpenMapService {
     cacheMisses: 0,
     averageResponseTime: 0,
     rateLimitHits: 0,
-    lastResetTime: new Date()
+    lastResetTime: new Date(),
   }
 
   constructor(config?: Partial<OpenMapConfig>) {
     this.config = {
-      userAgent: 'MedStintClerk/1.0 (Location Service)',
+      userAgent: "MedStintClerk/1.0 (Location Service)",
       timeout: 10000,
       maxRetries: 3,
       rateLimitPerMinute: 60,
       cacheEnabled: true,
       cacheDuration: this.DEFAULT_CACHE_DURATION,
       enableMetrics: true,
-      ...config
+      ...config,
     }
 
     // Validate configuration
     this.validateConfig()
-    
+
     // Setup cleanup intervals
     this.setupCleanupIntervals()
+
+    // Setup shutdown hooks to ensure timers are cleared
+    this.setupShutdownHooks()
   }
 
   /**
    * Detect timezone from coordinates using a simple timezone mapping
    * This is a basic implementation - for production, consider using a proper timezone API
    */
-  private detectTimezoneFromCoordinates(latitude: number, longitude: number): {
+  private detectTimezoneFromCoordinates(
+    latitude: number,
+    longitude: number
+  ): {
     timezone: string
     offset: number
   } {
     // Simple timezone detection based on longitude
     // This is a basic approximation - for accurate results, use a proper timezone service
     const timezoneOffset = Math.round(longitude / 15)
-    
+
     // Common timezone mappings for major regions
     const timezoneMap: { [key: string]: string } = {
-      '-12': 'Pacific/Kwajalein',
-      '-11': 'Pacific/Midway',
-      '-10': 'Pacific/Honolulu',
-      '-9': 'America/Anchorage',
-      '-8': 'America/Los_Angeles',
-      '-7': 'America/Denver',
-      '-6': 'America/Chicago',
-      '-5': 'America/New_York',
-      '-4': 'America/Halifax',
-      '-3': 'America/Sao_Paulo',
-      '-2': 'Atlantic/South_Georgia',
-      '-1': 'Atlantic/Azores',
-      '0': 'Europe/London',
-      '1': 'Europe/Berlin',
-      '2': 'Europe/Helsinki',
-      '3': 'Europe/Moscow',
-      '4': 'Asia/Dubai',
-      '5': 'Asia/Karachi',
-      '6': 'Asia/Dhaka',
-      '7': 'Asia/Bangkok',
-      '8': 'Asia/Shanghai',
-      '9': 'Asia/Tokyo',
-      '10': 'Australia/Sydney',
-      '11': 'Pacific/Norfolk',
-      '12': 'Pacific/Auckland'
+      "-12": "Pacific/Kwajalein",
+      "-11": "Pacific/Midway",
+      "-10": "Pacific/Honolulu",
+      "-9": "America/Anchorage",
+      "-8": "America/Los_Angeles",
+      "-7": "America/Denver",
+      "-6": "America/Chicago",
+      "-5": "America/New_York",
+      "-4": "America/Halifax",
+      "-3": "America/Sao_Paulo",
+      "-2": "Atlantic/South_Georgia",
+      "-1": "Atlantic/Azores",
+      "0": "Europe/London",
+      "1": "Europe/Berlin",
+      "2": "Europe/Helsinki",
+      "3": "Europe/Moscow",
+      "4": "Asia/Dubai",
+      "5": "Asia/Karachi",
+      "6": "Asia/Dhaka",
+      "7": "Asia/Bangkok",
+      "8": "Asia/Shanghai",
+      "9": "Asia/Tokyo",
+      "10": "Australia/Sydney",
+      "11": "Pacific/Norfolk",
+      "12": "Pacific/Auckland",
     }
 
     const offsetKey = timezoneOffset.toString()
-    const timezone = timezoneMap[offsetKey] || 'UTC'
+    const timezone = timezoneMap[offsetKey] || "UTC"
 
     return {
       timezone,
-      offset: timezoneOffset
+      offset: timezoneOffset,
     }
   }
 
   /**
    * Enhanced coordinate validation with timezone detection
    */
-  public validateCoordinates(latitude: number, longitude: number): {
+  public validateCoordinates(
+    latitude: number,
+    longitude: number
+  ): {
     isValid: boolean
     errors: string[]
     timezone?: string
@@ -207,17 +222,17 @@ class OpenMapService {
     const errors: string[] = []
 
     // Validate latitude
-    if (typeof latitude !== 'number' || isNaN(latitude)) {
-      errors.push('Latitude must be a valid number')
+    if (typeof latitude !== "number" || isNaN(latitude)) {
+      errors.push("Latitude must be a valid number")
     } else if (latitude < -90 || latitude > 90) {
-      errors.push('Latitude must be between -90 and 90 degrees')
+      errors.push("Latitude must be between -90 and 90 degrees")
     }
 
     // Validate longitude
-    if (typeof longitude !== 'number' || isNaN(longitude)) {
-      errors.push('Longitude must be a valid number')
+    if (typeof longitude !== "number" || isNaN(longitude)) {
+      errors.push("Longitude must be a valid number")
     } else if (longitude < -180 || longitude > 180) {
-      errors.push('Longitude must be between -180 and 180 degrees')
+      errors.push("Longitude must be between -180 and 180 degrees")
     }
 
     const isValid = errors.length === 0
@@ -228,7 +243,7 @@ class OpenMapService {
         isValid,
         errors,
         timezone: timezoneInfo.timezone,
-        timezoneOffset: timezoneInfo.offset
+        timezoneOffset: timezoneInfo.offset,
       }
     }
 
@@ -240,15 +255,15 @@ class OpenMapService {
    */
   private validateConfig(): void {
     if (this.config.timeout < 1000 || this.config.timeout > 30000) {
-      throw new Error('Timeout must be between 1000ms and 30000ms')
+      throw new Error("Timeout must be between 1000ms and 30000ms")
     }
-    
+
     if (this.config.maxRetries < 0 || this.config.maxRetries > 5) {
-      throw new Error('Max retries must be between 0 and 5')
+      throw new Error("Max retries must be between 0 and 5")
     }
-    
+
     if (this.config.rateLimitPerMinute < 1 || this.config.rateLimitPerMinute > 300) {
-      throw new Error('Rate limit must be between 1 and 300 requests per minute')
+      throw new Error("Rate limit must be between 1 and 300 requests per minute")
     }
   }
 
@@ -257,20 +272,63 @@ class OpenMapService {
    */
   private setupCleanupIntervals(): void {
     // Clean up expired cache entries every 5 minutes
-    setInterval(() => {
-      this.cleanupExpiredCache()
-    }, 5 * 60 * 1000)
+    if (!this.cacheCleanupInterval) {
+      this.cacheCleanupInterval = setInterval(
+        () => {
+          this.cleanupExpiredCache()
+        },
+        5 * 60 * 1000
+      )
+    }
 
     // Clean up expired rate limit entries every minute
-    setInterval(() => {
-      this.cleanupExpiredRateLimit()
-    }, 60 * 1000)
+    if (!this.rateLimitCleanupInterval) {
+      this.rateLimitCleanupInterval = setInterval(() => {
+        this.cleanupExpiredRateLimit()
+      }, 60 * 1000)
+    }
+  }
+
+  /**
+   * Ensure intervals are cleared on process shutdown
+   */
+  private setupShutdownHooks(): void {
+    if (this.shutdownHooksAttached) return
+    this.shutdownHooksAttached = true
+    const dispose = () => this.dispose()
+    try {
+      process.on("beforeExit", dispose)
+      process.on("SIGINT", dispose)
+      process.on("SIGTERM", dispose)
+      // nodemon/pm2
+      process.on("SIGUSR2", dispose)
+    } catch (_) {
+      // ignore if not Node environment
+    }
+  }
+
+  /**
+   * Dispose timers and clear caches to prevent leaks
+   */
+  public dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    if (this.cacheCleanupInterval) {
+      clearInterval(this.cacheCleanupInterval)
+      this.cacheCleanupInterval = undefined
+    }
+    if (this.rateLimitCleanupInterval) {
+      clearInterval(this.rateLimitCleanupInterval)
+      this.rateLimitCleanupInterval = undefined
+    }
+    this.cache.clear()
+    this.rateLimitStore.clear()
   }
 
   /**
    * Check rate limiting before making API calls
    */
-  private checkRateLimit(identifier = 'default'): boolean {
+  private checkRateLimit(identifier = "default"): boolean {
     const now = Date.now()
     const windowMs = 60 * 1000 // 1 minute
     const entry = this.rateLimitStore.get(identifier)
@@ -279,7 +337,7 @@ class OpenMapService {
       this.rateLimitStore.set(identifier, {
         count: 1,
         resetTime: now + windowMs,
-        windowStart: now
+        windowStart: now,
       })
       return true
     }
@@ -302,36 +360,40 @@ class OpenMapService {
     retryCount = 0
   ): Promise<Response> {
     const startTime = Date.now()
-    
+
     // Check rate limiting
     if (!this.checkRateLimit()) {
-      throw new Error('Rate limit exceeded. Please try again later.')
+      throw new Error("Rate limit exceeded. Please try again later.")
     }
 
     // Prepare headers with authentication and user agent
-    const headers: HeadersInit = {
-      'User-Agent': this.config.userAgent,
-      'Accept': 'application/json',
-      'Accept-Language': 'en-US,en;q=0.9',
-      ...options.headers
+    const headers: Record<string, string> = {
+      "User-Agent": this.config.userAgent,
+      Accept: "application/json",
+      "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    // Copy any existing headers
+    if (options.headers) {
+      Object.assign(headers, options.headers)
     }
 
     // Add API key if configured
     if (this.config.apiKey) {
-      headers['Authorization'] = `Bearer ${this.config.apiKey}`
+      headers["Authorization"] = `Bearer ${this.config.apiKey}`
     }
 
     const requestOptions: RequestInit = {
       ...options,
       headers,
-      signal: AbortSignal.timeout(this.config.timeout)
+      signal: AbortSignal.timeout(this.config.timeout),
     }
 
     try {
       this.metrics.totalRequests++
-      
+
       const response = await fetch(url, requestOptions)
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
@@ -344,11 +406,11 @@ class OpenMapService {
       return response
     } catch (error) {
       this.metrics.failedRequests++
-      
+
       // Retry logic with exponential backoff
       if (retryCount < this.config.maxRetries && this.shouldRetry(error)) {
         const delay = Math.min(1000 * 2 ** retryCount, 10000)
-        await new Promise(resolve => setTimeout(resolve, delay))
+        await new Promise((resolve) => setTimeout(resolve, delay))
         return this.makeApiRequest(url, options, retryCount + 1)
       }
 
@@ -360,9 +422,9 @@ class OpenMapService {
    * Determine if an error should trigger a retry
    */
   private shouldRetry(error: any): boolean {
-    if (error.name === 'AbortError') return false
-    if (error.message.includes('Rate limit')) return false
-    if (error.message.includes('HTTP 4')) return false // Client errors
+    if (error.name === "AbortError") return false
+    if (error.message.includes("Rate limit")) return false
+    if (error.message.includes("HTTP 4")) return false // Client errors
     return true
   }
 
@@ -371,11 +433,11 @@ class OpenMapService {
    */
   private updateResponseTimeMetrics(responseTime: number): void {
     if (!this.config.enableMetrics) return
-    
+
     const totalRequests = this.metrics.successfulRequests
     const currentAverage = this.metrics.averageResponseTime
-    
-    this.metrics.averageResponseTime = 
+
+    this.metrics.averageResponseTime =
       (currentAverage * (totalRequests - 1) + responseTime) / totalRequests
   }
 
@@ -384,55 +446,103 @@ class OpenMapService {
    */
   async getCurrentLocation(): Promise<LocationCoordinates> {
     return RetryManager.executeWithRetry(
-      () => new Promise<LocationCoordinates>((resolve, reject) => {
-        if (!navigator.geolocation) {
-          reject(new Error('Geolocation is not supported by this browser'))
-          return
-        }
-
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const coords = {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude
-            }
-            
-            // Validate coordinates
-            if (!DataValidator.validateCoordinates(coords.latitude, coords.longitude)) {
-              reject(new Error('Invalid coordinates received from geolocation'))
-              return
-            }
-            
-            resolve(coords)
-          },
-          (error) => {
-            let errorMessage = 'Geolocation error'
-            switch (error.code) {
-              case error.PERMISSION_DENIED:
-                errorMessage = 'Location access denied by user'
-                break
-              case error.POSITION_UNAVAILABLE:
-                errorMessage = 'Location information unavailable'
-                break
-              case error.TIMEOUT:
-                errorMessage = 'Location request timed out'
-                break
-              default:
-                errorMessage = `Geolocation error: ${error.message}`
-            }
-            reject(new Error(errorMessage))
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: this.config.timeout,
-            maximumAge: 60000 // 1 minute
+      () =>
+        new Promise<LocationCoordinates>((resolve, reject) => {
+          if (!navigator.geolocation) {
+            reject(new Error("Geolocation is not supported by this browser"))
+            return
           }
-        )
-      }),
+
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const coords = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+              }
+
+              // Validate coordinates
+              if (!DataValidator.validateCoordinates(coords.latitude, coords.longitude)) {
+                reject(new Error("Invalid coordinates received from geolocation"))
+                return
+              }
+
+              resolve(coords)
+            },
+            (error) => {
+              let errorMessage = "Geolocation error"
+              switch (error.code) {
+                case error.PERMISSION_DENIED:
+                  errorMessage = "Location access denied by user"
+                  break
+                case error.POSITION_UNAVAILABLE:
+                  errorMessage = "Location information unavailable"
+                  break
+                case error.TIMEOUT:
+                  errorMessage = "Location request timed out"
+                  break
+                default:
+                  errorMessage = `Geolocation error: ${error.message}`
+              }
+              reject(new Error(errorMessage))
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: this.config.timeout,
+              maximumAge: 60000, // 1 minute
+            }
+          )
+        }),
       this.config.maxRetries,
       1000,
-      (error) => !error.message.includes('denied') // Don't retry permission errors
+      (error) => !error.message.includes("denied") // Don't retry permission errors
     )
+  }
+
+  /**
+   * Forward geocode an address to coordinates with validation and retry
+   */
+  public async geocodeAddress(address: string): Promise<LocationCoordinates> {
+    const sanitized = address?.trim()
+    if (!sanitized || sanitized.length < 5) {
+      throw new Error("Address is incomplete or empty")
+    }
+
+    // Basic format validation: require comma-separated components and a street number
+    const hasComma = sanitized.includes(",")
+    const hasDigit = /\d/.test(sanitized)
+    if (!hasComma || !hasDigit) {
+      throw new Error("Enter a complete street address, city, state, ZIP")
+    }
+
+    try {
+      const url = `${this.NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(sanitized)}&addressdetails=1&limit=1`
+      const response = await this.makeApiRequest(url)
+      const results = await response.json()
+
+      if (!Array.isArray(results) || results.length === 0) {
+        throw new Error("Address not found")
+      }
+
+      const best = results[0]
+      const lat = parseFloat(best.lat)
+      const lon = parseFloat(best.lon)
+
+      if (!DataValidator.validateCoordinates(lat, lon)) {
+        throw new Error("Geocoding returned invalid coordinates")
+      }
+
+      const tzInfo = this.detectTimezoneFromCoordinates(lat, lon)
+
+      return {
+        latitude: Number(lat.toFixed(6)),
+        longitude: Number(lon.toFixed(6)),
+        timezone: tzInfo.timezone,
+        timezoneOffset: tzInfo.offset,
+      }
+    } catch (error: any) {
+      const message = error?.message || "Failed to geocode address"
+      throw new Error(message)
+    }
   }
 
   /**
@@ -443,22 +553,22 @@ class OpenMapService {
     radius: number = this.DEFAULT_RADIUS
   ): Promise<LocationLookupResult> {
     const startTime = Date.now()
-    
+
     try {
       // Validate input coordinates
       if (!DataValidator.validateCoordinates(coordinates.latitude, coordinates.longitude)) {
-        throw new Error('Invalid coordinates provided')
+        throw new Error("Invalid coordinates provided")
       }
 
       // Validate radius
       if (radius < 50 || radius > 5000) {
-        throw new Error('Radius must be between 50 and 5000 meters')
+        throw new Error("Radius must be between 50 and 5000 meters")
       }
 
       // Check cache first
       const cacheKey = this.getCacheKey(coordinates, radius)
       const cached = this.getFromCache(cacheKey)
-      
+
       if (cached) {
         this.metrics.cacheHits++
         return {
@@ -470,12 +580,12 @@ class OpenMapService {
             address: cached.fullAddress,
             osmId: cached.osmId,
             confidence: cached.confidenceScore,
-            lastUpdated: cached.cachedAt
+            lastUpdated: cached.cachedAt,
           },
           confidence: this.getConfidenceLevel(cached.confidenceScore),
           cached: true,
           responseTime: Date.now() - startTime,
-          apiCallsUsed: 0
+          apiCallsUsed: 0,
         }
       }
 
@@ -485,51 +595,50 @@ class OpenMapService {
       // Query OpenStreetMap for nearby medical facilities
       const facilities = await this.queryNearbyFacilities(coordinates, radius)
       apiCallsUsed++
-      
+
       if (facilities.length > 0) {
         const bestFacility = this.selectBestFacility(facilities, coordinates)
-        
+
         // Cache the result
         this.cacheResult(cacheKey, bestFacility, coordinates)
-        
+
         return {
           success: true,
           facility: {
             ...bestFacility,
             confidence: 85,
-            lastUpdated: new Date()
+            lastUpdated: new Date(),
           },
-          confidence: 'high',
+          confidence: "high",
           cached: false,
           responseTime: Date.now() - startTime,
-          apiCallsUsed
+          apiCallsUsed,
         }
       }
 
       // Fallback to reverse geocoding for address
       const fallbackAddress = await this.reverseGeocode(coordinates)
       apiCallsUsed++
-      
+
       return {
         success: true,
-        confidence: 'low',
+        confidence: "low",
         fallback: {
           address: fallbackAddress,
-          coordinates
+          coordinates,
         },
         cached: false,
         responseTime: Date.now() - startTime,
-        apiCallsUsed
+        apiCallsUsed,
       }
-
     } catch (error) {
-      console.error('Facility lookup error:', error)
+      console.error("Facility lookup error:", error)
       return {
         success: false,
-        confidence: 'low',
+        confidence: "low",
         cached: false,
         responseTime: Date.now() - startTime,
-        apiCallsUsed: 0
+        apiCallsUsed: 0,
       }
     }
   }
@@ -542,7 +651,7 @@ class OpenMapService {
     radius: number
   ): Promise<FacilityInfo[]> {
     const { latitude, longitude } = coordinates
-    
+
     // Overpass query for medical facilities
     const query = `
       [out:json][timeout:25];
@@ -556,24 +665,24 @@ class OpenMapService {
 
     try {
       const response = await this.makeApiRequest(this.OVERPASS_BASE_URL, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: `data=${encodeURIComponent(query)}`
+        body: `data=${encodeURIComponent(query)}`,
       })
 
       const data = await response.json()
-      
+
       // Validate response structure
       if (!data || !Array.isArray(data.elements)) {
-        throw new Error('Invalid response structure from Overpass API')
+        throw new Error("Invalid response structure from Overpass API")
       }
 
       return this.parseOverpassResults(data.elements, coordinates)
     } catch (error) {
-      console.error('Overpass API query failed:', error)
-      
+      console.error("Overpass API query failed:", error)
+
       // Return empty array instead of throwing to allow fallback
       return []
     }
@@ -584,21 +693,21 @@ class OpenMapService {
    */
   private async reverseGeocode(coordinates: LocationCoordinates): Promise<string> {
     const { latitude, longitude } = coordinates
-    
+
     try {
       const url = `${this.NOMINATIM_BASE_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`
       const response = await this.makeApiRequest(url)
 
       const data = await response.json()
-      
+
       // Validate response
-      if (!data || typeof data.display_name !== 'string') {
-        throw new Error('Invalid response from Nominatim API')
+      if (!data || typeof data.display_name !== "string") {
+        throw new Error("Invalid response from Nominatim API")
       }
 
       return data.display_name || `${latitude}, ${longitude}`
     } catch (error) {
-      console.error('Reverse geocoding failed:', error)
+      console.error("Reverse geocoding failed:", error)
       return `${latitude}, ${longitude}`
     }
   }
@@ -608,7 +717,7 @@ class OpenMapService {
    */
   private getFromCache(key: string): LocationCacheEntry | null {
     if (!this.config.cacheEnabled) return null
-    
+
     const entry = this.cache.get(key)
     if (entry && entry.expiresAt > new Date()) {
       // Update access tracking
@@ -616,20 +725,16 @@ class OpenMapService {
       entry.lastAccessed = new Date()
       return entry
     }
-    
+
     if (entry) {
       this.cache.delete(key)
     }
     return null
   }
 
-  private cacheResult(
-    key: string,
-    facility: FacilityInfo,
-    coordinates: LocationCoordinates
-  ): void {
+  private cacheResult(key: string, facility: FacilityInfo, coordinates: LocationCoordinates): void {
     if (!this.config.cacheEnabled) return
-    
+
     const entry: LocationCacheEntry = {
       id: crypto.randomUUID(),
       latitude: coordinates.latitude,
@@ -644,9 +749,9 @@ class OpenMapService {
       expiresAt: new Date(Date.now() + this.config.cacheDuration),
       isVerified: false,
       hitCount: 0,
-      lastAccessed: new Date()
+      lastAccessed: new Date(),
     }
-    
+
     this.cache.set(key, entry)
   }
 
@@ -693,7 +798,7 @@ class OpenMapService {
       cacheMisses: 0,
       averageResponseTime: 0,
       rateLimitHits: 0,
-      lastResetTime: new Date()
+      lastResetTime: new Date(),
     }
   }
 
@@ -710,15 +815,19 @@ class OpenMapService {
     const entries = Array.from(this.cache.values())
     const totalHits = entries.reduce((sum, entry) => sum + entry.hitCount, 0)
     const totalRequests = this.metrics.cacheHits + this.metrics.cacheMisses
-    
+
     return {
       size: this.cache.size,
       hitRate: totalRequests > 0 ? this.metrics.cacheHits / totalRequests : 0,
       totalHits,
-      oldestEntry: entries.length > 0 ? 
-        new Date(Math.min(...entries.map(e => e.cachedAt.getTime()))) : undefined,
-      newestEntry: entries.length > 0 ? 
-        new Date(Math.max(...entries.map(e => e.cachedAt.getTime()))) : undefined
+      oldestEntry:
+        entries.length > 0
+          ? new Date(Math.min(...entries.map((e) => e.cachedAt.getTime())))
+          : undefined,
+      newestEntry:
+        entries.length > 0
+          ? new Date(Math.max(...entries.map((e) => e.cachedAt.getTime())))
+          : undefined,
     }
   }
 
@@ -740,57 +849,28 @@ class OpenMapService {
   /**
    * Parse Overpass API results into FacilityInfo objects
    */
-  private parseOverpassResults(
-    elements: any[],
-    userLocation: LocationCoordinates
-  ): FacilityInfo[] {
+  private parseOverpassResults(elements: any[], userLocation: LocationCoordinates): FacilityInfo[] {
     return elements
-      .map(element => {
+      .map((element) => {
         const tags = element.tags || {}
         const lat = element.lat || element.center?.lat
         const lon = element.lon || element.center?.lon
-        
+
         if (!lat || !lon || !tags.name) return null
 
-        const distance = this.calculateDistance(
-          userLocation,
-          { latitude: lat, longitude: lon }
-        )
+        const distance = this.calculateDistance(userLocation, { latitude: lat, longitude: lon })
 
         return {
           name: tags.name,
-          type: tags.amenity || 'medical_facility',
+          type: tags.amenity || "medical_facility",
           department: tags.healthcare || tags.medical_specialty,
           address: this.formatAddress(tags),
           distance,
-          osmId: `${element.type}/${element.id}`
+          osmId: `${element.type}/${element.id}`,
         }
       })
-      .filter(Boolean)
-      .sort((a, b) => (a!.distance || 0) - (b!.distance || 0))
-  }
-
-  /**
-   * Reverse geocode coordinates to get address
-   */
-  private async reverseGeocode(coordinates: LocationCoordinates): Promise<string> {
-    const { latitude, longitude } = coordinates
-    
-    try {
-      const response = await fetch(
-        `${this.NOMINATIM_BASE_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`
-      )
-
-      if (!response.ok) {
-        throw new Error(`Nominatim API error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return data.display_name || `${latitude}, ${longitude}`
-    } catch (error) {
-      console.error('Reverse geocoding failed:', error)
-      return `${latitude}, ${longitude}`
-    }
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => (a?.distance ?? 0) - (b?.distance ?? 0)) as FacilityInfo[]
   }
 
   /**
@@ -804,11 +884,11 @@ class OpenMapService {
     const prioritized = facilities.sort((a, b) => {
       const aTypeScore = this.getFacilityTypeScore(a.type)
       const bTypeScore = this.getFacilityTypeScore(b.type)
-      
+
       if (aTypeScore !== bTypeScore) {
         return bTypeScore - aTypeScore // Higher score first
       }
-      
+
       return (a.distance || 0) - (b.distance || 0) // Closer first
     })
 
@@ -827,7 +907,7 @@ class OpenMapService {
       health_centre: 5,
       pharmacy: 3,
       dentist: 2,
-      veterinary: 1
+      veterinary: 1,
     }
     return scores[type] || 0
   }
@@ -835,20 +915,17 @@ class OpenMapService {
   /**
    * Calculate distance between two coordinates using Haversine formula
    */
-  private calculateDistance(
-    coord1: LocationCoordinates,
-    coord2: LocationCoordinates
-  ): number {
+  private calculateDistance(coord1: LocationCoordinates, coord2: LocationCoordinates): number {
     const R = 6371e3 // Earth's radius in meters
-    const φ1 = coord1.latitude * Math.PI / 180
-    const φ2 = coord2.latitude * Math.PI / 180
-    const Δφ = (coord2.latitude - coord1.latitude) * Math.PI / 180
-    const Δλ = (coord2.longitude - coord1.longitude) * Math.PI / 180
+    const φ1 = (coord1.latitude * Math.PI) / 180
+    const φ2 = (coord2.latitude * Math.PI) / 180
+    const Δφ = ((coord2.latitude - coord1.latitude) * Math.PI) / 180
+    const Δλ = ((coord2.longitude - coord1.longitude) * Math.PI) / 180
 
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ/2) * Math.sin(Δλ/2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 
     return R * c
   }
@@ -858,14 +935,14 @@ class OpenMapService {
    */
   private formatAddress(tags: any): string {
     const parts = []
-    
-    if (tags['addr:housenumber']) parts.push(tags['addr:housenumber'])
-    if (tags['addr:street']) parts.push(tags['addr:street'])
-    if (tags['addr:city']) parts.push(tags['addr:city'])
-    if (tags['addr:state']) parts.push(tags['addr:state'])
-    if (tags['addr:postcode']) parts.push(tags['addr:postcode'])
-    
-    return parts.length > 0 ? parts.join(', ') : 'Address not available'
+
+    if (tags["addr:housenumber"]) parts.push(tags["addr:housenumber"])
+    if (tags["addr:street"]) parts.push(tags["addr:street"])
+    if (tags["addr:city"]) parts.push(tags["addr:city"])
+    if (tags["addr:state"]) parts.push(tags["addr:state"])
+    if (tags["addr:postcode"]) parts.push(tags["addr:postcode"])
+
+    return parts.length > 0 ? parts.join(", ") : "Address not available"
   }
 
   /**
@@ -877,58 +954,20 @@ class OpenMapService {
     return `${lat},${lon},${radius}`
   }
 
-  private getFromCache(key: string): LocationCacheEntry | null {
-    const entry = this.cache.get(key)
-    if (entry && entry.expiresAt > new Date()) {
-      return entry
-    }
-    if (entry) {
-      this.cache.delete(key)
-    }
-    return null
-  }
-
-  private cacheResult(
-     key: string,
-     facility: FacilityInfo,
-     coordinates: LocationCoordinates
-   ): void {
-     if (!this.config.cacheEnabled) return
-     
-     const entry: LocationCacheEntry = {
-       id: crypto.randomUUID(),
-       latitude: coordinates.latitude,
-       longitude: coordinates.longitude,
-       facilityName: facility.name,
-       facilityType: facility.type,
-       department: facility.department,
-       fullAddress: facility.address,
-       osmId: facility.osmId,
-       confidenceScore: facility.confidence || 85,
-       cachedAt: new Date(),
-       expiresAt: new Date(Date.now() + this.config.cacheDuration),
-       isVerified: false,
-       hitCount: 0,
-       lastAccessed: new Date()
-     }
-     
-     this.cache.set(key, entry)
-   }
-
-  private getConfidenceLevel(score: number): 'high' | 'medium' | 'low' {
-    if (score >= 80) return 'high'
-    if (score >= 60) return 'medium'
-    return 'low'
-  }
-
-  /**
-   * Clear cache (for testing or manual refresh)
-   */
-  clearCache(): void {
-    this.cache.clear()
+  private getConfidenceLevel(score: number): "high" | "medium" | "low" {
+    if (score >= 80) return "high"
+    if (score >= 60) return "medium"
+    return "low"
   }
 }
 
 // Export both the class and singleton instance
 export { OpenMapService }
-export const openMapService = new OpenMapService()
+
+// Ensure singleton across hot reloads
+declare global {
+
+  var __openMapService: OpenMapService | undefined
+}
+
+export const openMapService = (globalThis.__openMapService ??= new OpenMapService())

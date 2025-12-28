@@ -102,20 +102,20 @@ export default function TemplatesBuilderPage() {
 
   const recentTemplates = [
     {
-      name: "Internal Medicine Core",
-      category: "Internal Medicine",
+      name: "General Radiology Core",
+      category: "General Radiology",
       lastModified: "2 days ago",
       status: "Published",
     },
     {
-      name: "Surgery Skills Assessment",
-      category: "Surgery",
+      name: "MRI Safety & Procedures",
+      category: "MRI",
       lastModified: "1 week ago",
       status: "Draft",
     },
     {
-      name: "Pediatrics Rotation",
-      category: "Pediatrics",
+      name: "Pediatric Imaging Protocols",
+      category: "Pediatric Radiology",
       lastModified: "2 weeks ago",
       status: "Published",
     },
@@ -287,7 +287,10 @@ export default function TemplatesBuilderPage() {
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           {recentTemplates.map((template, index) => (
-            <Card key={`template-${template.name}-${index}`} className="transition-all duration-200 hover:shadow-md">
+            <Card
+              key={`template-${template.name}-${index}`}
+              className="transition-all duration-200 hover:shadow-md"
+            >
               <CardContent className="p-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">

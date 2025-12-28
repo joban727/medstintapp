@@ -1,12 +1,18 @@
 import crypto from "node:crypto"
 import { auth } from "@clerk/nextjs/server"
 import { and, asc, eq } from "drizzle-orm"
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest } from "next/server"
 import { z } from "zod"
-import { db } from "@/database/db"
-import { users } from "@/database/schema"
-import { cacheIntegrationService } from '@/lib/cache-integration'
-
+import { db } from "@/database/connection-pool"
+import type { UserRole } from "@/types"
+import { clinicalPreceptors, users } from "@/database/schema"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  withErrorHandling,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+} from "@/lib/api-response"
 
 const createPreceptorSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -19,57 +25,58 @@ const createPreceptorSchema = z.object({
   bio: z.string().optional(),
 })
 
-export async function POST(request: NextRequest) {
-  try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  const { userId } = await auth()
+  if (!userId) {
+    return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
+  }
 
-    // Get the current user and verify they are a school admin
-    const currentUser = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+  // Get the current user and verify they are a school admin
+  const currentUser = await db.select().from(users).where(eq(users.id, userId)).limit(1)
 
-    if (!currentUser.length || currentUser[0].role !== "SCHOOL_ADMIN") {
-      return NextResponse.json(
-        { error: "Only school administrators can create preceptors" },
-        { status: 403 }
-      )
-    }
+  if (!currentUser.length || currentUser[0].role !== ("SCHOOL_ADMIN" as UserRole)) {
+    return createErrorResponse(
+      "Only school administrators can create preceptors",
+      HTTP_STATUS.FORBIDDEN
+    )
+  }
 
-    const schoolAdmin = currentUser[0]
-    if (!schoolAdmin.schoolId) {
-      return NextResponse.json(
-        { error: "School administrator must be associated with a school" },
-        { status: 400 }
-      )
-    }
+  const schoolAdmin = currentUser[0]
+  if (!schoolAdmin.schoolId) {
+    return createErrorResponse(
+      "School administrator must be associated with a school",
+      HTTP_STATUS.BAD_REQUEST
+    )
+  }
 
-    // Parse and validate the request body
-    const body = await request.json()
-    const validatedData = createPreceptorSchema.parse(body)
+  // Parse and validate the request body
+  const body = await request.json()
 
-    // Check if a user with this email already exists
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, validatedData.email))
-      .limit(1)
+  const validatedData = createPreceptorSchema.parse(body)
 
-    if (existingUser.length > 0) {
-      return NextResponse.json(
-        { error: "A user with this email address already exists" },
-        { status: 409 }
-      )
-    }
+  // Check if a user with this email already exists
+  const existingUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, validatedData.email))
+    .limit(1)
 
-    // Create the preceptor user
-    const newPreceptorResult = await db
+  if (existingUser.length > 0) {
+    return createErrorResponse(
+      "A user with this email address already exists",
+      HTTP_STATUS.CONFLICT
+    )
+  }
+
+  // Create the preceptor user
+  const result = await db.transaction(async (tx) => {
+    const [newUser] = await tx
       .insert(users)
       .values({
         id: crypto.randomUUID(),
         email: validatedData.email,
         name: validatedData.name,
-        role: "CLINICAL_PRECEPTOR" as const,
+        role: "CLINICAL_PRECEPTOR" as UserRole,
         schoolId: currentUser[0].schoolId || "",
         department: validatedData.department,
         isActive: true,
@@ -78,128 +85,91 @@ export async function POST(request: NextRequest) {
       })
       .returning()
 
-    const newPreceptor = newPreceptorResult[0]
+    if (!newUser) {
+      throw new Error("Failed to create user")
+    }
 
-    // TODO: Send invitation email to the new preceptor
-    // This would typically involve sending an email with a link to set up their account
-    console.log(`Preceptor invitation should be sent to: ${validatedData.email}`)
+    await tx.insert(clinicalPreceptors).values({
+      userId: newUser.id,
+      licenseNumber: "PENDING", // TODO: Add field to form
+      licenseType: "MD", // TODO: Add field to form
+      licenseState: "CA", // TODO: Add field to form
+      licenseExpirationDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)), // Default 1 year
+      specialty: validatedData.specialty,
+      yearsOfExperience: validatedData.yearsExperience,
+      clinicalSiteId: validatedData.clinicalSite,
+      maxStudents: validatedData.maxCapacity,
+      department: validatedData.department,
+      isActive: true,
+    })
 
-    return NextResponse.json(
-      {
-        message: "Preceptor created successfully",
-        preceptor: {
-          id: newPreceptor.id,
-          name: newPreceptor.name,
-          email: newPreceptor.email,
-          department: newPreceptor.department,
-          role: newPreceptor.role,
-        },
+    return newUser
+  })
+
+  return createSuccessResponse(
+    {
+      message: "Preceptor created successfully",
+      preceptor: {
+        id: result.id,
+        name: result.name,
+        email: result.email,
+        department: result.department,
+        role: result.role,
       },
-      { status: 201 }
+    },
+    undefined,
+    HTTP_STATUS.CREATED
+  )
+})
+
+export const GET = withErrorHandling(async (_request: NextRequest) => {
+  const { userId } = await auth()
+  if (!userId) {
+    return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
+  }
+
+  // Get the current user
+  const currentUser = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+
+  if (!currentUser.length) {
+    return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
+  }
+
+  const user = currentUser[0]
+
+  // Only school admins and supervisors can view all preceptors
+  if (user.role === null || !["SCHOOL_ADMIN" as UserRole, "CLINICAL_SUPERVISOR" as UserRole].includes(user.role as UserRole)) {
+    return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
+  }
+
+  // Build where conditions - if user has a school_id, filter by it, otherwise show all
+  let whereCondition: ReturnType<typeof and> | ReturnType<typeof eq>
+  if (user.schoolId) {
+    whereCondition = and(
+      eq(users.isActive, true),
+      eq(users.role, "CLINICAL_PRECEPTOR"),
+      eq(users.schoolId, user.schoolId)
     )
-  } catch (error) {
-    console.error("Error creating preceptor:", error)
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          error: "Validation failed",
-          details: error.issues.map((err) => ({
-            field: err.path.join("."),
-            message: err.message,
-          })),
-        },
-        { status: 400 }
-      )
-    }
-
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateAllCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in preceptors/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
-
-export async function GET(_request: NextRequest) {
-  try {
-    // Try to get cached response
-    const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:preceptors/route.ts',
-      async () => {
-        // Original function logic will be wrapped here
-        return await executeOriginalLogic()
-      },
-      300 // 5 minutes TTL
-    )
-    
-    if (cached) {
-      return cached
-    }
-  } catch (cacheError) {
-    console.warn('Cache error in preceptors/route.ts:', cacheError)
-    // Continue with original logic if cache fails
-  }
-  
-  async function executeOriginalLogic() {
-
-  try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get the current user
-    const currentUser = await db.select().from(users).where(eq(users.id, userId)).limit(1)
-
-    if (!currentUser.length) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
-    const user = currentUser[0]
-
-    // Only school admins and supervisors can view all preceptors
-    if (!["SCHOOL_ADMIN", "CLINICAL_SUPERVISOR"].includes(user.role)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    // Build where conditions - if user has a school_id, filter by it, otherwise show all
-    let whereCondition: ReturnType<typeof and> | ReturnType<typeof eq>
-    if (user.schoolId) {
-      whereCondition = and(
-        eq(users.isActive, true),
-        eq(users.role, "CLINICAL_PRECEPTOR"),
-        eq(users.schoolId, user.schoolId)
-      )
-    } else {
-      // If admin has no school_id (super admin), show all active preceptors
-      whereCondition = and(eq(users.isActive, true), eq(users.role, "CLINICAL_PRECEPTOR"))
-    }
-
-    const preceptors = await db
-      .select({
-        id: users.id,
-        userId: users.id,
-        name: users.name,
-        email: users.email,
-        phone: users.phone,
-        department: users.department,
-        isActive: users.isActive,
-        schoolId: users.schoolId,
-      })
-      .from(users)
-      .where(whereCondition)
-      .orderBy(asc(users.name))
-
-    return NextResponse.json({ preceptors })
-  } catch (error) {
-    console.error("Error fetching preceptors:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  } else {
+    // If admin has no school_id (super admin), show all active preceptors
+    whereCondition = and(eq(users.isActive, true), eq(users.role, "CLINICAL_PRECEPTOR"))
   }
 
-  }
-}
+  const preceptors = await db
+    .select({
+      id: users.id,
+      userId: users.id,
+      name: users.name,
+      email: users.email,
+      phone: users.phone,
+      department: users.department,
+      isActive: users.isActive,
+      schoolId: users.schoolId,
+    })
+    .from(users)
+    .where(whereCondition)
+    .orderBy(asc(users.name))
+
+  return createSuccessResponse({ preceptors })
+})
+

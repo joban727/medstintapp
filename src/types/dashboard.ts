@@ -1,3 +1,5 @@
+import React from "react"
+
 // Dashboard-specific type definitions
 
 export interface Task {
@@ -39,6 +41,7 @@ export interface ScheduleDay {
     status: string
   }>
 }
+
 
 export interface DashboardStats {
   title: string

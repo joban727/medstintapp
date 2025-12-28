@@ -1,21 +1,21 @@
 /**
  * Offline Operation Queue
- * 
+ *
  * Provides graceful degradation and operation queuing for offline scenarios
  * with automatic recovery and conflict resolution.
  */
 
-import { logger } from './logger'
+import { logger } from "./client-logger"
 
 export interface QueuedOperation {
   id: string
-  type: 'clock-in' | 'clock-out' | 'time-sync'
+  type: "clock-in" | "clock-out" | "time-sync"
   data: any
   timestamp: number
   retryCount: number
   maxRetries: number
-  priority: 'high' | 'medium' | 'low'
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  priority: "high" | "medium" | "low"
+  status: "pending" | "processing" | "completed" | "failed"
 }
 
 export interface OfflineQueueConfig {
@@ -24,16 +24,16 @@ export interface OfflineQueueConfig {
   retryDelay: number
   storageKey: string
   enablePersistence: boolean
-  conflictResolution: 'merge' | 'overwrite' | 'manual'
+  conflictResolution: "merge" | "overwrite" | "manual"
 }
 
 const DEFAULT_CONFIG: OfflineQueueConfig = {
   maxQueueSize: 100,
   maxRetries: 3,
   retryDelay: 5000, // 5 seconds
-  storageKey: 'medstint_offline_queue',
+  storageKey: "medstint_offline_queue",
   enablePersistence: true,
-  conflictResolution: 'merge'
+  conflictResolution: "merge",
 }
 
 export class OfflineQueue {
@@ -60,23 +60,23 @@ export class OfflineQueue {
   /**
    * Add operation to queue
    */
-  enqueue(operation: Omit<QueuedOperation, 'id' | 'retryCount' | 'status'>): string {
+  enqueue(operation: Omit<QueuedOperation, "id" | "retryCount" | "status">): string {
     const queuedOperation: QueuedOperation = {
       ...operation,
       id: this.generateId(),
       retryCount: 0,
-      status: 'pending'
+      status: "pending",
     }
 
     // Check queue size limit
     if (this.queue.length >= this.config.maxQueueSize) {
       // Remove oldest low-priority operation
-      const oldestLowPriority = this.queue.findIndex(op => op.priority === 'low')
+      const oldestLowPriority = this.queue.findIndex((op) => op.priority === "low")
       if (oldestLowPriority !== -1) {
         this.queue.splice(oldestLowPriority, 1)
-        logger.warn('Queue size limit reached, removed oldest low-priority operation')
+        logger.warn("Queue size limit reached, removed oldest low-priority operation")
       } else {
-        throw new Error('Queue is full and no low-priority operations to remove')
+        throw new Error("Queue is full and no low-priority operations to remove")
       }
     }
 
@@ -85,13 +85,13 @@ export class OfflineQueue {
     this.queue.splice(insertIndex, 0, queuedOperation)
 
     this.saveToStorage()
-    this.notifyListeners('enqueue', queuedOperation)
+    this.notifyListeners("enqueue", queuedOperation)
 
-    logger.info('Operation queued for offline processing', {
+    logger.info({
       id: queuedOperation.id,
       type: queuedOperation.type,
-      priority: queuedOperation.priority
-    })
+      priority: queuedOperation.priority,
+    }, "Operation queued for offline processing")
 
     return queuedOperation.id
   }
@@ -100,12 +100,12 @@ export class OfflineQueue {
    * Remove operation from queue
    */
   dequeue(id: string): QueuedOperation | null {
-    const index = this.queue.findIndex(op => op.id === id)
+    const index = this.queue.findIndex((op) => op.id === id)
     if (index === -1) return null
 
     const operation = this.queue.splice(index, 1)[0]
     this.saveToStorage()
-    this.notifyListeners('dequeue', operation)
+    this.notifyListeners("dequeue", operation)
 
     return operation
   }
@@ -114,16 +114,19 @@ export class OfflineQueue {
    * Get queue status
    */
   getStatus() {
-    const statusCounts = this.queue.reduce((acc, op) => {
-      acc[op.status] = (acc[op.status] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
+    const statusCounts = this.queue.reduce(
+      (acc, op) => {
+        acc[op.status] = (acc[op.status] || 0) + 1
+        return acc
+      },
+      {} as Record<string, number>
+    )
 
     return {
       totalOperations: this.queue.length,
       isProcessing: this.isProcessing,
       statusCounts,
-      oldestOperation: this.queue.length > 0 ? this.queue[this.queue.length - 1].timestamp : null
+      oldestOperation: this.queue.length > 0 ? this.queue[this.queue.length - 1].timestamp : null,
     }
   }
 
@@ -133,7 +136,7 @@ export class OfflineQueue {
   clear(): void {
     this.queue = []
     this.saveToStorage()
-    logger.info('Offline queue cleared')
+    logger.info({}, "Offline queue cleared")
   }
 
   /**
@@ -186,62 +189,60 @@ export class OfflineQueue {
 
     // Check if online
     if (!navigator.onLine) {
-      logger.debug('Still offline, skipping queue processing')
+      logger.debug({}, "Still offline, skipping queue processing")
       return
     }
 
     this.isProcessing = true
 
     try {
-      const pendingOperations = this.queue.filter(op => op.status === 'pending')
-      
+      const pendingOperations = this.queue.filter((op) => op.status === "pending")
+
       for (const operation of pendingOperations) {
         try {
-          operation.status = 'processing'
-          this.notifyListeners('processing', operation)
+          operation.status = "processing"
+          this.notifyListeners("processing", operation)
 
           await this.executeOperation(operation)
 
-          operation.status = 'completed'
-          this.notifyListeners('completed', operation)
+          operation.status = "completed"
+          this.notifyListeners("completed", operation)
 
           // Remove completed operation
           this.dequeue(operation.id)
 
-          logger.info('Offline operation completed', {
+          logger.info({
             id: operation.id,
-            type: operation.type
-          })
-
+            type: operation.type,
+          }, "Offline operation completed")
         } catch (error) {
           operation.retryCount++
-          
+
           if (operation.retryCount >= operation.maxRetries) {
-            operation.status = 'failed'
-            this.notifyListeners('failed', operation)
-            
-            logger.error('Offline operation failed permanently', {
+            operation.status = "failed"
+            this.notifyListeners("failed", operation)
+
+            logger.error({
               id: operation.id,
               type: operation.type,
               retryCount: operation.retryCount,
-              error: error instanceof Error ? error.message : 'Unknown error'
-            })
+              error: error instanceof Error ? error.message : "Unknown error",
+            }, "Offline operation failed permanently")
           } else {
-            operation.status = 'pending'
-            this.notifyListeners('retry', operation)
-            
-            logger.warn('Offline operation retry scheduled', {
+            operation.status = "pending"
+            this.notifyListeners("retry", operation)
+
+            logger.warn({
               id: operation.id,
               type: operation.type,
               retryCount: operation.retryCount,
-              maxRetries: operation.maxRetries
-            })
+              maxRetries: operation.maxRetries,
+            }, "Offline operation retry scheduled")
           }
         }
       }
 
       this.saveToStorage()
-
     } finally {
       this.isProcessing = false
     }
@@ -252,13 +253,13 @@ export class OfflineQueue {
    */
   private async executeOperation(operation: QueuedOperation): Promise<void> {
     switch (operation.type) {
-      case 'clock-in':
+      case "clock-in":
         await this.executeClockIn(operation)
         break
-      case 'clock-out':
+      case "clock-out":
         await this.executeClockOut(operation)
         break
-      case 'time-sync':
+      case "time-sync":
         await this.executeTimeSync(operation)
         break
       default:
@@ -270,16 +271,16 @@ export class OfflineQueue {
    * Execute clock-in operation
    */
   private async executeClockIn(operation: QueuedOperation): Promise<void> {
-    const response = await fetch('/api/clock/in', {
-      method: 'POST',
+    const response = await fetch("/api/clock/in", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         ...operation.data,
         offlineTimestamp: operation.timestamp,
-        queueId: operation.id
-      })
+        queueId: operation.id,
+      }),
     })
 
     if (!response.ok) {
@@ -288,7 +289,7 @@ export class OfflineQueue {
 
     const result = await response.json()
     if (!result.success) {
-      throw new Error(result.error?.message || 'Clock-in operation failed')
+      throw new Error(result.error?.message || "Clock-in operation failed")
     }
   }
 
@@ -296,16 +297,16 @@ export class OfflineQueue {
    * Execute clock-out operation
    */
   private async executeClockOut(operation: QueuedOperation): Promise<void> {
-    const response = await fetch('/api/clock/out', {
-      method: 'POST',
+    const response = await fetch("/api/clock/out", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         ...operation.data,
         offlineTimestamp: operation.timestamp,
-        queueId: operation.id
-      })
+        queueId: operation.id,
+      }),
     })
 
     if (!response.ok) {
@@ -314,7 +315,7 @@ export class OfflineQueue {
 
     const result = await response.json()
     if (!result.success) {
-      throw new Error(result.error?.message || 'Clock-out operation failed')
+      throw new Error(result.error?.message || "Clock-out operation failed")
     }
   }
 
@@ -322,22 +323,22 @@ export class OfflineQueue {
    * Execute time sync operation
    */
   private async executeTimeSync(operation: QueuedOperation): Promise<void> {
-    const response = await fetch('/api/time-sync/server-time')
-    
+    const response = await fetch("/api/time-sync/server-time")
+
     if (!response.ok) {
       throw new Error(`Time sync failed: ${response.statusText}`)
     }
 
     const result = await response.json()
     if (!result.success) {
-      throw new Error(result.error?.message || 'Time sync operation failed')
+      throw new Error(result.error?.message || "Time sync operation failed")
     }
   }
 
   /**
    * Find insert index based on priority
    */
-  private findInsertIndex(priority: 'high' | 'medium' | 'low'): number {
+  private findInsertIndex(priority: "high" | "medium" | "low"): number {
     const priorityOrder = { high: 0, medium: 1, low: 2 }
     const targetPriority = priorityOrder[priority]
 
@@ -366,11 +367,11 @@ export class OfflineQueue {
       try {
         callback(operation)
       } catch (error) {
-        logger.error('Error in offline queue listener', {
+        logger.error({
           event,
           operationId: operation.id,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
+          error: error instanceof Error ? error.message : "Unknown error",
+        }, "Error in offline queue listener")
       }
     }
   }
@@ -379,14 +380,14 @@ export class OfflineQueue {
    * Save queue to localStorage
    */
   private saveToStorage(): void {
-    if (!this.config.enablePersistence) return
+    if (!this.config.enablePersistence || typeof window === "undefined") return
 
     try {
       localStorage.setItem(this.config.storageKey, JSON.stringify(this.queue))
     } catch (error) {
-      logger.error('Failed to save offline queue to storage', {
-        error: error instanceof Error ? error.message : 'Unknown error'
-      })
+      logger.error({
+        error: error instanceof Error ? error.message : "Unknown error",
+      }, "Failed to save offline queue to storage")
     }
   }
 
@@ -394,20 +395,20 @@ export class OfflineQueue {
    * Load queue from localStorage
    */
   private loadFromStorage(): void {
-    if (!this.config.enablePersistence) return
+    if (!this.config.enablePersistence || typeof window === "undefined") return
 
     try {
       const stored = localStorage.getItem(this.config.storageKey)
       if (stored) {
         this.queue = JSON.parse(stored)
-        logger.info('Offline queue loaded from storage', {
-          operationCount: this.queue.length
-        })
+        logger.info({
+          operationCount: this.queue.length,
+        }, "Offline queue loaded from storage")
       }
     } catch (error) {
-      logger.error('Failed to load offline queue from storage', {
-        error: error instanceof Error ? error.message : 'Unknown error'
-      })
+      logger.error({
+        error: error instanceof Error ? error.message : "Unknown error",
+      }, "Failed to load offline queue from storage")
       this.queue = []
     }
   }
@@ -417,11 +418,13 @@ export class OfflineQueue {
 export const offlineQueue = OfflineQueue.getInstance()
 
 // Auto-start processing when online
-window.addEventListener('online', () => {
-  logger.info('Connection restored, processing offline queue')
-  offlineQueue.startProcessing()
-})
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    logger.info({}, "Connection restored, processing offline queue")
+    offlineQueue.startProcessing()
+  })
 
-window.addEventListener('offline', () => {
-  logger.warn('Connection lost, operations will be queued')
-})
+  window.addEventListener("offline", () => {
+    logger.warn({}, "Connection lost, operations will be queued")
+  })
+}

@@ -15,6 +15,10 @@ import { Label } from "../ui/label"
 import { Progress } from "../ui/progress"
 import { Textarea } from "../ui/textarea"
 
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 interface UserData {
   id: string
   email: string
@@ -33,7 +37,7 @@ interface ClerkUser {
     id: string
     emailAddress: string
     verification: { status: string; strategy: string } | null
-    linkedTo: unknown[]
+    linkedTo: string[]
   }[]
 }
 
@@ -92,13 +96,16 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
       if (!response.ok) {
         let message = "Failed to update user information"
         try {
-          const data = await response.json()
+          const data = await response.json().catch((err) => {
+            console.error("Failed to parse JSON response:", err)
+            throw new Error("Invalid response format")
+          })
           message = data?.error || data?.message || message
         } catch {
           try {
             const text = await response.text()
             if (text) message = text
-          } catch {}
+          } catch { }
         }
         throw new Error(message)
       }
@@ -106,7 +113,8 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
       return await response.json()
     } catch (error) {
       // Error updating user
-      const errorMessage = error instanceof Error ? error.message : "Failed to update user information"
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to update user information"
       toast.error(errorMessage)
       throw error
     }
@@ -116,7 +124,6 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
     setIsSubmitting(true)
     try {
       const token = await getToken()
-
       const response = await fetch("/api/user/update", {
         method: "POST",
         headers: {
@@ -135,28 +142,40 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
       if (!response.ok) {
         let message = "Failed to update user information"
         try {
-          const data = await response.json()
+          const data = await response.json().catch((err) => {
+            console.error("Failed to parse JSON response:", err)
+            throw new Error("Invalid response format")
+          })
           message = data?.error || data?.message || message
         } catch {
           try {
             const text = await response.text()
             if (text) message = text
-          } catch {}
+          } catch { }
         }
         throw new Error(message)
       }
 
-      const _data = await response.json()
+      const _data = await response.json().catch((err) => {
+        console.error("Failed to parse JSON response:", err)
+        throw new Error("Invalid response format")
+      })
       toast.success("Profile updated successfully")
 
-      const completeRes = await fetch("/api/user/onboarding-complete", { method: "POST" })
+      const completeRes = await fetch("/api/user/onboarding-complete", {
+        method: "POST",
+      })
       if (!completeRes.ok) {
         // Failed to mark onboarding complete
       }
-      router.push("/dashboard")
+
+      try {
+        window.location.assign("/dashboard")
+      } catch { }
     } catch (error) {
       // Error during onboarding completion
-      const errorMessage = error instanceof Error ? error.message : "Failed to update user information"
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to update user information"
       toast.error(errorMessage)
     } finally {
       setIsSubmitting(false)
@@ -170,7 +189,6 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
           case "welcome":
             setCurrentStep("profile")
             break
-
           case "profile":
             if (!profileData.name.trim()) {
               toast.error("Please enter your name")
@@ -180,7 +198,6 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
               toast.error("Please enter your email")
               return
             }
-
             await handleUpdateUser({
               name: profileData.name,
               email: profileData.email,
@@ -188,14 +205,11 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
               department: profileData.department,
               role: "SUPER_ADMIN",
             })
-
             setCurrentStep("permissions")
             break
-
           case "permissions":
             setCurrentStep("complete")
             break
-
           case "complete": {
             // Mark onboarding as complete using the proper API endpoint
             const token = await getToken()
@@ -214,7 +228,9 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
             }
 
             toast.success("Super Admin account created successfully!")
-            router.push("/dashboard")
+            try {
+              window.location.assign("/dashboard")
+            } catch { }
             break
           }
         }
@@ -228,9 +244,9 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
     switch (currentStep) {
       case "welcome":
         return (
-          <div className="space-y-6 text-center">
+          <div className="gap-6 text-center">
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/20">
-              <Shield className="h-10 w-10 text-red-600 dark:text-red-400" />
+              <Shield className="h-10 w-10 text-error dark:text-red-400" />
             </div>
             <div>
               <h3 className="mb-3 font-semibold text-2xl">Welcome, Super Administrator!</h3>
@@ -240,17 +256,16 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
               <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-900/20">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
                   <strong>Important:</strong> Super administrators have unrestricted access to all
-                  platform features, including user management, system configuration, and sensitive
+                  MedStint platform features, including user management, system configuration, and sensitive
                   data.
                 </p>
               </div>
             </div>
           </div>
         )
-
       case "profile":
         return (
-          <div className="space-y-6">
+          <div className="gap-6">
             <div className="mb-6 text-center">
               <UserIcon className="mx-auto mb-4 h-12 w-12 text-red-500" />
               <h3 className="mb-2 font-semibold text-xl">Administrator Profile</h3>
@@ -258,10 +273,9 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
                 Set up your administrator profile information.
               </p>
             </div>
-
             <div className="grid gap-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="gap-2">
                   <Label htmlFor={nameId}>Full Name *</Label>
                   <Input
                     id={nameId}
@@ -270,8 +284,7 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
                     placeholder="Enter your full name"
                   />
                 </div>
-
-                <div className="space-y-2">
+                <div className="gap-2">
                   <Label htmlFor={emailId}>Email Address *</Label>
                   <Input
                     id={emailId}
@@ -282,9 +295,8 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
                   />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="gap-2">
                   <Label htmlFor={phoneId}>Phone Number</Label>
                   <Input
                     id={phoneId}
@@ -293,8 +305,7 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
                     placeholder="Enter your phone number"
                   />
                 </div>
-
-                <div className="space-y-2">
+                <div className="gap-2">
                   <Label htmlFor={departmentId}>Department</Label>
                   <Input
                     id={departmentId}
@@ -306,8 +317,7 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
                   />
                 </div>
               </div>
-
-              <div className="space-y-2">
+              <div className="gap-2">
                 <Label htmlFor={notesId}>Additional Notes (Optional)</Label>
                 <Textarea
                   id={notesId}
@@ -320,10 +330,9 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
             </div>
           </div>
         )
-
       case "permissions":
         return (
-          <div className="space-y-6">
+          <div className="gap-6">
             <div className="mb-6 text-center">
               <Settings className="mx-auto mb-4 h-12 w-12 text-red-500" />
               <h3 className="mb-2 font-semibold text-xl">Super Administrator Permissions</h3>
@@ -331,58 +340,55 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
                 Review the permissions that will be granted to your account.
               </p>
             </div>
-
-            <div className="space-y-4">
+            <div className="gap-4">
               <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-                <div className="mb-3 flex items-center space-x-3">
-                  <Shield className="h-5 w-5 text-red-600" />
+                <div className="mb-3 flex items-center gap-3">
+                  <Shield className="h-5 w-5 text-error" />
                   <h4 className="font-semibold text-red-900 dark:text-red-100">
                     Full Platform Access
                   </h4>
                 </div>
-                <ul className="space-y-2 text-red-800 text-sm dark:text-red-200">
-                  <li className="flex items-center space-x-2">
-                    <div className="h-1 w-1 rounded-full bg-red-600" />
+                <ul className="gap-2 text-red-800 text-sm dark:text-red-200">
+                  <li className="flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-error" />
                     <span>Manage all schools, programs, and users</span>
                   </li>
-                  <li className="flex items-center space-x-2">
-                    <div className="h-1 w-1 rounded-full bg-red-600" />
+                  <li className="flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-error" />
                     <span>Access system configuration and settings</span>
                   </li>
-                  <li className="flex items-center space-x-2">
-                    <div className="h-1 w-1 rounded-full bg-red-600" />
+                  <li className="flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-error" />
                     <span>View all data and generate comprehensive reports</span>
                   </li>
-                  <li className="flex items-center space-x-2">
-                    <div className="h-1 w-1 rounded-full bg-red-600" />
+                  <li className="flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-error" />
                     <span>Create and manage other administrator accounts</span>
                   </li>
                 </ul>
               </div>
-
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-                <div className="mb-3 flex items-center space-x-3">
-                  <Database className="h-5 w-5 text-blue-600" />
+                <div className="mb-3 flex items-center gap-3">
+                  <Database className="h-5 w-5 text-medical-primary" />
                   <h4 className="font-semibold text-blue-900 dark:text-blue-100">
                     Data Management
                   </h4>
                 </div>
-                <ul className="space-y-2 text-blue-800 text-sm dark:text-blue-200">
-                  <li className="flex items-center space-x-2">
-                    <div className="h-1 w-1 rounded-full bg-blue-600" />
+                <ul className="gap-2 text-blue-800 text-sm dark:text-blue-200">
+                  <li className="flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-medical-primary" />
                     <span>Full database access and management</span>
                   </li>
-                  <li className="flex items-center space-x-2">
-                    <div className="h-1 w-1 rounded-full bg-blue-600" />
+                  <li className="flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-medical-primary" />
                     <span>Data export and backup capabilities</span>
                   </li>
-                  <li className="flex items-center space-x-2">
-                    <div className="h-1 w-1 rounded-full bg-blue-600" />
+                  <li className="flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-medical-primary" />
                     <span>Audit log access and monitoring</span>
                   </li>
                 </ul>
               </div>
-
               <div className="flex items-center justify-center">
                 <Badge variant="destructive" className="px-4 py-2 text-sm">
                   SUPER_ADMIN Role
@@ -391,10 +397,9 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
             </div>
           </div>
         )
-
       case "complete":
         return (
-          <div className="space-y-6 text-center">
+          <div className="gap-6 text-center">
             <CheckCircle className="mx-auto h-16 w-16 text-green-500" />
             <div>
               <h3 className="mb-3 font-semibold text-2xl text-green-900 dark:text-green-100">
@@ -412,7 +417,6 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
             </div>
           </div>
         )
-
       default:
         return null
     }
@@ -423,27 +427,25 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
   return (
     <Card className="w-full">
       <CardHeader>
-        <div className="space-y-2">
+        <div className="gap-2">
           <Progress value={currentStepInfo.progress} className="w-full" />
           <div className="flex justify-between text-gray-500 text-sm">
             <span>{currentStepInfo.description}</span>
             <span>{currentStepInfo.progress}%</span>
           </div>
         </div>
-        <CardTitle className="flex items-center space-x-2">
+        <CardTitle className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-red-500" />
           <span>{currentStepInfo.title}</span>
         </CardTitle>
       </CardHeader>
-
-      <CardContent className="space-y-6">
+      <CardContent className="gap-6">
         {renderStepContent()}
-
         <div className="flex justify-end">
           <Button
             onClick={handleNext}
             disabled={isPending}
-            className="min-w-32 bg-red-600 hover:bg-red-700"
+            className="min-w-32 bg-error hover:bg-red-700"
           >
             {isPending
               ? "Processing..."
@@ -460,43 +462,4 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
 interface UserTypeSelectionProps {
   user: UserData
   onNext: (data: any) => void
-}
-
-export function UserTypeSelection({ user, onNext }: UserTypeSelectionProps) {
-  const { getToken } = useAuth()
-
-  const _handleUpdateUser = async (role: "STUDENT" | "SCHOOL_ADMIN") => {
-    try {
-      const token = await getToken()
-      const response = await fetch("/api/user/update", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ role }),
-      })
-
-      if (!response.ok) {
-        let message = "Failed to update user type"
-        try {
-          const data = await response.json()
-          message = data?.error || data?.message || message
-        } catch {
-          try {
-            const text = await response.text()
-            if (text) message = text
-          } catch {}
-        }
-        throw new Error(message)
-      }
-
-      const data = await response.json()
-      onNext(data)
-    } catch (error) {
-      // Failed to update user type
-      const errorMessage = error instanceof Error ? error.message : "Failed to update user type"
-      toast.error(errorMessage)
-    }
-  }
 }

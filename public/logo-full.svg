@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50" fill="none">
+  <defs>
+    <linearGradient id="liquidGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4" /> <!-- Cyan-500 -->
+      <stop offset="100%" stop-color="#14b8a6" /> <!-- Teal-500 -->
+    </linearGradient>
+    <linearGradient id="glassShine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="white" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="white" stop-opacity="0.1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Abstract Fluid M Icon -->
+  <g transform="translate(0, 0) scale(0.75)">
+    <!-- Main Shape -->
+    <path d="M10 50 C 10 20, 25 55, 32 35 C 39 15, 54 20, 54 50" 
+          stroke="url(#liquidGradient)" 
+          stroke-width="10" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"
+          fill="none" />
+          
+    <!-- Glass Highlight -->
+    <path d="M10 50 C 10 20, 25 55, 32 35 C 39 15, 54 20, 54 50" 
+          stroke="url(#glassShine)" 
+          stroke-width="4" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"
+          fill="none" 
+          transform="translate(0, -1)" />
+          
+    <!-- Accent Dot -->
+    <circle cx="54" cy="18" r="5" fill="url(#liquidGradient)" />
+    <circle cx="54" cy="18" r="2" fill="white" fill-opacity="0.8" />
+  </g>
+
+  <!-- Text "MedStint" -->
+  <text x="55" y="34" font-family="Arial, sans-serif" font-weight="bold" font-size="28" fill="url(#liquidGradient)" style="font-feature-settings: 'ss01', 'ss02'; letter-spacing: -0.5px;">
+    MedStint
+  </text>
+</svg>

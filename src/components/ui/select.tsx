@@ -68,7 +68,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-50 max-h-96 min-w-[12rem] overflow-hidden rounded-2xl border-2 border-surface-2 bg-surface-1 text-popover-foreground shadow-xl backdrop-blur-sm data-[state=closed]:animate-out data-[state=open]:animate-in",
+        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-50 max-h-96 min-w-[12rem] overflow-hidden rounded-xl border-2 border-surface-2 bg-surface-1 text-popover-foreground shadow-xl backdrop-blur-sm data-[state=closed]:animate-out data-[state=open]:animate-in",
         position === "popper" &&
           "data-[side=left]:-translate-x-1 data-[side=top]:-translate-y-1 data-[side=right]:translate-x-1 data-[side=bottom]:translate-y-1",
         className
@@ -111,7 +111,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-3 pr-3 pl-10 text-base outline-none transition-all duration-200 focus:bg-medical-blue-light focus:text-medical-blue-dark data-[disabled]:pointer-events-none data-[disabled]:opacity-50 hover:bg-surface-2",
+      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-3 pr-3 pl-10 text-base outline-none transition-all duration-200 focus:bg-medical-blue-light focus:text-medical-blue-dark data-[disabled]:pointer-events-none data-[disabled]:opacity-50 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
       className
     )}
     {...props}
@@ -121,7 +121,6 @@ const SelectItem = React.forwardRef<
         <Check className="h-5 w-5" />
       </SelectPrimitive.ItemIndicator>
     </span>
-
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
   </SelectPrimitive.Item>
 ))

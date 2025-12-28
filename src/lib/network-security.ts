@@ -115,7 +115,9 @@ export function getClientIP(request: NextRequest): string {
 export function getSchoolNetworkConfig(schoolType?: string): NetworkSecurityConfig {
   const baseConfig = { ...DEFAULT_NETWORK_CONFIG }
 
+  // eslint-disable-next-line security/detect-object-injection
   if (schoolType && SCHOOL_NETWORK_CONFIGS[schoolType]) {
+    // eslint-disable-next-line security/detect-object-injection
     return { ...baseConfig, ...SCHOOL_NETWORK_CONFIGS[schoolType] }
   }
 
@@ -330,9 +332,13 @@ export function diagnoseNetworkIssues(
         ? "error"
         : "warning"
 
-  // Create headers object from request
+  // Create headers object from request (safe from prototype pollution)
   const headers: Record<string, string | null> = {}
   request.headers.forEach((value, key) => {
+    if (key === "__proto__" || key === "constructor" || key === "prototype") {
+      return
+    }
+    // eslint-disable-next-line security/detect-object-injection
     headers[key] = value
   })
 

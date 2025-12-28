@@ -1,7 +1,8 @@
-import { db } from '@/database/db'
-import { locationVerifications, locationPermissions, locationAccuracyLogs } from '@/database/schema'
-import { eq, and, desc, gte } from 'drizzle-orm'
-import { OpenMapService } from '@/lib/openmap-service'
+import { db } from "@/database/connection-pool"
+import { locationVerifications, locationPermissions, locationAccuracyLogs, timeRecords } from '@/database/schema'
+import { eq, and, desc, lt } from 'drizzle-orm'
+import type { OpenMapService } from '@/lib/openmap-service'
+import { openMapService } from '@/lib/openmap-service'
 
 export interface LocationData {
   latitude: number
@@ -18,6 +19,7 @@ export interface LocationData {
 
 export interface LocationStorageOptions {
   userId: string
+  timeRecordId: string
   action: 'clock_in' | 'clock_out'
   clinicalSiteId?: string
   isManual?: boolean
@@ -30,8 +32,8 @@ export interface LocationStorageOptions {
 
 export interface LocationPermissionData {
   userId: string
-  permissionType: 'granted' | 'denied' | 'prompt'
-  permissionStatus: 'active' | 'revoked' | 'expired'
+  permissionType: 'precise' | 'approximate' | 'denied'
+  permissionStatus: 'granted' | 'denied' | 'prompt' | 'not_requested'
   deviceInfo?: {
     userAgent: string
     platform: string
@@ -55,7 +57,8 @@ export class LocationStorageService {
   private readonly DEFAULT_RETENTION_DAYS = 90
 
   constructor() {
-    this.openMapService = new OpenMapService()
+    // Use singleton to avoid multiple interval owners and memory leaks
+    this.openMapService = openMapService
   }
 
   /**
@@ -84,22 +87,24 @@ export class LocationStorageService {
 
       // Store location verification
       const [verification] = await db.insert(locationVerifications).values({
-        userId: options.userId,
-        clockAction: options.action,
-        userLatitude: encryptedLocation.latitude,
-        userLongitude: encryptedLocation.longitude,
-        locationAccuracy: locationData.accuracy,
-        clinicalSiteId: options.clinicalSiteId,
+        timeRecordId: options.timeRecordId,
+        verificationType: options.action,
+        userLatitude: encryptedLocation.latitude.toString(),
+        userLongitude: encryptedLocation.longitude.toString(),
+        userAccuracy: locationData.accuracy.toString(),
+        clinicalSiteLocationId: options.clinicalSiteId, // Using clinicalSiteId as locationId for now
         isWithinGeofence: false, // Will be calculated by geofence service
-        isManualEntry: options.isManual || false,
-        deviceInfo: options.deviceInfo ? JSON.stringify(options.deviceInfo) : null,
-        verifiedAt: locationData.timestamp,
-        timezone: validation.timezone,
-        timezoneOffset: validation.timezoneOffset
+        locationSource: options.isManual ? 'manual' : 'gps',
+        verificationTime: locationData.timestamp,
+        metadata: {
+          timezone: validation.timezone,
+          timezoneOffset: validation.timezoneOffset,
+          deviceInfo: options.deviceInfo
+        }
       }).returning({ id: locationVerifications.id })
 
       // Store detailed accuracy logs if enabled
-      await this.storeAccuracyLog(locationData, options.userId, verification.id)
+      await this.storeAccuracyLog(locationData, options.userId, options.isManual ? 'manual' : 'gps')
 
       return {
         success: true,
@@ -126,8 +131,8 @@ export class LocationStorageService {
         permissionType: permissionData.permissionType,
         permissionStatus: permissionData.permissionStatus,
         deviceInfo: permissionData.deviceInfo ? JSON.stringify(permissionData.deviceInfo) : null,
-        grantedAt: new Date(),
-        lastCheckedAt: new Date()
+        respondedAt: new Date(),
+        lastUsedAt: new Date()
       })
 
       return { success: true }
@@ -159,19 +164,28 @@ export class LocationStorageService {
       const history = await db
         .select({
           id: locationVerifications.id,
-          action: locationVerifications.clockAction,
-          timestamp: locationVerifications.verifiedAt,
-          accuracy: locationVerifications.locationAccuracy,
+          action: locationVerifications.verificationType,
+          timestamp: locationVerifications.verificationTime,
+          accuracy: locationVerifications.userAccuracy,
           isWithinGeofence: locationVerifications.isWithinGeofence,
-          isManual: locationVerifications.isManualEntry,
-          timezone: locationVerifications.timezone
+          isManual: locationVerifications.locationSource,
+          metadata: locationVerifications.metadata
         })
         .from(locationVerifications)
-        .where(eq(locationVerifications.userId, userId))
-        .orderBy(desc(locationVerifications.verifiedAt))
+        .innerJoin(timeRecords, eq(locationVerifications.timeRecordId, timeRecords.id))
+        .where(eq(timeRecords.studentId, userId))
+        .orderBy(desc(locationVerifications.verificationTime))
         .limit(limit)
 
-      return history
+      return history.map(record => ({
+        id: record.id,
+        action: record.action,
+        timestamp: record.timestamp,
+        accuracy: parseFloat(record.accuracy ?? '0'),
+        isWithinGeofence: record.isWithinGeofence,
+        isManual: record.isManual === 'manual',
+        timezone: (record.metadata as any)?.timezone
+      }))
     } catch (error) {
       console.error('Error fetching location history:', error)
       return []
@@ -193,10 +207,10 @@ export class LocationStorageService {
         .where(
           and(
             eq(locationPermissions.userId, userId),
-            eq(locationPermissions.permissionStatus, 'active')
+            eq(locationPermissions.permissionStatus, 'granted')
           )
         )
-        .orderBy(desc(locationPermissions.lastCheckedAt))
+        .orderBy(desc(locationPermissions.lastUsedAt))
         .limit(1)
 
       if (permission.length === 0) {
@@ -204,9 +218,9 @@ export class LocationStorageService {
       }
 
       return {
-        hasPermission: permission[0].permissionType === 'granted',
-        permissionType: permission[0].permissionType,
-        lastChecked: permission[0].lastCheckedAt
+        hasPermission: permission[0].permissionStatus === 'granted',
+        permissionType: permission[0].permissionType || undefined,
+        lastChecked: permission[0].lastUsedAt || undefined
       }
     } catch (error) {
       console.error('Error fetching location permission:', error)
@@ -225,12 +239,12 @@ export class LocationStorageService {
       // Delete old location verifications
       await db
         .delete(locationVerifications)
-        .where(gte(locationVerifications.verifiedAt, cutoffDate))
+        .where(lt(locationVerifications.verificationTime, cutoffDate))
 
       // Delete old accuracy logs
       await db
         .delete(locationAccuracyLogs)
-        .where(gte(locationAccuracyLogs.recordedAt, cutoffDate))
+        .where(lt(locationAccuracyLogs.timestamp, cutoffDate))
 
       console.log(`Cleaned up location data older than ${retentionDays} days`)
     } catch (error) {
@@ -244,19 +258,21 @@ export class LocationStorageService {
   private async storeAccuracyLog(
     locationData: LocationData,
     userId: string,
-    verificationId: string
+    source: 'gps' | 'network' | 'manual'
   ): Promise<void> {
     try {
       await db.insert(locationAccuracyLogs).values({
         userId,
-        verificationId,
-        accuracy: locationData.accuracy,
-        altitude: locationData.altitude,
-        altitudeAccuracy: locationData.altitudeAccuracy,
-        heading: locationData.heading,
-        speed: locationData.speed,
+        latitude: locationData.latitude.toString(),
+        longitude: locationData.longitude.toString(),
+        accuracy: locationData.accuracy.toString(),
+        altitude: locationData.altitude?.toString(),
+        altitudeAccuracy: locationData.altitudeAccuracy?.toString(),
+        heading: locationData.heading?.toString(),
+        speed: locationData.speed?.toString(),
+        locationSource: source,
         batteryLevel: null, // Will be populated from device info if available
-        recordedAt: locationData.timestamp
+        timestamp: locationData.timestamp
       })
     } catch (error) {
       console.error('Error storing accuracy log:', error)

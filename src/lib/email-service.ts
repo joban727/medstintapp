@@ -1,7 +1,13 @@
 import { Resend } from "resend"
 
-// Initialize Resend with API key from environment
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazy initialization of Resend to avoid build-time errors
+let resend: Resend | null = null
+function getResend(): Resend | null {
+  if (!resend && process.env.RESEND_API_KEY) {
+    resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return resend
+}
 
 export interface EmailOptions {
   to: string | string[]
@@ -34,7 +40,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       return false
     }
 
-    const { to, subject, html, text, from = "noreply@medstint.com", attachments } = options
+    const { to, subject, html, text, from = "MedStint <noreply@medstint.com>", attachments } = options
 
     const emailData: any = {
       from,
@@ -52,7 +58,13 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       emailData.attachments = attachments
     }
 
-    const result = await resend.emails.send(emailData)
+    const resendClient = getResend()
+    if (!resendClient) {
+      console.warn("Resend client not available. Email sending disabled.")
+      return false
+    }
+
+    const result = await resendClient.emails.send(emailData)
 
     if (result.error) {
       console.error("Resend API error:", result.error)
@@ -158,6 +170,7 @@ function generateReportEmailHTML(data: {
         </div>
         
         <div class="footer">
+          <p>&copy; ${new Date().getFullYear()} MedStint. All rights reserved.</p>
           <p>This is an automated message from MedStint. Please do not reply to this email.</p>
           <p>If you have any questions, please contact your system administrator.</p>
         </div>
@@ -246,6 +259,70 @@ ${subject}
 ${message}
 
 ${actionUrl ? `${actionText}: ${actionUrl}` : ""}
+  `.trim()
+
+  return await sendEmail({
+    to,
+    subject,
+    html,
+    text,
+  })
+}
+
+/**
+ * Send invitation email to a student
+ */
+export async function sendInvitationEmail({
+  to,
+  schoolName,
+  programName,
+  inviteLink,
+}: {
+  to: string
+  schoolName: string
+  programName: string
+  inviteLink: string
+}): Promise<boolean> {
+  const subject = `You've been invited to join ${schoolName}`
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>${subject}</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .content { padding: 20px 0; }
+        .button { display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 10px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="content">
+          <h2>Welcome to MedStint!</h2>
+          <p>You have been invited to join <strong>${schoolName}</strong> for the <strong>${programName}</strong> program.</p>
+          <p>Click the button below to accept your invitation and set up your account:</p>
+          <a href="${inviteLink}" class="button">Accept Invitation</a>
+          <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+          <p>${inviteLink}</p>
+          <p>This invitation will expire in 7 days.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  const text = `
+Welcome to MedStint!
+
+You have been invited to join ${schoolName} for the ${programName} program.
+
+To accept your invitation and set up your account, please visit:
+${inviteLink}
+
+This invitation will expire in 7 days.
   `.trim()
 
   return await sendEmail({

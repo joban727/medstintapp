@@ -1,97 +1,76 @@
+// import pino from 'pino'
+import { db } from '@/database/connection-pool'
+import { auditLogs } from '@/database/schema'
+import crypto from 'crypto'
+
+// Configure Pino
+// const isDev = process.env.NODE_ENV === 'development'
+
+// export const logger = pino({
+//   level: process.env.LOG_LEVEL || 'info',
+//   transport: isDev
+//     ? {
+//       target: 'pino-pretty',
+//       options: {
+//         colorize: true,
+//         ignore: 'pid,hostname',
+//       },
+//     }
+//     : undefined,
+//   base: {
+//     env: process.env.NODE_ENV,
+//   },
+// })
+
+export const logger = {
+  info: (obj: any, msg?: string) => console.log(`[INFO] ${msg}`, obj),
+  error: (obj: any, msg?: string) => console.error(`[ERROR] ${msg}`, obj),
+  warn: (obj: any, msg?: string) => console.warn(`[WARN] ${msg}`, obj),
+  debug: (obj: any, msg?: string) => console.debug(`[DEBUG] ${msg}`, obj),
+}
+
+// Audit Log Severity Levels
+export type AuditSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+export type AuditStatus = 'SUCCESS' | 'FAILURE' | 'ERROR'
+
+interface AuditLogParams {
+  action: string
+  userId?: string
+  resource?: string
+  resourceId?: string
+  details?: Record<string, any>
+  severity?: AuditSeverity
+  status?: AuditStatus
+  ipAddress?: string
+  userAgent?: string
+}
+
 /**
- * Production-ready logger utility
- * Replaces console.log statements for better error tracking and debugging
+ * Audit Logger
+ * Writes critical business events to the Neon database for compliance and tracking.
  */
+export const auditLogger = {
+  log: async (params: AuditLogParams) => {
+    try {
+      // 1. Log to standard logger for immediate visibility
+      logger.info({ audit: params }, `[Audit] ${params.action}`)
 
-type LogLevel = "error" | "warn" | "info" | "debug"
-
-type LogContext = Record<string, string | number | boolean | null | undefined>
-
-interface SerializedError {
-  name: string
-  message: string
-  stack?: string
-}
-
-interface LogEntry {
-  level: LogLevel
-  message: string
-  timestamp: string
-  context?: LogContext
-  error?: SerializedError
-}
-
-class Logger {
-  private isDevelopment = process.env.NODE_ENV === "development"
-  private isProduction = process.env.NODE_ENV === "production"
-
-  private formatMessage(
-    level: LogLevel,
-    message: string,
-    context?: LogContext,
-    error?: Error
-  ): LogEntry {
-    return {
-      level,
-      message,
-      timestamp: new Date().toISOString(),
-      context,
-      error: error
-        ? {
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-          }
-        : undefined,
+      // 2. Persist to Neon Database
+      await db.insert(auditLogs).values({
+        id: crypto.randomUUID(),
+        action: params.action,
+        userId: params.userId,
+        resource: params.resource,
+        resourceId: params.resourceId,
+        details: params.details ? JSON.stringify(params.details) : undefined,
+        severity: params.severity || 'LOW',
+        status: params.status || 'SUCCESS',
+        ipAddress: params.ipAddress,
+        userAgent: params.userAgent,
+      })
+    } catch (error) {
+      // Fallback: Log the failure to write to DB, but don't crash the app
+      logger.error({ err: error, auditParams: params }, 'Failed to write audit log to database')
     }
   }
-
-  private shouldLog(level: LogLevel): boolean {
-    if (this.isProduction) {
-      // In production, only log errors and warnings
-      return level === "error" || level === "warn"
-    }
-    return true // Log everything in development
-  }
-
-  private output(entry: LogEntry): void {
-    if (!this.shouldLog(entry.level)) return
-
-    if (this.isDevelopment) {
-      // In development, use console for immediate feedback
-      const method = entry.level === "error" ? "error" : entry.level === "warn" ? "warn" : "log"
-      console[method](`[${entry.level.toUpperCase()}] ${entry.message}`, entry.context || "")
-      if (entry.error) {
-        console.error(entry.error)
-      }
-    } else {
-      // In production, you could send to external logging service
-      // For now, we'll suppress most logs except critical errors
-      if (entry.level === "error") {
-        console.error(`[ERROR] ${entry.message}`, entry.context)
-      }
-    }
-  }
-
-  error(message: string, context?: LogContext, error?: Error): void {
-    this.output(this.formatMessage("error", message, context, error))
-  }
-
-  warn(message: string, context?: LogContext): void {
-    this.output(this.formatMessage("warn", message, context))
-  }
-
-  info(message: string, context?: LogContext): void {
-    this.output(this.formatMessage("info", message, context))
-  }
-
-  debug(message: string, context?: LogContext): void {
-    this.output(this.formatMessage("debug", message, context))
-  }
 }
-
-// Export singleton instance
-export const logger = new Logger()
-
-// Export for backwards compatibility with existing code
-export default logger

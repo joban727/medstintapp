@@ -22,6 +22,7 @@ export const cacheConfig = {
     defaultTtl: 300000, // 5 minutes
     routes: {
       '/api/users': 600000, // 10 minutes
+      '/api/clinical-sites': 1800000, // 30 minutes
       '/api/competencies': 1800000, // 30 minutes
       '/api/rotations': 3600000, // 1 hour
       '/api/dashboard': 300000 // 5 minutes
@@ -62,6 +63,7 @@ export const cacheConfig = {
     schedule: '0 */6 * * *', // Every 6 hours
     routes: [
       '/api/users',
+      '/api/clinical-sites',
       '/api/competencies',
       '/api/rotations'
     ]

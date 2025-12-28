@@ -1,11 +1,27 @@
 import { eq } from "drizzle-orm"
 import type { NextRequest } from "next/server"
-import { db } from "@/database/db"
+import { db } from "@/database/connection-pool"
 import { auditLogs, users } from "@/database/schema"
 import { hasPermission, type Permission, ROLE_HIERARCHY } from "@/lib/auth"
 import { getCurrentUser } from "@/lib/auth-clerk"
 import type { UserRole } from "@/types"
 
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
 // Route protection configuration
 export interface RouteConfig {
   path: string
@@ -45,6 +61,11 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
   },
   {
     path: "/dashboard/school-admin/rotations",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["manage_rotations"],
+  },
+  {
+    path: "/dashboard/school-admin/rotation-templates",
     roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
     permissions: ["manage_rotations"],
   },
@@ -120,6 +141,321 @@ export const PROTECTED_API_ROUTES: RouteConfig[] = [
       "manage_timecard_corrections",
     ],
   },
+  // (removed: pending-tasks route deleted)
+  {
+    path: "/api/reports",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR"],
+    permissions: ["view_reports", "generate_reports"],
+  },
+  {
+    path: "/api/reports/scheduled",
+    roles: ["SCHOOL_ADMIN", "CLINICAL_SUPERVISOR"],
+    permissions: ["manage_scheduled_reports"],
+  },
+  {
+    path: "/api/reports/schedule",
+    roles: ["SCHOOL_ADMIN", "CLINICAL_SUPERVISOR"],
+    permissions: ["manage_scheduled_reports"],
+  },
+  {
+    path: "/api/reports/comprehensive",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_SUPERVISOR"],
+    permissions: ["view_reports", "generate_reports"],
+  },
+  {
+    path: "/api/reports/export",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_SUPERVISOR"],
+    permissions: ["export_reports"],
+  },
+  {
+    path: "/api/time-records",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["view_time_records", "manage_time_records"],
+  },
+  {
+    path: "/api/rotations",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR"],
+    permissions: ["manage_rotations", "view_rotations"],
+  },
+  {
+    path: "/api/rotation-templates",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["manage_rotations"],
+  },
+  {
+    path: "/api/cohort-rotations",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["manage_rotations"],
+  },
+  {
+    path: "/api/clinical-sites",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["manage_clinical_sites"],
+  },
+  {
+    path: "/api/preceptors",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_SUPERVISOR"],
+    permissions: ["manage_preceptors"],
+  },
+  {
+    path: "/api/programs",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["manage_programs"],
+  },
+  {
+    path: "/api/competencies",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR"],
+    permissions: ["manage_competencies"],
+  },
+  {
+    path: "/api/evaluations",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR"],
+    permissions: ["manage_evaluations"],
+  },
+  {
+    path: "/api/sites",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["manage_clinical_sites"],
+  },
+  {
+    path: "/api/location",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["manage_locations"],
+  },
+  {
+    path: "/api/audit-logs",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["view_audit_logs"],
+  },
+  {
+    path: "/api/analytics",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["view_analytics"],
+  },
+  {
+    path: "/api/billing",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["manage_billing"],
+  },
+  {
+    path: "/api/onboarding",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["manage_onboarding"],
+  },
+  // (removed: system route deleted)
+  {
+    path: "/api/webhooks",
+    roles: ["SUPER_ADMIN"],
+    permissions: ["manage_webhooks"],
+  },
+  // (removed: websocket route deleted)
+  {
+    path: "/api/health",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["view_health_status"],
+  },
+  {
+    path: "/api/clock",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["use_clock"],
+  },
+  {
+    path: "/api/student",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["view_student_dashboard"],
+  },
+  {
+    path: "/api/user",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["manage_user_profile"],
+  },
+  {
+    path: "/api/facility-management",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["manage_facilities"],
+  },
+  // (removed: rotation-templates route deleted)
+  {
+    path: "/api/site-assignments",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["manage_site_assignments"],
+  },
+  // (removed: notification-templates route deleted)
+  {
+    path: "/api/competency-submissions",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["manage_competency_submissions", "view_competency_submissions"],
+  },
+  {
+    path: "/api/competency-assignments",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["manage_competency_assignments", "view_competency_assignments"],
+  },
+  {
+    path: "/api/competency-templates",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR"],
+    permissions: ["manage_competency_templates"],
+  },
+  {
+    path: "/api/competency-analytics",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_SUPERVISOR"],
+    permissions: ["view_competency_analytics"],
+  },
+  {
+    path: "/api/competency-notifications",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["manage_competency_notifications"],
+  },
+  {
+    path: "/api/competency-progress",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["view_competency_progress"],
+  },
+  {
+    path: "/api/competency-deployments",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_SUPERVISOR"],
+    permissions: ["manage_competency_deployments"],
+  },
+  {
+    path: "/api/competency-assessments",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR"],
+    permissions: ["manage_competency_assessments"],
+  },
+  {
+    path: "/api/school-context",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["view_school_context"],
+  },
+  {
+    path: "/api/facility-management",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["manage_facilities"],
+  },
+  // (removed: facility-cache route deleted)
+  // (removed: facility-lookup route deleted)
+  {
+    path: "/api/location",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["manage_locations"],
+  },
+  {
+    path: "/api/location/capture",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["capture_location"],
+  },
+  {
+    path: "/api/location/verify",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["verify_location"],
+  },
+  {
+    path: "/api/location/permissions",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["manage_location_permissions"],
+  },
+  {
+    path: "/api/time-sync",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["manage_time_sync"],
+  },
+  {
+    path: "/api/time-sync/poll",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["poll_time_sync"],
+  },
+  {
+    path: "/api/time-sync/connect",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["connect_time_sync"],
+  },
+  {
+    path: "/api/time-sync/status",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["view_time_sync_status"],
+  },
+  {
+    path: "/api/student/dashboard",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "STUDENT"],
+    permissions: ["view_student_dashboard"],
+  },
+  {
+    path: "/api/student/dashboard-stats",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "STUDENT"],
+    permissions: ["view_student_dashboard_stats"],
+  },
+  {
+    path: "/api/student/clock-in",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "STUDENT"],
+    permissions: ["student_clock_in"],
+  },
+  {
+    path: "/api/student/clock-out",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "STUDENT"],
+    permissions: ["student_clock_out"],
+  },
+  {
+    path: "/api/student/clock-status",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "STUDENT"],
+    permissions: ["view_student_clock_status"],
+  },
+  {
+    path: "/api/evaluations",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR"],
+    permissions: ["manage_evaluations"],
+  },
+  {
+    path: "/api/onboarding/session",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"],
+    permissions: ["manage_onboarding_session"],
+  },
+  {
+    path: "/api/analytics/onboarding",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["view_onboarding_analytics"],
+  },
+  // (removed: system/readiness route deleted)
+  {
+    path: "/api/admin/performance",
+    roles: ["SUPER_ADMIN"],
+    permissions: ["view_admin_performance"],
+  },
+  {
+    path: "/api/admin/cleanup-mock-data",
+    roles: ["SUPER_ADMIN"],
+    permissions: ["cleanup_mock_data"],
+  },
+  {
+    path: "/api/billing/create-subscription",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["create_subscription"],
+  },
+  {
+    path: "/api/billing/cancel-subscription",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["cancel_subscription"],
+  },
+  {
+    path: "/api/webhooks/clerk",
+    roles: ["SYSTEM"],
+    permissions: ["webhook_clerk"],
+  },
+  // (removed: test routes deleted)
+
+  {
+    path: "/api/schedule/timeline",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["view_schedule"],
+  },
+  {
+    path: "/api/schedule/conflicts",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["view_schedule"],
+  },
+  {
+    path: "/api/sites/capacity",
+    roles: ["SUPER_ADMIN", "SCHOOL_ADMIN"],
+    permissions: ["manage_clinical_sites"],
+  },
 ]
 
 // Get user from database by ID
@@ -129,15 +465,7 @@ export async function getUserById(userId: string, retryCount = 0) {
 
   try {
     const user = await db
-      .select({
-        id: users.id,
-        role: users.role,
-        email: users.email,
-        name: users.name,
-        schoolId: users.schoolId,
-        isActive: users.isActive,
-        onboardingCompleted: users.onboardingCompleted,
-      })
+      .select()
       .from(users)
       .where(eq(users.id, userId))
       .limit(1)
@@ -302,15 +630,15 @@ export async function apiAuthMiddleware(
     if (requiredPermissions && requiredPermissions.length > 0) {
       const hasRequiredPermissions = requireAll
         ? requiredPermissions.every((permission) =>
-            hasPermission(user.role as UserRole, permission)
-          )
+          hasPermission(user.role as UserRole, permission)
+        )
         : requireAny
           ? requiredPermissions.some((permission) =>
-              hasPermission(user.role as UserRole, permission)
-            )
+            hasPermission(user.role as UserRole, permission)
+          )
           : requiredPermissions.some((permission) =>
-              hasPermission(user.role as UserRole, permission)
-            )
+            hasPermission(user.role as UserRole, permission)
+          )
 
       if (!hasRequiredPermissions) {
         await logAuditEvent({
@@ -360,7 +688,11 @@ export function canCreateRole(creatorRole: UserRole, targetRole: UserRole): bool
 
   // SCHOOL_ADMIN can create CLINICAL_PRECEPTOR, CLINICAL_SUPERVISOR, STUDENT
   if (creatorRole === "SCHOOL_ADMIN") {
-    return ["CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR", "STUDENT"].includes(targetRole)
+    return [
+      "CLINICAL_PRECEPTOR" as UserRole,
+      "CLINICAL_SUPERVISOR" as UserRole,
+      "STUDENT" as UserRole,
+    ].includes(targetRole)
   }
 
   // Other roles cannot create users

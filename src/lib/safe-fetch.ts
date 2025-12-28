@@ -11,6 +11,8 @@ export interface SafeFetchResponse<T = any> {
   success: boolean
   data?: T
   error?: string
+  message?: string
+  details?: any[]
   status: number
 }
 
@@ -37,9 +39,25 @@ export async function safeFetch<T = any>(
 
     // Check if response is ok
     if (!response.ok) {
+      // Try to parse error response body if available
+      let errorDetails: any = {}
+      try {
+        const text = await response.text()
+        if (text && text.trim() !== "") {
+          errorDetails = JSON.parse(text)
+        }
+      } catch (e) {
+        // Ignore parsing error for error response
+      }
+
       return {
         success: false,
-        error: `HTTP ${response.status}: ${response.statusText}`,
+        error:
+          errorDetails.error ||
+          errorDetails.message ||
+          `HTTP ${response.status}: ${response.statusText}`,
+        message: errorDetails.message,
+        details: errorDetails.details,
         status: response.status,
       }
     }
@@ -48,10 +66,10 @@ export async function safeFetch<T = any>(
     const text = await response.text()
 
     // Check if response has content
-    if (!text || text.trim() === '') {
+    if (!text || text.trim() === "") {
       return {
         success: false,
-        error: 'Empty response from server',
+        error: "Empty response from server",
         status: response.status,
       }
     }
@@ -61,11 +79,11 @@ export async function safeFetch<T = any>(
     try {
       data = JSON.parse(text)
     } catch (parseError) {
-      console.error('JSON parse error:', parseError)
-      console.error('Response text:', text.substring(0, 500)) // Log first 500 chars
+      console.error("JSON parse error:", parseError)
+      console.error("Response text:", text.substring(0, 500)) // Log first 500 chars
       return {
         success: false,
-        error: 'Invalid JSON response from server',
+        error: "Invalid JSON response from server",
         status: response.status,
       }
     }
@@ -77,10 +95,10 @@ export async function safeFetch<T = any>(
     }
   } catch (error) {
     if (error instanceof Error) {
-      if (error.name === 'AbortError') {
+      if (error.name === "AbortError") {
         return {
           success: false,
-          error: 'Request timeout',
+          error: "Request timeout",
           status: 408,
         }
       }
@@ -92,7 +110,7 @@ export async function safeFetch<T = any>(
     }
     return {
       success: false,
-      error: 'Unknown error occurred',
+      error: "Unknown error occurred",
       status: 0,
     }
   }
@@ -105,20 +123,29 @@ export async function safeFetchApi<T = any>(
   url: string,
   options: SafeFetchOptions = {}
 ): Promise<SafeFetchResponse<T>> {
-  const result = await safeFetch<{ success: boolean; data?: T; error?: string; message?: string }>(
-    url,
-    options
-  )
+  const result = await safeFetch<{
+    success: boolean
+    data?: T
+    error?: string
+    message?: string
+    details?: any[]
+  }>(url, options)
 
   if (!result.success) {
-    return result
+    return {
+      success: false,
+      error: result.error,
+      message: result.message,
+      details: result.details,
+      status: result.status,
+    }
   }
 
   const apiResponse = result.data
   if (!apiResponse) {
     return {
       success: false,
-      error: 'No data in response',
+      error: "No data in response",
       status: result.status,
     }
   }
@@ -127,14 +154,17 @@ export async function safeFetchApi<T = any>(
   if (apiResponse.success === false) {
     return {
       success: false,
-      error: apiResponse.error || apiResponse.message || 'API request failed',
+      error: apiResponse.error || apiResponse.message || "API request failed",
+      message: apiResponse.message,
+      details: apiResponse.details,
       status: result.status,
     }
   }
 
   return {
     success: true,
-    data: apiResponse.data || apiResponse,
+    data: apiResponse.data || (apiResponse as any),
+    message: apiResponse.message,
     status: result.status,
   }
 }

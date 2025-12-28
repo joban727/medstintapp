@@ -12,9 +12,9 @@ export interface CircuitBreakerConfig {
 }
 
 export enum CircuitState {
-  CLOSED = 'CLOSED',     // Normal operation
-  OPEN = 'OPEN',         // Blocking requests
-  HALF_OPEN = 'HALF_OPEN' // Testing recovery
+  CLOSED = "CLOSED", // Normal operation
+  OPEN = "OPEN", // Blocking requests
+  HALF_OPEN = "HALF_OPEN", // Testing recovery
 }
 
 export interface CircuitBreakerStats {
@@ -45,7 +45,10 @@ class CircuitBreaker {
   async execute<T>(operation: () => Promise<T>): Promise<T> {
     if (this.state === CircuitState.OPEN) {
       if (Date.now() < (this.nextAttemptTime || 0)) {
-        throw new Error(`Circuit breaker is OPEN for ${this.name}. Next attempt at ${new Date(this.nextAttemptTime!).toISOString()}`)
+        const nextAttempt = this.nextAttemptTime ?? Date.now() + this.config.recoveryTimeout
+        throw new Error(
+          `Circuit breaker is OPEN for ${this.name}. Next attempt at ${new Date(nextAttempt).toISOString()}`
+        )
       }
       // Transition to HALF_OPEN
       this.state = CircuitState.HALF_OPEN
@@ -53,7 +56,10 @@ class CircuitBreaker {
       console.log(`🔄 Circuit breaker ${this.name} transitioning to HALF_OPEN`)
     }
 
-    if (this.state === CircuitState.HALF_OPEN && this.halfOpenCalls >= this.config.halfOpenMaxCalls) {
+    if (
+      this.state === CircuitState.HALF_OPEN &&
+      this.halfOpenCalls >= this.config.halfOpenMaxCalls
+    ) {
       throw new Error(`Circuit breaker ${this.name} is HALF_OPEN and max calls exceeded`)
     }
 
@@ -74,7 +80,7 @@ class CircuitBreaker {
 
   private onSuccess(): void {
     this.successCount++
-    
+
     if (this.state === CircuitState.HALF_OPEN) {
       // If we've had enough successful calls, close the circuit
       if (this.halfOpenCalls >= this.config.halfOpenMaxCalls) {
@@ -100,12 +106,19 @@ class CircuitBreaker {
       // Any failure in HALF_OPEN state opens the circuit
       this.state = CircuitState.OPEN
       this.nextAttemptTime = Date.now() + this.config.recoveryTimeout
-      console.log(`❌ Circuit breaker ${this.name} failed in HALF_OPEN - state: OPEN until ${new Date(this.nextAttemptTime).toISOString()}`)
-    } else if (this.state === CircuitState.CLOSED && this.failureCount >= this.config.failureThreshold) {
+      console.log(
+        `❌ Circuit breaker ${this.name} failed in HALF_OPEN - state: OPEN until ${new Date(this.nextAttemptTime).toISOString()}`
+      )
+    } else if (
+      this.state === CircuitState.CLOSED &&
+      this.failureCount >= this.config.failureThreshold
+    ) {
       // Open the circuit if failure threshold is reached
       this.state = CircuitState.OPEN
       this.nextAttemptTime = Date.now() + this.config.recoveryTimeout
-      console.log(`🚨 Circuit breaker ${this.name} opened due to ${this.failureCount} failures - state: OPEN until ${new Date(this.nextAttemptTime).toISOString()}`)
+      console.log(
+        `🚨 Circuit breaker ${this.name} opened due to ${this.failureCount} failures - state: OPEN until ${new Date(this.nextAttemptTime).toISOString()}`
+      )
     }
   }
 
@@ -117,7 +130,7 @@ class CircuitBreaker {
       lastFailureTime: this.lastFailureTime,
       nextAttemptTime: this.nextAttemptTime,
       totalRequests: this.totalRequests,
-      totalFailures: this.totalFailures
+      totalFailures: this.totalFailures,
     }
   }
 
@@ -141,12 +154,12 @@ class CircuitBreaker {
 // Global circuit breaker registry
 class CircuitBreakerRegistry {
   private breakers = new Map<string, CircuitBreaker>()
-  
+
   private defaultConfig: CircuitBreakerConfig = {
     failureThreshold: 3,
     recoveryTimeout: 15000, // 15 seconds (reduced from 30)
     monitoringWindow: 60000, // 1 minute
-    halfOpenMaxCalls: 2
+    halfOpenMaxCalls: 2,
   }
 
   getBreaker(name: string, config?: Partial<CircuitBreakerConfig>): CircuitBreaker {
@@ -195,18 +208,18 @@ export async function fetchWithCircuitBreaker(
   options?: RequestInit,
   breakerConfig?: Partial<CircuitBreakerConfig>
 ): Promise<Response> {
-  const breakerName = `fetch-${new URL(url, 'http://localhost').pathname}`
-  
+  const breakerName = `fetch-${new URL(url, "http://localhost").pathname}`
+
   return withCircuitBreaker(
     breakerName,
     async () => {
       const response = await fetch(url, options)
-      
+
       // Consider 5xx errors as failures for circuit breaker
       if (response.status >= 500) {
         throw new Error(`Server error: ${response.status} ${response.statusText}`)
       }
-      
+
       return response
     },
     breakerConfig

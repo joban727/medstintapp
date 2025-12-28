@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useEffectEvent, useState, type ReactNode } from "react"
 import { useTheme as useNextTheme } from "next-themes"
 
 // Enhanced theme configuration interface
@@ -62,7 +62,7 @@ export function EnhancedThemeProvider({ children }: { children: ReactNode }) {
   // Apply theme configuration to document
   const applyTheme = (themeConfig: ThemeConfig) => {
     const root = document.documentElement
-    
+
     // Apply theme mode
     if (themeConfig.mode !== 'system') {
       setTheme(themeConfig.mode)
@@ -72,7 +72,7 @@ export function EnhancedThemeProvider({ children }: { children: ReactNode }) {
 
     // Apply color scheme
     root.setAttribute('data-color-scheme', themeConfig.colorScheme)
-    
+
     // Apply animation preferences
     root.setAttribute('data-animations', themeConfig.animations)
     if (themeConfig.animations === 'none' || themeConfig.animations === 'reduced') {
@@ -136,14 +136,14 @@ export function EnhancedThemeProvider({ children }: { children: ReactNode }) {
   const updateConfig = (updates: Partial<ThemeConfig>) => {
     const newConfig = { ...config, ...updates }
     setConfig(newConfig)
-    
+
     // Save to localStorage
     try {
       localStorage.setItem(THEME_CONFIG_KEY, JSON.stringify(newConfig))
     } catch (error) {
       console.warn('Failed to save theme configuration:', error)
     }
-    
+
     // Apply theme immediately
     applyTheme(newConfig)
   }
@@ -173,45 +173,47 @@ export function EnhancedThemeProvider({ children }: { children: ReactNode }) {
     }
   }, [systemTheme, config])
 
+  // Stable event handler for reduced motion (React 19.2+)
+  const onReducedMotionChange = useEffectEvent((e: MediaQueryListEvent) => {
+    if (e.matches && config.animations === 'full') {
+      updateConfig({ animations: 'reduced' })
+    }
+  })
+
   // Handle reduced motion preference
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-    
-    const handleChange = (e: MediaQueryListEvent) => {
-      if (e.matches && config.animations === 'full') {
-        updateConfig({ animations: 'reduced' })
-      }
-    }
 
-    mediaQuery.addEventListener('change', handleChange)
-    
+    mediaQuery.addEventListener('change', onReducedMotionChange)
+
     // Check initial state
     if (mediaQuery.matches && config.animations === 'full') {
       updateConfig({ animations: 'reduced' })
     }
 
-    return () => mediaQuery.removeEventListener('change', handleChange)
-  }, [config.animations])
+    return () => mediaQuery.removeEventListener('change', onReducedMotionChange)
+  }, []) // Only runs once - onReducedMotionChange always has fresh state
+
+  // Stable event handler for high contrast (React 19.2+)
+  const onHighContrastChange = useEffectEvent((e: MediaQueryListEvent) => {
+    if (e.matches && config.contrast === 'normal') {
+      updateConfig({ contrast: 'high' })
+    }
+  })
 
   // Handle high contrast preference
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-contrast: high)')
-    
-    const handleChange = (e: MediaQueryListEvent) => {
-      if (e.matches && config.contrast === 'normal') {
-        updateConfig({ contrast: 'high' })
-      }
-    }
 
-    mediaQuery.addEventListener('change', handleChange)
-    
+    mediaQuery.addEventListener('change', onHighContrastChange)
+
     // Check initial state
     if (mediaQuery.matches && config.contrast === 'normal') {
       updateConfig({ contrast: 'high' })
     }
 
-    return () => mediaQuery.removeEventListener('change', handleChange)
-  }, [config.contrast])
+    return () => mediaQuery.removeEventListener('change', onHighContrastChange)
+  }, []) // Only runs once - onHighContrastChange always has fresh state
 
   const contextValue: ThemeContextType = {
     config,
@@ -246,38 +248,38 @@ export function getThemeClasses(baseClasses: string, themeVariants?: {
   accessible?: string
 }) {
   if (!themeVariants) return baseClasses
-  
+
   const variants = []
-  
+
   if (themeVariants.light) {
     variants.push(`light:${themeVariants.light}`)
   }
-  
+
   if (themeVariants.dark) {
     variants.push(`dark:${themeVariants.dark}`)
   }
-  
+
   if (themeVariants.medical) {
     variants.push(`[data-color-scheme="medical"]:${themeVariants.medical}`)
   }
-  
+
   if (themeVariants.professional) {
     variants.push(`[data-color-scheme="professional"]:${themeVariants.professional}`)
   }
-  
+
   if (themeVariants.accessible) {
     variants.push(`[data-color-scheme="accessible"]:${themeVariants.accessible}`)
   }
-  
+
   return `${baseClasses} ${variants.join(' ')}`
 }
 
 // Theme-aware component wrapper
-export function ThemeAware({ 
-  children, 
+export function ThemeAware({
+  children,
   className = "",
-  themeClasses 
-}: { 
+  themeClasses
+}: {
   children: ReactNode
   className?: string
   themeClasses?: {
@@ -289,7 +291,7 @@ export function ThemeAware({
   }
 }) {
   const enhancedClasses = getThemeClasses(className, themeClasses)
-  
+
   return (
     <div className={enhancedClasses}>
       {children}

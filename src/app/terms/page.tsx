@@ -4,8 +4,8 @@ import Link from "next/link"
 import { Button } from "../../components/ui/button"
 
 export const metadata: Metadata = {
-  title: "Terms of Service - MedStint",
-  description: "Terms of Service for MedStint",
+  title: "Terms of Service | MedStint",
+  description: "Terms of service for the MedStint platform",
 }
 
 export default function TermsPage() {
@@ -21,14 +21,13 @@ export default function TermsPage() {
       <div className="prose prose-gray dark:prose-invert max-w-none">
         <h1>Terms of Service</h1>
 
-        <p className="text-lg text-muted-foreground">
-          Last updated: {new Date().toLocaleDateString()}
-        </p>
+        <p className="text-muted-foreground">Last updated: {new Date().toLocaleDateString()}</p>
+      </div>
 
-        <h2>1. Acceptance of Terms</h2>
+      <div className="prose prose-slate dark:prose-invert max-w-none">
         <p>
-          By accessing and using MedStint, you accept and agree to be bound by the terms and
-          provision of this agreement.
+          Welcome to MedStint. By accessing or using our platform, you agree to be bound by these
+          Terms of Service and our Privacy Policy.
         </p>
 
         <h2>2. Use License</h2>

@@ -5,12 +5,21 @@ import { useAuth } from "@clerk/nextjs"
 import {
   Calendar,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
   Globe,
   GraduationCap,
   MapPin,
   School,
   Search,
   User,
+  Mail,
+  Phone,
+  Home,
+  IdCard,
+  CalendarDays,
+  Sparkles,
+  ArrowRight,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
@@ -18,24 +27,34 @@ import { toast } from "sonner"
 import { useFieldIds } from "../../hooks/use-unique-id"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../ui/card"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
 import { Progress } from "../ui/progress"
 import { Textarea } from "../ui/textarea"
+import { Separator } from "../ui/separator"
+import { motion, AnimatePresence } from "framer-motion"
+import { cn } from "@/lib/utils"
+
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
 
 interface StudentOnboardingProps {
   user: any
   clerkUser: any
   availableSchools: any[]
   availablePrograms: any[]
+  availableCohorts: any[]
 }
 
 type Step =
   | "welcome"
-  | "personal-info"
+  | "basic-info"
+  | "contact-info"
   | "school-selection"
   | "program-selection"
+  | "cohort-selection"
   | "enrollment-confirmation"
   | "complete"
 
@@ -44,7 +63,6 @@ interface SchoolInfo {
   name: string
   address: string
   website: string
-  accreditation: string
 }
 
 interface ProgramInfo {
@@ -56,11 +74,24 @@ interface ProgramInfo {
   schoolId: string
 }
 
-export function StudentOnboarding({
+interface CohortInfo {
+  id: string
+  name: string
+  programId: string
+  startDate: Date
+  endDate: Date
+  graduationYear: number | null
+  capacity: number
+  description: string | null
+  status: string
+}
+
+export default function StudentOnboarding({
   user,
   clerkUser,
   availableSchools,
   availablePrograms,
+  availableCohorts,
 }: StudentOnboardingProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -76,6 +107,7 @@ export function StudentOnboarding({
     "dateOfBirth",
     "enrollmentDate",
   ])
+
   const { getToken } = useAuth()
 
   // Form data
@@ -88,30 +120,36 @@ export function StudentOnboarding({
     dateOfBirth: "",
   })
 
-  const [selectedSchool, setSelectedSchool] = useState<SchoolInfo | null>(null)
-  const [selectedProgram, setSelectedProgram] = useState<ProgramInfo | null>(null)
+  const [selectedSchool, setSelectedSchool] = useState<SchoolInfo | null>(() => {
+    if (user?.schoolId) {
+      return availableSchools.find((s) => s.id === user.schoolId) || null
+    }
+    return null
+  })
+  const [selectedProgram, setSelectedProgram] = useState<ProgramInfo | null>(() => {
+    if (user?.programId) {
+      return availablePrograms.find((p) => p.id === user.programId) || null
+    }
+    return null
+  })
+  const [selectedCohort, setSelectedCohort] = useState<CohortInfo | null>(() => {
+    if (user?.cohortId) {
+      return availableCohorts.find((c: CohortInfo) => c.id === user.cohortId) || null
+    }
+    return null
+  })
   const [enrollmentDate, setEnrollmentDate] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
 
   const steps: Record<Step, { title: string; description: string; progress: number }> = {
-    welcome: { title: "Welcome", description: "Student Registration", progress: 16 },
-    "personal-info": { title: "Personal Information", description: "Your Details", progress: 33 },
-    "school-selection": {
-      title: "School Selection",
-      description: "Choose Institution",
-      progress: 50,
-    },
-    "program-selection": {
-      title: "Program Selection",
-      description: "Academic Program",
-      progress: 66,
-    },
-    "enrollment-confirmation": {
-      title: "Enrollment",
-      description: "Confirm Details",
-      progress: 83,
-    },
-    complete: { title: "Complete", description: "Registration Complete", progress: 100 },
+    welcome: { title: "Welcome", description: "Get Started", progress: 10 },
+    "basic-info": { title: "Basic Info", description: "Who You Are", progress: 20 },
+    "contact-info": { title: "Contact Info", description: "How to Reach You", progress: 35 },
+    "school-selection": { title: "School", description: "Choose Institution", progress: 45 },
+    "program-selection": { title: "Program", description: "Academic Program", progress: 55 },
+    "cohort-selection": { title: "Cohort", description: "Your Class", progress: 70 },
+    "enrollment-confirmation": { title: "Review", description: "Confirm Details", progress: 85 },
+    complete: { title: "Complete", description: "You're Done!", progress: 100 },
   }
 
   const filteredSchools = availableSchools.filter(
@@ -122,6 +160,11 @@ export function StudentOnboarding({
 
   const availableProgramsForSchool = selectedSchool
     ? availablePrograms.filter((program) => program.schoolId === selectedSchool.id)
+    : []
+
+  // Filter cohorts for the selected program
+  const availableCohortsForProgram = selectedProgram
+    ? availableCohorts.filter((cohort: CohortInfo) => cohort.programId === selectedProgram.id)
     : []
 
   const handleUpdateUser = async (updates: any) => {
@@ -139,21 +182,24 @@ export function StudentOnboarding({
       if (!response.ok) {
         let message = "Failed to update user information"
         try {
-          const data = await response.json()
+          const data = await response.json().catch((err) => {
+            console.error("Failed to parse JSON response:", err)
+            throw new Error("Invalid response format")
+          })
           message = data?.error || data?.message || data?.details || message
         } catch {
           try {
             const text = await response.text()
             if (text) message = text
-          } catch {}
+          } catch { }
         }
         throw new Error(message)
       }
 
       return await response.json()
     } catch (error) {
-      // Error updating user
-      const errorMessage = error instanceof Error ? error.message : "Failed to update user information"
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to update user information"
       toast.error(errorMessage)
       throw error
     }
@@ -164,14 +210,18 @@ export function StudentOnboarding({
       try {
         switch (currentStep) {
           case "welcome":
-            setCurrentStep("personal-info")
+            setCurrentStep("basic-info")
             break
 
-          case "personal-info":
+          case "basic-info":
             if (!personalData.name.trim()) {
               toast.error("Please enter your full name")
               return
             }
+            setCurrentStep("contact-info")
+            break
+
+          case "contact-info":
             if (!personalData.email.trim()) {
               toast.error("Please enter your email address")
               return
@@ -192,6 +242,14 @@ export function StudentOnboarding({
               toast.error("Please select a program")
               return
             }
+            setCurrentStep("cohort-selection")
+            break
+
+          case "cohort-selection":
+            if (!selectedCohort) {
+              toast.error("Please select your cohort/class")
+              return
+            }
             setCurrentStep("enrollment-confirmation")
             break
 
@@ -201,23 +259,21 @@ export function StudentOnboarding({
               return
             }
 
-            // Validate and format enrollment date
             const enrollmentDateObj = new Date(enrollmentDate)
             if (Number.isNaN(enrollmentDateObj.getTime())) {
               toast.error("Please select a valid enrollment date")
               return
             }
 
-            // Update user with all information
             await handleUpdateUser({
               name: personalData.name,
               email: personalData.email,
               phone: personalData.phone,
               address: personalData.address,
               studentId: personalData.studentId,
-              // dateOfBirth is currently not stored in users schema; omit to avoid backend errors
               schoolId: selectedSchool?.id,
               programId: selectedProgram?.id,
+              cohortId: selectedCohort?.id,
               enrollmentDate: enrollmentDateObj,
               role: "STUDENT",
             })
@@ -227,7 +283,6 @@ export function StudentOnboarding({
           }
 
           case "complete": {
-            // Mark onboarding as complete using the proper API endpoint
             const token = await getToken()
             const completeResponse = await fetch("/api/user/onboarding-complete", {
               method: "POST",
@@ -246,14 +301,17 @@ export function StudentOnboarding({
                 try {
                   const text = await completeResponse.text()
                   if (text) message = text
-                } catch {}
+                } catch { }
               }
               toast.error(message)
               return
             }
 
             toast.success("Student registration completed successfully!")
-            router.push("/dashboard")
+            try {
+              router.push("/dashboard")
+              router.refresh()
+            } catch { }
             break
           }
         }
@@ -265,17 +323,23 @@ export function StudentOnboarding({
 
   const handleBack = () => {
     switch (currentStep) {
-      case "personal-info":
+      case "basic-info":
         setCurrentStep("welcome")
         break
+      case "contact-info":
+        setCurrentStep("basic-info")
+        break
       case "school-selection":
-        setCurrentStep("personal-info")
+        setCurrentStep("contact-info")
         break
       case "program-selection":
         setCurrentStep("school-selection")
         break
-      case "enrollment-confirmation":
+      case "cohort-selection":
         setCurrentStep("program-selection")
+        break
+      case "enrollment-confirmation":
+        setCurrentStep("cohort-selection")
         break
     }
   }
@@ -284,102 +348,72 @@ export function StudentOnboarding({
     switch (currentStep) {
       case "welcome":
         return (
-          <div className="space-y-6 text-center">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/20">
-              <GraduationCap className="h-10 w-10 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <h3 className="mb-3 font-semibold text-2xl">Welcome to Student Registration!</h3>
-              <p className="mb-4 text-gray-600 dark:text-gray-300">
-                Let's get you enrolled in your medical education program.
-              </p>
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-                <p className="text-blue-800 text-sm dark:text-blue-200">
-                  You'll be able to track your clinical rotations, log hours, and access educational
-                  resources.
-                </p>
+          <motion.div
+            key="welcome"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="flex flex-col items-center text-center space-y-8 py-12"
+          >
+            <div className="relative group">
+              <div className="absolute -inset-4 rounded-full bg-primary/20 opacity-20 blur-xl group-hover:opacity-30 transition-opacity duration-500"></div>
+              <div className="relative flex h-32 w-32 items-center justify-center rounded-full bg-background border-2 border-border shadow-sm">
+                <Sparkles className="h-16 w-16 text-primary animate-pulse" />
               </div>
             </div>
-          </div>
-        )
-
-      case "personal-info":
-        return (
-          <div className="space-y-6">
-            <div className="mb-6 text-center">
-              <User className="mx-auto mb-4 h-12 w-12 text-blue-500" />
-              <h3 className="mb-2 font-semibold text-xl">Personal Information</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Please provide your personal details for registration.
+            <div className="space-y-4 max-w-lg">
+              <h3 className="text-3xl font-semibold tracking-tight text-foreground">
+                Welcome to MedStint
+              </h3>
+              <p className="text-muted-foreground text-lg leading-relaxed">
+                Your journey to clinical excellence starts here. We'll guide you through setting up
+                your profile in just a few simple steps.
               </p>
             </div>
+            <Button
+              size="lg"
+              onClick={handleNext}
+              className="w-full max-w-xs text-lg h-14 rounded-full shadow-sm hover:shadow-md transition-all"
+            >
+              Get Started <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+          </motion.div>
+        )
 
-            <div className="grid gap-4">
+      case "basic-info":
+        return (
+          <motion.div
+            key="basic-info"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-6"
+          >
+            <div className="space-y-1">
+              <h3 className="text-2xl font-semibold tracking-tight">Basic Information</h3>
+              <p className="text-muted-foreground">Tell us a bit about yourself.</p>
+            </div>
+
+            <div className="grid gap-6">
               <div className="space-y-2">
-                <Label htmlFor={fieldIds.fullName}>Full Name *</Label>
+                <Label htmlFor={fieldIds.fullName} className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-primary" /> Full Name
+                </Label>
                 <Input
                   id={fieldIds.fullName}
                   value={personalData.name}
                   onChange={(e) => setPersonalData((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder="Enter your full name"
+                  placeholder="e.g. Jane Doe"
+                  className="h-12 text-lg"
+                  autoFocus
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor={fieldIds.email}>Email Address *</Label>
-                  <Input
-                    id={fieldIds.email}
-                    type="email"
-                    value={personalData.email}
-                    onChange={(e) =>
-                      setPersonalData((prev) => ({ ...prev, email: e.target.value }))
-                    }
-                    placeholder="your.email@example.com"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={fieldIds.phone}>Phone Number</Label>
-                  <Input
-                    id={fieldIds.phone}
-                    value={personalData.phone}
-                    onChange={(e) =>
-                      setPersonalData((prev) => ({ ...prev, phone: e.target.value }))
-                    }
-                    placeholder="Your phone number"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor={fieldIds.address}>Address</Label>
-                <Textarea
-                  id={fieldIds.address}
-                  value={personalData.address}
-                  onChange={(e) =>
-                    setPersonalData((prev) => ({ ...prev, address: e.target.value }))
-                  }
-                  placeholder="Your home address"
-                  rows={2}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor={fieldIds.studentId}>Student ID (Optional)</Label>
-                  <Input
-                    id={fieldIds.studentId}
-                    value={personalData.studentId}
-                    onChange={(e) =>
-                      setPersonalData((prev) => ({ ...prev, studentId: e.target.value }))
-                    }
-                    placeholder="Your student ID"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={fieldIds.dateOfBirth}>Date of Birth</Label>
+                  <Label htmlFor={fieldIds.dateOfBirth} className="flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-primary" /> Date of Birth
+                  </Label>
                   <Input
                     id={fieldIds.dateOfBirth}
                     type="date"
@@ -387,254 +421,522 @@ export function StudentOnboarding({
                     onChange={(e) =>
                       setPersonalData((prev) => ({ ...prev, dateOfBirth: e.target.value }))
                     }
+                    className="h-12"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={fieldIds.studentId} className="flex items-center gap-2">
+                    <IdCard className="h-4 w-4 text-primary" /> Student ID{" "}
+                    <span className="text-muted-foreground text-xs font-normal">(Optional)</span>
+                  </Label>
+                  <Input
+                    id={fieldIds.studentId}
+                    value={personalData.studentId}
+                    onChange={(e) =>
+                      setPersonalData((prev) => ({ ...prev, studentId: e.target.value }))
+                    }
+                    placeholder="e.g. 12345678"
+                    className="h-12"
                   />
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
+        )
+
+      case "contact-info":
+        return (
+          <motion.div
+            key="contact-info"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-6"
+          >
+            <div className="space-y-1">
+              <h3 className="text-2xl font-semibold tracking-tight">Contact Details</h3>
+              <p className="text-muted-foreground">How can we reach you?</p>
+            </div>
+
+            <div className="grid gap-6">
+              <div className="space-y-2">
+                <Label htmlFor={fieldIds.email} className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-primary" /> Email Address
+                </Label>
+                <Input
+                  id={fieldIds.email}
+                  type="email"
+                  value={personalData.email}
+                  onChange={(e) => setPersonalData((prev) => ({ ...prev, email: e.target.value }))}
+                  placeholder="name@example.com"
+                  className="h-12"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor={fieldIds.phone} className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-primary" /> Phone Number
+                </Label>
+                <Input
+                  id={fieldIds.phone}
+                  type="tel"
+                  value={personalData.phone}
+                  onChange={(e) => setPersonalData((prev) => ({ ...prev, phone: e.target.value }))}
+                  placeholder="(555) 123-4567"
+                  className="h-12"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor={fieldIds.address} className="flex items-center gap-2">
+                  <Home className="h-4 w-4 text-primary" /> Address
+                </Label>
+                <Textarea
+                  id={fieldIds.address}
+                  value={personalData.address}
+                  onChange={(e) =>
+                    setPersonalData((prev) => ({ ...prev, address: e.target.value }))
+                  }
+                  placeholder="123 Main St, City, State, Zip"
+                  className="min-h-[100px] resize-none text-base"
+                />
+              </div>
+            </div>
+          </motion.div>
         )
 
       case "school-selection":
         return (
-          <div className="space-y-6">
-            <div className="mb-6 text-center">
-              <School className="mx-auto mb-4 h-12 w-12 text-blue-500" />
-              <h3 className="mb-2 font-semibold text-xl">Select Your School</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Choose the educational institution you'll be attending.
-              </p>
+          <motion.div
+            key="school-selection"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-6"
+          >
+            <div className="space-y-1">
+              <h3 className="text-2xl font-semibold tracking-tight">Select School</h3>
+              <p className="text-muted-foreground">Which institution are you attending?</p>
             </div>
 
-            <div className="space-y-4">
-              <div className="relative">
-                <Search className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 transform text-gray-400" />
-                <Input
-                  placeholder="Search schools..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-
-              <div className="max-h-96 space-y-3 overflow-y-auto">
-                {filteredSchools.length === 0 ? (
-                  <div className="py-8 text-center text-gray-500">
-                    {availableSchools.length === 0 ? (
-                      <p>No schools are currently available. Please contact support.</p>
-                    ) : (
-                      <p>No schools found matching your search.</p>
-                    )}
+            {user?.schoolId && selectedSchool ? (
+              <Card className="border-border bg-card">
+                <CardContent className="flex items-center gap-4 p-6">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                    <School className="h-6 w-6 text-primary" />
                   </div>
-                ) : (
-                  filteredSchools.map((school) => (
-                    <Card
-                      key={school.id}
-                      className={`cursor-pointer transition-all hover:shadow-md ${
-                        selectedSchool?.id === school.id
-                          ? "bg-blue-50 ring-2 ring-blue-500 dark:bg-blue-900/20"
-                          : "hover:bg-gray-50 dark:hover:bg-gray-800"
-                      }`}
-                      onClick={() => setSelectedSchool(school)}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h4 className="mb-2 font-semibold text-lg">{school.name}</h4>
-                            {school.address && (
-                              <div className="mb-1 flex items-center text-gray-600 text-sm dark:text-gray-300">
-                                <MapPin className="mr-1 h-4 w-4" />
-                                {school.address}
-                              </div>
-                            )}
-                            {school.website && (
-                              <div className="mb-2 flex items-center text-gray-600 text-sm dark:text-gray-300">
-                                <Globe className="mr-1 h-4 w-4" />
-                                <a
-                                  href={school.website}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="hover:underline"
-                                >
-                                  {school.website}
-                                </a>
-                              </div>
-                            )}
-                            <Badge variant="secondary">{school.accreditation}</Badge>
-                          </div>
-                          {selectedSchool?.id === school.id && (
-                            <CheckCircle className="h-6 w-6 flex-shrink-0 text-blue-500" />
+                  <div>
+                    <h4 className="font-semibold text-foreground">
+                      Pre-assigned School
+                    </h4>
+                    <p className="text-muted-foreground">
+                      You have been assigned to <strong>{selectedSchool.name}</strong>
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search schools..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 h-12"
+                  />
+                </div>
+                <div className="grid gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                  {filteredSchools.length === 0 ? (
+                    <div className="py-12 text-center text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
+                      <School className="mx-auto h-10 w-10 mb-3 opacity-20" />
+                      <p>No schools found matching your search.</p>
+                    </div>
+                  ) : (
+                    filteredSchools.map((school) => (
+                      <motion.div
+                        key={school.id}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        className={cn(
+                          "group relative flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all hover:shadow-md",
+                          selectedSchool?.id === school.id
+                            ? "border-blue-500 bg-blue-50/50 ring-1 ring-blue-500 dark:bg-blue-900/20"
+                            : "bg-card hover:border-blue-200 dark:hover:border-blue-800"
+                        )}
+                        onClick={() => setSelectedSchool(school)}
+                      >
+                        <div
+                          className={cn(
+                            "mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors",
+                            selectedSchool?.id === school.id
+                              ? "bg-primary/10 text-primary"
+                              : "bg-muted text-muted-foreground group-hover:bg-primary/5 group-hover:text-primary"
                           )}
+                        >
+                          <School className="h-5 w-5" />
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
+                        <div className="flex-1 space-y-1">
+                          <h4 className="font-semibold leading-none">{school.name}</h4>
+                          {school.address && (
+                            <p className="text-sm text-muted-foreground flex items-center gap-1">
+                              <MapPin className="h-3 w-3" /> {school.address}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 pt-1">
+                            {school.website && (
+                              <a
+                                href={school.website}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs text-blue-500 hover:underline flex items-center gap-0.5"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Globe className="h-3 w-3" /> Website
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        {selectedSchool?.id === school.id && (
+                          <div className="absolute right-4 top-4">
+                            <CheckCircle className="h-5 w-5 text-primary" />
+                          </div>
+                        )}
+                      </motion.div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
+            )}
+          </motion.div>
         )
 
       case "program-selection":
+        if (!selectedSchool) return null
+
         return (
-          <div className="space-y-6">
-            <div className="mb-6 text-center">
-              <GraduationCap className="mx-auto mb-4 h-12 w-12 text-blue-500" />
-              <h3 className="mb-2 font-semibold text-xl">Select Your Program</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Choose the academic program at {selectedSchool?.name}.
+          <motion.div
+            key="program-selection"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-6"
+          >
+            <div className="space-y-1">
+              <h3 className="text-2xl font-semibold tracking-tight">Select Program</h3>
+              <p className="text-muted-foreground">
+                Choose your academic program at {selectedSchool.name}.
               </p>
             </div>
 
-            <div className="space-y-4">
-              {availableProgramsForSchool.length === 0 ? (
-                <div className="py-8 text-center text-gray-500">
-                  <p>No programs are currently available at this school.</p>
-                  <Button
-                    variant="outline"
-                    onClick={() => setCurrentStep("school-selection")}
-                    className="mt-4"
-                  >
-                    Choose Different School
-                  </Button>
-                </div>
-              ) : (
-                availableProgramsForSchool.map((program) => (
-                  <Card
-                    key={program.id}
-                    className={`cursor-pointer transition-all hover:shadow-md ${
-                      selectedProgram?.id === program.id
-                        ? "bg-blue-50 ring-2 ring-blue-500 dark:bg-blue-900/20"
-                        : "hover:bg-gray-50 dark:hover:bg-gray-800"
-                    }`}
-                    onClick={() => setSelectedProgram(program)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="mb-2 font-semibold text-lg">{program.name}</h4>
-                          <p className="mb-3 text-gray-600 dark:text-gray-300">
-                            {program.description}
-                          </p>
-
-                          <div className="mb-2 flex items-center text-gray-600 text-sm dark:text-gray-300">
-                            <Calendar className="mr-1 h-4 w-4" />
-                            Duration: {program.duration} months
-                          </div>
-
-                          <div className="text-gray-600 text-sm dark:text-gray-300">
-                            <strong>Class Year:</strong> {program.classYear}
-                          </div>
-                        </div>
-                        {selectedProgram?.id === program.id && (
-                          <CheckCircle className="h-6 w-6 flex-shrink-0 text-blue-500" />
+            {user?.programId && selectedProgram ? (
+              <Card className="border-border bg-card">
+                <CardContent className="flex items-center gap-4 p-6">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                    <GraduationCap className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-foreground">
+                      Pre-assigned Program
+                    </h4>
+                    <p className="text-muted-foreground">
+                      You have been assigned to <strong>{selectedProgram.name}</strong>
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4">
+                {availableProgramsForSchool.length === 0 ? (
+                  <div className="py-12 text-center text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
+                    <GraduationCap className="mx-auto h-10 w-10 mb-3 opacity-20" />
+                    <p>No programs found for this school.</p>
+                    <Button variant="link" onClick={() => setCurrentStep("school-selection")}>
+                      Choose a different school
+                    </Button>
+                  </div>
+                ) : (
+                  availableProgramsForSchool.map((program) => (
+                    <motion.div
+                      key={program.id}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      className={cn(
+                        "group relative flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all hover:shadow-md",
+                        selectedProgram?.id === program.id
+                          ? "border-blue-500 bg-blue-50/50 ring-1 ring-blue-500 dark:bg-blue-900/20"
+                          : "bg-card hover:border-blue-200 dark:hover:border-blue-800"
+                      )}
+                      onClick={() => setSelectedProgram(program)}
+                    >
+                      <div
+                        className={cn(
+                          "mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors",
+                          selectedProgram?.id === program.id
+                            ? "bg-blue-100 text-blue-600"
+                            : "bg-muted text-muted-foreground group-hover:bg-blue-50 group-hover:text-blue-500"
                         )}
+                      >
+                        <GraduationCap className="h-5 w-5" />
                       </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
+                      <div className="flex-1 space-y-1">
+                        <h4 className="font-semibold leading-none">{program.name}</h4>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {program.description}
+                        </p>
+                        <div className="flex items-center gap-4 pt-2 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-md">
+                            <Calendar className="h-3 w-3" /> {program.duration} Months
+                          </span>
+                          <span className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-md">
+                            <User className="h-3 w-3" /> Class of {program.classYear}
+                          </span>
+                        </div>
+                      </div>
+                      {selectedProgram?.id === program.id && (
+                        <div className="absolute right-4 top-4">
+                          <CheckCircle className="h-5 w-5 text-blue-500" />
+                        </div>
+                      )}
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            )}
+          </motion.div>
+        )
+
+      case "cohort-selection":
+        if (!selectedProgram) return null
+
+        return (
+          <motion.div
+            key="cohort-selection"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-6"
+          >
+            <div className="space-y-1">
+              <h3 className="text-2xl font-semibold tracking-tight">Select Your Class</h3>
+              <p className="text-muted-foreground">
+                Which cohort are you joining in {selectedProgram.name}?
+              </p>
             </div>
-          </div>
+
+            {user?.cohortId && selectedCohort ? (
+              <Card className="border-border bg-card">
+                <CardContent className="flex items-center gap-4 p-6">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                    <CalendarDays className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-foreground">
+                      Pre-assigned Cohort
+                    </h4>
+                    <p className="text-muted-foreground">
+                      You have been assigned to <strong>{selectedCohort.name}</strong>
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4">
+                {availableCohortsForProgram.length === 0 ? (
+                  <div className="py-12 text-center text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
+                    <CalendarDays className="mx-auto h-10 w-10 mb-3 opacity-20" />
+                    <p>No cohorts available for this program yet.</p>
+                    <p className="text-sm mt-2">Please contact your school administrator.</p>
+                    <Button variant="link" onClick={() => setCurrentStep("program-selection")}>
+                      Choose a different program
+                    </Button>
+                  </div>
+                ) : (
+                  availableCohortsForProgram.map((cohort: CohortInfo) => (
+                    <motion.div
+                      key={cohort.id}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      className={cn(
+                        "group relative flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all hover:shadow-md",
+                        selectedCohort?.id === cohort.id
+                          ? "border-primary bg-primary/5 ring-1 ring-primary dark:bg-primary/10"
+                          : "bg-card hover:border-primary/50 dark:hover:border-primary/50"
+                      )}
+                      onClick={() => setSelectedCohort(cohort)}
+                    >
+                      <div
+                        className={cn(
+                          "mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors",
+                          selectedCohort?.id === cohort.id
+                            ? "bg-primary/10 text-primary"
+                            : "bg-muted text-muted-foreground group-hover:bg-primary/5 group-hover:text-primary"
+                        )}
+                      >
+                        <CalendarDays className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <h4 className="font-semibold leading-none">{cohort.name}</h4>
+                        {cohort.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {cohort.description}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-4 pt-2 text-xs text-muted-foreground">
+                          {cohort.graduationYear && (
+                            <span className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-md">
+                              <GraduationCap className="h-3 w-3" /> Class of {cohort.graduationYear}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-md">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(cohort.startDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })} - {new Date(cohort.endDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                          </span>
+                          <span className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-md">
+                            <User className="h-3 w-3" /> {cohort.capacity} capacity
+                          </span>
+                        </div>
+                      </div>
+                      {selectedCohort?.id === cohort.id && (
+                        <div className="absolute right-4 top-4">
+                          <CheckCircle className="h-5 w-5 text-primary" />
+                        </div>
+                      )}
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            )}
+          </motion.div>
         )
 
       case "enrollment-confirmation":
         return (
-          <div className="space-y-6">
-            <div className="mb-6 text-center">
-              <CheckCircle className="mx-auto mb-4 h-12 w-12 text-blue-500" />
-              <h3 className="mb-2 font-semibold text-xl">Confirm Enrollment</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Please review your information and confirm your enrollment.
-              </p>
+          <motion.div
+            key="enrollment-confirmation"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-6"
+          >
+            <div className="space-y-1">
+              <h3 className="text-2xl font-semibold tracking-tight">Confirm Enrollment</h3>
+              <p className="text-muted-foreground">Please review your details before finishing.</p>
             </div>
 
-            <div className="space-y-4">
+            <div className="grid gap-6 md:grid-cols-2">
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Personal Information</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                    <User className="h-4 w-4 text-primary" /> Personal Details
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  <div>
-                    <strong>Name:</strong> {personalData.name}
+                <CardContent className="space-y-3 text-sm">
+                  <div className="grid grid-cols-[100px_1fr] gap-1">
+                    <span className="text-muted-foreground">Name:</span>
+                    <span className="font-medium">{personalData.name}</span>
                   </div>
-                  <div>
-                    <strong>Email:</strong> {personalData.email}
+                  <div className="grid grid-cols-[100px_1fr] gap-1">
+                    <span className="text-muted-foreground">Email:</span>
+                    <span className="font-medium">{personalData.email}</span>
                   </div>
                   {personalData.phone && (
-                    <div>
-                      <strong>Phone:</strong> {personalData.phone}
+                    <div className="grid grid-cols-[100px_1fr] gap-1">
+                      <span className="text-muted-foreground">Phone:</span>
+                      <span className="font-medium">{personalData.phone}</span>
                     </div>
                   )}
                   {personalData.studentId && (
-                    <div>
-                      <strong>Student ID:</strong> {personalData.studentId}
+                    <div className="grid grid-cols-[100px_1fr] gap-1">
+                      <span className="text-muted-foreground">Student ID:</span>
+                      <span className="font-medium">{personalData.studentId}</span>
                     </div>
                   )}
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Academic Information</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4 text-primary" /> Academic Info
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  <div>
-                    <strong>School:</strong> {selectedSchool?.name}
+                <CardContent className="space-y-3 text-sm">
+                  <div className="grid grid-cols-[100px_1fr] gap-1">
+                    <span className="text-muted-foreground">School:</span>
+                    <span className="font-medium">{selectedSchool?.name}</span>
                   </div>
-                  <div>
-                    <strong>Program:</strong> {selectedProgram?.name}
+                  <div className="grid grid-cols-[100px_1fr] gap-1">
+                    <span className="text-muted-foreground">Program:</span>
+                    <span className="font-medium">{selectedProgram?.name}</span>
                   </div>
-                  <div>
-                    <strong>Class Year:</strong> {selectedProgram?.classYear}
+                  <div className="grid grid-cols-[100px_1fr] gap-1">
+                    <span className="text-muted-foreground">Cohort:</span>
+                    <span className="font-medium">{selectedCohort?.name}</span>
                   </div>
+                  {selectedCohort?.graduationYear && (
+                    <div className="grid grid-cols-[100px_1fr] gap-1">
+                      <span className="text-muted-foreground">Graduating:</span>
+                      <span className="font-medium">{selectedCohort.graduationYear}</span>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor={fieldIds.enrollmentDate}>Enrollment Date *</Label>
+            <div className="space-y-3 pt-2">
+              <Label htmlFor={fieldIds.enrollmentDate} className="text-base font-medium">
+                When did you start?
+              </Label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id={fieldIds.enrollmentDate}
                   type="date"
                   value={enrollmentDate}
                   onChange={(e) => setEnrollmentDate(e.target.value)}
-                  min={new Date().toISOString().split("T")[0]}
+                  className="pl-10 h-12"
+                  min={
+                    new Date(new Date().setFullYear(new Date().getFullYear() - 5))
+                      .toISOString()
+                      .split("T")[0]
+                  }
                 />
               </div>
-
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-                <div className="mb-2 flex items-center space-x-2">
-                  <Badge variant="secondary">STUDENT</Badge>
-                  <span className="text-blue-800 text-sm dark:text-blue-200">Role Assignment</span>
-                </div>
-                <p className="text-blue-700 text-sm dark:text-blue-300">
-                  You will be assigned the Student role with access to rotation tracking, time
-                  logging, and educational resources.
-                </p>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                This helps us track your progress accurately.
+              </p>
             </div>
-          </div>
+          </motion.div>
         )
 
       case "complete":
         return (
-          <div className="space-y-6 text-center">
-            <CheckCircle className="mx-auto h-16 w-16 text-green-500" />
-            <div>
-              <h3 className="mb-3 font-semibold text-2xl text-green-900 dark:text-green-100">
-                Student Registration Complete!
-              </h3>
-              <p className="mb-4 text-gray-600 dark:text-gray-300">
-                Welcome to {selectedSchool?.name}! You're now enrolled in the{" "}
-                {selectedProgram?.name} program.
-              </p>
-              <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
-                <p className="text-green-800 text-sm dark:text-green-200">
-                  You can now access your student dashboard to view rotations, track clinical hours,
-                  and manage your academic progress.
-                </p>
+          <motion.div
+            key="complete"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col items-center text-center space-y-8 py-12"
+          >
+            <div className="relative">
+              <div className="absolute -inset-4 rounded-full bg-green-500 opacity-20 blur-xl animate-pulse"></div>
+              <div className="relative rounded-full bg-green-100 p-8 dark:bg-green-900/30">
+                <CheckCircle className="h-20 w-20 text-green-600 dark:text-green-400" />
               </div>
             </div>
-          </div>
+            <div className="space-y-4 max-w-md">
+              <h3 className="text-4xl font-bold tracking-tight">You're All Set!</h3>
+              <p className="text-muted-foreground text-lg">
+                Welcome to {selectedSchool?.name}. Your dashboard is ready and waiting for you.
+              </p>
+            </div>
+            <Card className="w-full max-w-md bg-muted/50 border-dashed">
+              <CardContent className="p-6 text-base text-muted-foreground">
+                You can now log clinical hours, view your rotation schedule, and track your
+                competencies.
+              </CardContent>
+            </Card>
+          </motion.div>
         )
 
       default:
@@ -643,48 +945,98 @@ export function StudentOnboarding({
   }
 
   const currentStepInfo = steps[currentStep]
+  const stepKeys = Object.keys(steps) as Step[]
+  const currentStepIndex = stepKeys.indexOf(currentStep)
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <div className="space-y-2">
-          <Progress value={currentStepInfo.progress} className="w-full" />
-          <div className="flex justify-between text-gray-500 text-sm">
-            <span>{currentStepInfo.description}</span>
-            <span>{currentStepInfo.progress}%</span>
+    <div className="min-h-screen flex items-center justify-center p-4 md:p-8 bg-background">
+      <Card className="w-full max-w-3xl shadow-2xl border-0 ring-1 ring-gray-200 dark:ring-gray-800 backdrop-blur-sm bg-background/80">
+        <CardHeader className="border-b bg-muted/30 pb-8 pt-8 px-8">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-2xl font-bold">{currentStepInfo.title}</CardTitle>
+                <CardDescription className="text-base">
+                  {currentStepInfo.description}
+                </CardDescription>
+              </div>
+              <Badge
+                variant="secondary"
+                className="px-4 py-1.5 text-sm font-medium bg-background/80 backdrop-blur-sm border shadow-sm"
+              >
+                Step {currentStepIndex + 1} of {stepKeys.length}
+              </Badge>
+            </div>
+
+            {/* Custom Stepper */}
+            <div className="relative">
+              <div className="absolute top-1/2 left-0 w-full h-1 bg-muted -translate-y-1/2 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-primary"
+                  initial={{ width: `${(currentStepIndex / (stepKeys.length - 1)) * 100}%` }}
+                  animate={{ width: `${(currentStepIndex / (stepKeys.length - 1)) * 100}%` }}
+                  transition={{ duration: 0.5, ease: "easeInOut" }}
+                />
+              </div>
+              <div className="relative flex justify-between">
+                {stepKeys.map((step, index) => {
+                  const isActive = index <= currentStepIndex
+                  const isCurrent = index === currentStepIndex
+                  return (
+                    <div key={step} className="flex flex-col items-center gap-2">
+                      <motion.div
+                        className={cn(
+                          "w-4 h-4 rounded-full border-2 transition-colors duration-300 z-10",
+                          isActive
+                            ? "bg-primary border-primary"
+                            : "bg-background border-muted-foreground/30",
+                          isCurrent && "ring-4 ring-primary/20"
+                        )}
+                        whileHover={{ scale: 1.2 }}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
-        </div>
-        <CardTitle className="flex items-center space-x-2">
-          <GraduationCap className="h-5 w-5 text-blue-500" />
-          <span>{currentStepInfo.title}</span>
-        </CardTitle>
-      </CardHeader>
+        </CardHeader>
 
-      <CardContent className="space-y-6">
-        {renderStepContent()}
+        <CardContent className="p-8 min-h-[500px] flex flex-col">
+          <div className="flex-1">
+            <AnimatePresence mode="wait">{renderStepContent()}</AnimatePresence>
+          </div>
 
-        <div className="flex justify-between">
           {currentStep !== "welcome" && currentStep !== "complete" && (
-            <Button variant="outline" onClick={handleBack} disabled={isPending}>
-              Back
-            </Button>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center justify-between pt-8 mt-8 border-t"
+            >
+              <Button
+                variant="ghost"
+                onClick={handleBack}
+                disabled={isPending}
+                className="gap-2 hover:bg-muted/50"
+              >
+                <ChevronLeft className="h-4 w-4" /> Back
+              </Button>
+              <Button
+                onClick={handleNext}
+                disabled={isPending}
+                className="gap-2 min-w-[140px] shadow-lg hover:shadow-xl transition-all"
+              >
+                {isPending
+                  ? "Processing..."
+                  : currentStep === "enrollment-confirmation"
+                    ? "Complete Setup"
+                    : "Continue"}
+                {!isPending && <ChevronRight className="h-4 w-4" />}
+              </Button>
+            </motion.div>
           )}
-
-          <div className="flex-1" />
-
-          <Button
-            onClick={handleNext}
-            disabled={isPending}
-            className="min-w-32 bg-blue-600 hover:bg-blue-700"
-          >
-            {isPending
-              ? "Processing..."
-              : currentStep === "complete"
-                ? "Go to Dashboard"
-                : "Continue"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

@@ -3,18 +3,22 @@ import { eq } from "drizzle-orm"
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "../../../../database/connection-pool"
 import { users, schools } from "../../../../database/schema"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { cacheIntegrationService } from "@/lib/cache-integration"
+import type { UserRole } from "@/types"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+  withErrorHandling,
+} from "../../../../lib/api-response"
 
-
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
+export const DELETE = withErrorHandling(
+  async (_request: NextRequest, { params }: { params: { id: string } }) => {
     const clerkUser = await currentUser()
 
     if (!clerkUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     // Get current user to check permissions
@@ -27,14 +31,14 @@ export async function DELETE(
       .limit(1)
 
     // Only super admins can delete users
-    if (!currentDbUser || currentDbUser.role !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    if (!currentDbUser || currentDbUser.role !== ("SUPER_ADMIN" as UserRole as UserRole)) {
+      return createErrorResponse("Insufficient permissions", HTTP_STATUS.FORBIDDEN)
     }
 
     const userIdToDelete = params.id
 
     if (!userIdToDelete) {
-      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
+      return createErrorResponse("User ID is required", HTTP_STATUS.BAD_REQUEST)
     }
 
     // Check if user exists and get their details
@@ -50,55 +54,48 @@ export async function DELETE(
       .limit(1)
 
     if (!userToDelete) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+      return createErrorResponse("User not found", HTTP_STATUS.NOT_FOUND)
     }
 
     if (!userToDelete.isActive) {
-      return NextResponse.json({ error: "User is already deleted" }, { status: 400 })
+      return createErrorResponse("User is already deleted", HTTP_STATUS.BAD_REQUEST)
     }
 
     // Prevent super admin from deleting themselves
     if (userIdToDelete === clerkUser.id) {
-      return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 })
+      return createErrorResponse("Cannot delete your own account", HTTP_STATUS.BAD_REQUEST)
     }
 
     // Start transaction for cascade deletion
     await db.transaction(async (tx) => {
       // If the user is a school admin, soft delete all associated schools
-      if (userToDelete.role === "SCHOOL_ADMIN" && userToDelete.schoolId) {
+      if (userToDelete.role === ("SCHOOL_ADMIN" as UserRole as UserRole) && userToDelete.schoolId) {
         await tx
           .update(schools)
           .set({ isActive: false })
           .where(eq(schools.id, userToDelete.schoolId))
       }
 
-      // Also soft delete any schools where this user is the primary contact
+      // Also soft delete any schools where this user is the admin
       await tx
         .update(schools)
         .set({ isActive: false })
-        .where(eq(schools.primaryContactId, userIdToDelete))
+        .where(eq(schools.adminId, userIdToDelete))
 
       // Soft delete the user
-      await tx
-        .update(users)
-        .set({ isActive: false })
-        .where(eq(users.id, userIdToDelete))
+      await tx.update(users).set({ isActive: false }).where(eq(users.id, userIdToDelete))
     })
 
-    return NextResponse.json({
-      success: true,
-      message: "User and associated schools have been successfully deleted",
-    })
-  } catch (error) {
-    console.error("Error deleting user:", error)
-    
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateUserCache()
+      await cacheIntegrationService.invalidateByTags(['user'])
     } catch (cacheError) {
-      console.warn('Cache invalidation error in users/[id]/route.ts:', cacheError)
+      console.warn("Cache invalidation error in users/[id]/route.ts:", cacheError)
     }
-    
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+
+    return createSuccessResponse(
+      { userId: userIdToDelete },
+      "User and associated schools have been successfully deleted"
+    )
   }
-}
+)

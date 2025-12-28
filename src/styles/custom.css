@@ -20,22 +20,6 @@ button:not(:disabled),
   cursor: pointer;
 }
 
-:root {
-	--warning: hsl(38 92% 50%);
-	--warning-foreground: hsl(48 96% 89%);
-}
-
-.dark {
-	--warning: hsl(48 96% 89%);
-	--warning-foreground: hsl(38 92% 50%);
-}
-
-@theme inline {
-	--color-warning: var(--warning);
-	--color-warning-foreground: var(--warning-foreground);
-}
-
-
 .shadow-light {
   box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.085);
 }
@@ -56,18 +40,22 @@ button:not(:disabled),
   from {
     transform: translateX(0%);
   }
+
   to {
     transform: translateX(-100%);
   }
 }
+
 @keyframes marquee-vertical {
   from {
     transform: translateY(0%);
   }
+
   to {
     transform: translateY(-100%);
   }
 }
+
 .animate-marquee {
   animation: marquee var(--duration) linear infinite;
 }
@@ -77,12 +65,13 @@ button:not(:disabled),
 }
 
 ::selection {
-  background: var(--primary);
+  background: hsl(var(--primary));
   color: black;
   -webkit-text-fill-color: black;
 }
+
 ::-moz-selection {
-  background: var(--primary);
+  background: hsl(var(--primary));
   color: black;
   -webkit-text-fill-color: black;
 }

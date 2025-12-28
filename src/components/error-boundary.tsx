@@ -23,10 +23,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return {
-      hasError: true,
-      error,
-    }
+    return { hasError: true, error }
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
@@ -53,7 +50,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // For chunk loading errors, reload the page
     if (
       this.state.error?.name === "ChunkLoadError" ||
-      this.state.error?.message.includes("Loading chunk")
+      this.state.error?.message?.includes("Loading chunk")
     ) {
       window.location.reload()
     }
@@ -63,11 +60,16 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     if (this.state.hasError) {
       const { error } = this.state
       const isChunkError =
-        error?.name === "ChunkLoadError" || error?.message.includes("Loading chunk")
+        error?.name === "ChunkLoadError" || error?.message?.includes("Loading chunk")
 
       if (this.props.fallback) {
         const FallbackComponent = this.props.fallback
-        return <FallbackComponent error={error || new Error('Unknown error')} retry={this.handleRetry} />
+        return (
+          <FallbackComponent
+            error={error || new Error("Unknown error")}
+            retry={this.handleRetry}
+          />
+        )
       }
 
       return (
@@ -75,7 +77,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
           <Card className="w-full max-w-md">
             <CardHeader className="text-center">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-                <AlertTriangle className="h-6 w-6 text-red-600" />
+                <AlertTriangle className="h-6 w-6 text-error" />
               </div>
               <CardTitle className="font-semibold text-xl">
                 {isChunkError ? "Loading Error" : "Something went wrong"}
@@ -86,7 +88,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
                   : "An unexpected error occurred. Please try refreshing the page."}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="gap-4">
               {process.env.NODE_ENV === "development" && error && (
                 <div className="rounded-md bg-gray-50 p-3">
                   <p className="font-medium text-gray-900 text-sm">Error Details:</p>
@@ -94,7 +96,12 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
                 </div>
               )}
               <div className="flex gap-2">
-                <Button type="button" onClick={this.handleRetry} className="flex-1" variant="default">
+                <Button
+                  type="button"
+                  onClick={this.handleRetry}
+                  className="flex-1"
+                  variant="default"
+                >
                   <RefreshCw className="mr-2 h-4 w-4" />
                   {isChunkError ? "Reload Page" : "Try Again"}
                 </Button>
@@ -125,7 +132,10 @@ export default ErrorBoundary
 export const useChunkErrorHandler = () => {
   React.useEffect(() => {
     const handleChunkError = (event: ErrorEvent) => {
-      if (event.error?.name === "ChunkLoadError" || event.message?.includes("Loading chunk")) {
+      if (
+        event.error?.name === "ChunkLoadError" ||
+        event.message?.includes("Loading chunk")
+      ) {
         console.error("Chunk loading error detected, reloading page...")
         window.location.reload()
       }

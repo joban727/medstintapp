@@ -3,6 +3,23 @@ import { nanoid } from "nanoid"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "../../../../../database/connection-pool"
+
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
 import {
   auditLogs,
   rotations,
@@ -11,8 +28,16 @@ import {
   users,
 } from "../../../../../database/schema"
 import { getCurrentUser } from "../../../../../lib/auth-clerk"
-import { cacheIntegrationService } from '@/lib/cache-integration'
-
+import { cacheIntegrationService } from "@/lib/cache-integration"
+import type { UserRole } from "@/types"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  createValidationErrorResponse,
+  withErrorHandlingAsync,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+} from "@/lib/api-response"
 
 // Validation schema for applying corrections
 const applySchema = z.object({
@@ -24,16 +49,31 @@ const applySchema = z.object({
 
 // POST /api/timecard-corrections/[id]/apply - Apply an approved timecard correction
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  try {
+  return withErrorHandlingAsync(async () => {
+    const { id } = await params
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     const correctionId = id
     const body = await request.json()
-    const validatedData = applySchema.parse(body)
+    let validatedData
+    try {
+      validatedData = applySchema.parse(body)
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return createValidationErrorResponse(
+          ERROR_MESSAGES.VALIDATION_ERROR,
+          error.issues.map((issue) => ({
+            field: issue.path.join("."),
+            code: issue.code,
+            details: issue.message,
+          }))
+        )
+      }
+      throw error
+    }
 
     // Get the correction
     const [correction] = await db
@@ -43,28 +83,31 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .limit(1)
 
     if (!correction) {
-      return NextResponse.json({ error: "Correction not found" }, { status: 404 })
+      return createErrorResponse("Correction not found", HTTP_STATUS.NOT_FOUND)
     }
 
     // Check if correction is approved
     if (correction.status !== "APPROVED") {
-      return NextResponse.json(
-        { error: "Only approved corrections can be applied" },
-        { status: 409 }
-      )
+      return createErrorResponse("Only approved corrections can be applied", HTTP_STATUS.CONFLICT)
     }
 
     // Check if correction has already been applied
     if (correction.appliedBy && correction.appliedAt) {
-      return NextResponse.json({ error: "Correction has already been applied" }, { status: 409 })
+      return createErrorResponse("Correction has already been applied", HTTP_STATUS.CONFLICT)
     }
 
     // Check if user has permission to apply corrections
     let hasPermission = false
 
-    if (["SCHOOL_ADMIN", "CLINICAL_SUPERVISOR", "SUPER_ADMIN"].includes(user.role)) {
+    if (
+      [
+        "SCHOOL_ADMIN" as UserRole,
+        "CLINICAL_SUPERVISOR" as UserRole,
+        "SUPER_ADMIN" as UserRole,
+      ].includes(user.role)
+    ) {
       hasPermission = true
-    } else if (user.role === "CLINICAL_PRECEPTOR") {
+    } else if (user.role === ("CLINICAL_PRECEPTOR" as UserRole as UserRole as UserRole)) {
       // Check if the preceptor is assigned to the rotation
       const [rotation] = await db
         .select()
@@ -78,9 +121,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     if (!hasPermission) {
-      return NextResponse.json(
-        { error: "You don't have permission to apply this correction" },
-        { status: 403 }
+      return createErrorResponse(
+        "You don't have permission to apply this correction",
+        HTTP_STATUS.FORBIDDEN
       )
     }
 
@@ -92,7 +135,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .limit(1)
 
     if (!originalRecord) {
-      return NextResponse.json({ error: "Original time record not found" }, { status: 404 })
+      return createErrorResponse("Original time record not found", HTTP_STATUS.NOT_FOUND)
     }
 
     // Parse requested changes
@@ -100,7 +143,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     try {
       requestedChanges = JSON.parse(correction.requestedChanges)
     } catch (_error) {
-      return NextResponse.json({ error: "Invalid correction data format" }, { status: 400 })
+      return createErrorResponse("Invalid correction data format", HTTP_STATUS.BAD_REQUEST)
     }
 
     // Store original data before making changes (for audit trail)
@@ -157,9 +200,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (clockIn && clockOut) {
         const diffMs = clockOut.getTime() - clockIn.getTime()
         if (diffMs < 0) {
-          return NextResponse.json(
-            { error: "Clock out time cannot be before clock in time" },
-            { status: 400 }
+          return createErrorResponse(
+            "Clock out time cannot be before clock in time",
+            HTTP_STATUS.BAD_REQUEST
           )
         }
         const diffHours = diffMs / (1000 * 60 * 60)
@@ -169,9 +212,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Validate the changes make sense
     if (updateFields.totalHours && Number.parseFloat(updateFields.totalHours) > 24) {
-      return NextResponse.json(
-        { error: "Total hours cannot exceed 24 hours per day" },
-        { status: 400 }
+      return createErrorResponse(
+        "Total hours cannot exceed 24 hours per day",
+        HTTP_STATUS.BAD_REQUEST
       )
     }
 
@@ -222,7 +265,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         createdAt: now,
       })
 
-      return NextResponse.json({
+      return createSuccessResponse({
         message: "Timecard correction applied successfully",
         appliedChanges: requestedChanges,
         appliedAt: now.toISOString(),
@@ -230,199 +273,181 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       })
     } catch (error) {
       console.error("Error applying correction:", error)
-      return NextResponse.json({ error: "Failed to apply correction changes" }, { status: 500 })
-    }
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation failed", details: error.issues },
-        { status: 400 }
+      return createErrorResponse(
+        "Failed to apply correction changes",
+        HTTP_STATUS.INTERNAL_SERVER_ERROR
       )
     }
-
-    console.error("Error processing correction application:", error)
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateAllCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in timecard-corrections/[id]/apply/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to process correction application" }, { status: 500 })
-  }
+  })
 }
 
 // GET /api/timecard-corrections/[id]/apply - Get correction application preview
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
+  return withErrorHandlingAsync(async () => {
     // Try to get cached response
     const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:timecard-corrections/[id]/apply/route.ts',
+      "api:timecard-corrections/[id]/apply/route.ts",
       async () => {
         // Original function logic will be wrapped here
         return await executeOriginalLogic()
       },
       300 // 5 minutes TTL
     )
-    
+
     if (cached) {
       return cached
     }
-  } catch (cacheError) {
-    console.warn('Cache error in timecard-corrections/[id]/apply/route.ts:', cacheError)
-    // Continue with original logic if cache fails
-  }
-  
-  async function executeOriginalLogic() {
 
-  const { id } = await params
-  try {
-    const user = await getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    async function executeOriginalLogic() {
+      const { id } = await params
+      const user = await getCurrentUser()
+      if (!user) {
+        return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
+      }
 
-    const correctionId = id
+      const correctionId = id
 
-    // Get the correction with related data
-    const [correctionData] = await db
-      .select({
-        // Correction data
-        id: timecardCorrections.id,
-        originalTimeRecordId: timecardCorrections.originalTimeRecordId,
-        studentId: timecardCorrections.studentId,
-        rotationId: timecardCorrections.rotationId,
-        correctionType: timecardCorrections.correctionType,
-        requestedChanges: timecardCorrections.requestedChanges,
-        reason: timecardCorrections.reason,
-        studentNotes: timecardCorrections.studentNotes,
-        status: timecardCorrections.status,
-        reviewedBy: timecardCorrections.reviewedBy,
-        reviewedAt: timecardCorrections.reviewedAt,
-        reviewerNotes: timecardCorrections.reviewerNotes,
-        appliedBy: timecardCorrections.appliedBy,
-        appliedAt: timecardCorrections.appliedAt,
-        priority: timecardCorrections.priority,
-        dueDate: timecardCorrections.dueDate,
-        createdAt: timecardCorrections.createdAt,
-        // Student data
-        studentName: users.name,
-        studentEmail: users.email,
-        // Original time record data
-        originalRecordDate: timeRecords.date,
-        originalRecordClockIn: timeRecords.clockIn,
-        originalRecordClockOut: timeRecords.clockOut,
-        originalRecordTotalHours: timeRecords.totalHours,
-        originalRecordActivities: timeRecords.activities,
-        originalRecordNotes: timeRecords.notes,
-        originalRecordStatus: timeRecords.status,
-      })
-      .from(timecardCorrections)
-      .leftJoin(users, eq(timecardCorrections.studentId, users.id))
-      .leftJoin(timeRecords, eq(timecardCorrections.originalTimeRecordId, timeRecords.id))
-      .where(eq(timecardCorrections.id, correctionId))
-      .limit(1)
-
-    if (!correctionData) {
-      return NextResponse.json({ error: "Correction not found" }, { status: 404 })
-    }
-
-    // Verify user has permission to view this correction
-    let hasPermission = false
-
-    if (["SCHOOL_ADMIN", "CLINICAL_SUPERVISOR", "SUPER_ADMIN"].includes(user.role)) {
-      hasPermission = true
-    } else if (user.role === "CLINICAL_PRECEPTOR") {
-      // Check if the preceptor is assigned to the rotation
-      const [rotation] = await db
-        .select()
-        .from(rotations)
-        .where(and(eq(rotations.id, correctionData.rotationId), eq(rotations.preceptorId, user.id)))
+      // Get the correction with related data
+      const [correctionData] = await db
+        .select({
+          // Correction data
+          id: timecardCorrections.id,
+          originalTimeRecordId: timecardCorrections.originalTimeRecordId,
+          studentId: timecardCorrections.studentId,
+          rotationId: timecardCorrections.rotationId,
+          correctionType: timecardCorrections.correctionType,
+          requestedChanges: timecardCorrections.requestedChanges,
+          reason: timecardCorrections.reason,
+          studentNotes: timecardCorrections.studentNotes,
+          status: timecardCorrections.status,
+          reviewedBy: timecardCorrections.reviewedBy,
+          reviewedAt: timecardCorrections.reviewedAt,
+          reviewerNotes: timecardCorrections.reviewerNotes,
+          appliedBy: timecardCorrections.appliedBy,
+          appliedAt: timecardCorrections.appliedAt,
+          priority: timecardCorrections.priority,
+          dueDate: timecardCorrections.dueDate,
+          createdAt: timecardCorrections.createdAt,
+          // Student data
+          studentName: users.name,
+          studentEmail: users.email,
+          // Original time record data
+          originalRecordDate: timeRecords.date,
+          originalRecordClockIn: timeRecords.clockIn,
+          originalRecordClockOut: timeRecords.clockOut,
+          originalRecordTotalHours: timeRecords.totalHours,
+          originalRecordActivities: timeRecords.activities,
+          originalRecordNotes: timeRecords.notes,
+          originalRecordStatus: timeRecords.status,
+        })
+        .from(timecardCorrections)
+        .leftJoin(users, eq(timecardCorrections.studentId, users.id))
+        .leftJoin(timeRecords, eq(timecardCorrections.originalTimeRecordId, timeRecords.id))
+        .where(eq(timecardCorrections.id, correctionId))
         .limit(1)
 
-      if (rotation) {
+      if (!correctionData) {
+        return createErrorResponse("Correction not found", HTTP_STATUS.NOT_FOUND)
+      }
+
+      // Verify user has permission to view this correction
+      let hasPermission = false
+
+      if (
+        [
+          "SCHOOL_ADMIN" as UserRole,
+          "CLINICAL_SUPERVISOR" as UserRole,
+          "SUPER_ADMIN" as UserRole,
+        ].includes(user.role)
+      ) {
         hasPermission = true
+      } else if (user.role === ("CLINICAL_PRECEPTOR" as UserRole as UserRole as UserRole)) {
+        // Check if the preceptor is assigned to the rotation
+        const [rotation] = await db
+          .select()
+          .from(rotations)
+          .where(
+            and(eq(rotations.id, correctionData.rotationId), eq(rotations.preceptorId, user.id))
+          )
+          .limit(1)
+
+        if (rotation) {
+          hasPermission = true
+        }
       }
-    }
 
-    if (!hasPermission) {
-      return NextResponse.json(
-        { error: "You don't have permission to view this correction" },
-        { status: 403 }
-      )
-    }
-
-    // Parse requested changes
-    let requestedChanges: Record<string, unknown> = {}
-    try {
-      requestedChanges = JSON.parse(correctionData.requestedChanges)
-    } catch (error) {
-      console.error("Error parsing requested changes:", error)
-    }
-
-    // Calculate preview of final data after applying changes
-    const originalData = {
-      date: correctionData.originalRecordDate,
-      clockIn: correctionData.originalRecordClockIn,
-      clockOut: correctionData.originalRecordClockOut,
-      totalHours: correctionData.originalRecordTotalHours,
-      activities: correctionData.originalRecordActivities,
-      notes: correctionData.originalRecordNotes,
-      status: correctionData.originalRecordStatus,
-    }
-
-    const previewData = { ...originalData }
-
-    // Apply requested changes to preview
-    if (requestedChanges.clockIn) {
-      previewData.clockIn = new Date(requestedChanges.clockIn as string)
-    }
-    if (requestedChanges.clockOut) {
-      previewData.clockOut = new Date(requestedChanges.clockOut as string)
-    }
-    if (requestedChanges.activities !== undefined) {
-      previewData.activities = requestedChanges.activities as string
-    }
-    if (requestedChanges.notes !== undefined) {
-      previewData.notes = requestedChanges.notes as string
-    }
-    if (requestedChanges.date) {
-      previewData.date = new Date(requestedChanges.date as string)
-    }
-
-    // Recalculate total hours for preview
-    if (requestedChanges.clockIn || requestedChanges.clockOut) {
-      const clockIn = requestedChanges.clockIn
-        ? new Date(requestedChanges.clockIn as string)
-        : correctionData.originalRecordClockIn
-      const clockOut = requestedChanges.clockOut
-        ? new Date(requestedChanges.clockOut as string)
-        : correctionData.originalRecordClockOut
-
-      if (clockIn && clockOut) {
-        const diffMs = clockOut.getTime() - clockIn.getTime()
-        const diffHours = diffMs / (1000 * 60 * 60)
-        previewData.totalHours = String(Math.max(0, Math.round(diffHours * 100) / 100))
+      if (!hasPermission) {
+        return createErrorResponse(
+          "You don't have permission to view this correction",
+          HTTP_STATUS.FORBIDDEN
+        )
       }
+
+      // Parse requested changes
+      let requestedChanges: Record<string, unknown> = {}
+      try {
+        requestedChanges = JSON.parse(correctionData.requestedChanges)
+      } catch (error) {
+        console.error("Error parsing requested changes:", error)
+      }
+
+      // Calculate preview of final data after applying changes
+      const originalData = {
+        date: correctionData.originalRecordDate,
+        clockIn: correctionData.originalRecordClockIn,
+        clockOut: correctionData.originalRecordClockOut,
+        totalHours: correctionData.originalRecordTotalHours,
+        activities: correctionData.originalRecordActivities,
+        notes: correctionData.originalRecordNotes,
+        status: correctionData.originalRecordStatus,
+      }
+
+      const previewData = { ...originalData }
+
+      // Apply requested changes to preview
+      if (requestedChanges.clockIn) {
+        previewData.clockIn = new Date(requestedChanges.clockIn as string)
+      }
+      if (requestedChanges.clockOut) {
+        previewData.clockOut = new Date(requestedChanges.clockOut as string)
+      }
+      if (requestedChanges.activities !== undefined) {
+        previewData.activities = requestedChanges.activities as string
+      }
+      if (requestedChanges.notes !== undefined) {
+        previewData.notes = requestedChanges.notes as string
+      }
+      if (requestedChanges.date) {
+        previewData.date = new Date(requestedChanges.date as string)
+      }
+
+      // Recalculate total hours for preview
+      if (requestedChanges.clockIn || requestedChanges.clockOut) {
+        const clockIn = requestedChanges.clockIn
+          ? new Date(requestedChanges.clockIn as string)
+          : correctionData.originalRecordClockIn
+        const clockOut = requestedChanges.clockOut
+          ? new Date(requestedChanges.clockOut as string)
+          : correctionData.originalRecordClockOut
+
+        if (clockIn && clockOut) {
+          const diffMs = clockOut.getTime() - clockIn.getTime()
+          const diffHours = diffMs / (1000 * 60 * 60)
+          previewData.totalHours = String(Math.max(0, Math.round(diffHours * 100) / 100))
+        }
+      }
+
+      return createSuccessResponse({
+        correction: {
+          ...correctionData,
+          requestedChanges,
+        },
+        originalData,
+        previewData,
+        canApply: correctionData.status === "APPROVED" && !correctionData.appliedBy,
+      })
     }
 
-    return NextResponse.json({
-      correction: {
-        ...correctionData,
-        requestedChanges,
-      },
-      originalData,
-      previewData,
-      canApply: correctionData.status === "APPROVED" && !correctionData.appliedBy,
-    })
-  } catch (error) {
-    console.error("Error fetching correction application preview:", error)
-    return NextResponse.json(
-      { error: "Failed to fetch correction application preview" },
-      { status: 500 }
-    )
-  }
-
-  }
+    return await executeOriginalLogic()
+  })
 }

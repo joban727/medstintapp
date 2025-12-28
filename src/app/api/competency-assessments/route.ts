@@ -5,9 +5,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "../../../database/connection-pool"
 import { competencies, competencySubmissions, users } from "../../../database/schema"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { cacheIntegrationService } from "@/lib/cache-integration"
 
-
+import type { UserRole } from "@/types"
 // Validation schemas
 const assessmentQuerySchema = z.object({
   userId: z.string().optional(),
@@ -71,16 +71,19 @@ async function checkPermissions(userId: string, targetUserId?: string) {
   }
 
   const userRole = user[0].role
-  const isAdmin = ["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(userRole)
-  const isSupervisor = ["CLINICAL_SUPERVISOR", "CLINICAL_PRECEPTOR"].includes(userRole)
-  const isStudent = userRole === "STUDENT"
+  const isAdmin = userRole !== null && ["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(userRole as UserRole)
+  const isSupervisor = userRole !== null && [
+    "CLINICAL_SUPERVISOR" as UserRole,
+    "CLINICAL_PRECEPTOR" as UserRole,
+  ].includes(userRole as UserRole)
+  const isStudent = userRole === ("STUDENT" as UserRole)
   const isOwnData = userId === targetUserId
 
   return {
     canView: isAdmin || isSupervisor || (isStudent && isOwnData),
     canAssess: isAdmin || isSupervisor,
     canModify: isAdmin || isSupervisor,
-    userRole,
+    userRole: userRole || "STUDENT",
     schoolId: user[0].schoolId,
   }
 }
@@ -95,126 +98,124 @@ export async function GET(request: NextRequest) {
   try {
     // Try to get cached response
     const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:competency-assessments/route.ts',
+      "api:competency-assessments/route.ts",
       async () => {
         // Original function logic will be wrapped here
         return await executeOriginalLogic()
       },
       300 // 5 minutes TTL
     )
-    
+
     if (cached) {
       return cached
     }
   } catch (cacheError) {
-    console.warn('Cache error in competency-assessments/route.ts:', cacheError)
+    console.warn("Cache error in competency-assessments/route.ts:", cacheError)
     // Continue with original logic if cache fails
   }
-  
+
   async function executeOriginalLogic() {
+    try {
+      const { userId } = await auth()
+      if (!userId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
 
-  try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+      const { searchParams } = new URL(request.url)
+      const query = assessmentQuerySchema.parse(Object.fromEntries(searchParams))
 
-    const { searchParams } = new URL(request.url)
-    const query = assessmentQuerySchema.parse(Object.fromEntries(searchParams))
+      // Check permissions
+      const permissions = await checkPermissions(userId, query.userId)
+      if (!permissions.canView) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      }
 
-    // Check permissions
-    const permissions = await checkPermissions(userId, query.userId)
-    if (!permissions.canView) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+      // Build query conditions
+      const conditions = []
 
-    // Build query conditions
-    const conditions = []
+      if (query.userId) {
+        conditions.push(eq(competencySubmissions.studentId, query.userId))
+      } else if (permissions.userRole === ("STUDENT" as UserRole)) {
+        // Students can only see their own submissions
+        conditions.push(eq(competencySubmissions.studentId, userId))
+      } else if (permissions.schoolId && !permissions.userRole.includes("SUPER_ADMIN")) {
+        // School-level filtering for non-super admins
+        conditions.push(eq(users.schoolId, permissions.schoolId))
+      }
 
-    if (query.userId) {
-      conditions.push(eq(competencySubmissions.studentId, query.userId))
-    } else if (permissions.userRole === "STUDENT") {
-      // Students can only see their own submissions
-      conditions.push(eq(competencySubmissions.studentId, userId))
-    } else if (permissions.schoolId && !permissions.userRole.includes("SUPER_ADMIN")) {
-      // School-level filtering for non-super admins
-      conditions.push(eq(users.schoolId, permissions.schoolId))
-    }
+      if (query.competencyId) {
+        conditions.push(eq(competencySubmissions.competencyId, query.competencyId))
+      }
 
-    if (query.competencyId) {
-      conditions.push(eq(competencySubmissions.competencyId, query.competencyId))
-    }
+      // Note: assignmentId field doesn't exist in competencySubmissions schema
+      // Removed assignmentId filter
 
-    // Note: assignmentId field doesn't exist in competencySubmissions schema
-    // Removed assignmentId filter
+      if (query.status) {
+        conditions.push(eq(competencySubmissions.status, query.status))
+      }
 
-    if (query.status) {
-      conditions.push(eq(competencySubmissions.status, query.status))
-    }
+      if (query.assessorId) {
+        conditions.push(eq(competencySubmissions.reviewedBy, query.assessorId))
+      }
 
-    if (query.assessorId) {
-      conditions.push(eq(competencySubmissions.reviewedBy, query.assessorId))
-    }
+      // Execute query with joins
+      const results = await db
+        .select({
+          id: competencySubmissions.id,
+          studentId: competencySubmissions.studentId,
+          competencyId: competencySubmissions.competencyId,
+          assessmentId: competencySubmissions.assessmentId,
+          evaluationId: competencySubmissions.evaluationId,
+          rotationId: competencySubmissions.rotationId,
+          reviewedBy: competencySubmissions.reviewedBy,
+          status: competencySubmissions.status,
+          submissionType: competencySubmissions.submissionType,
+          evidence: competencySubmissions.evidence,
+          notes: competencySubmissions.notes,
+          feedback: competencySubmissions.feedback,
+          reviewedAt: competencySubmissions.reviewedAt,
+          submittedAt: competencySubmissions.submittedAt,
+          dueDate: competencySubmissions.dueDate,
+          completionDate: competencySubmissions.completionDate,
+          metadata: competencySubmissions.metadata,
+          createdAt: competencySubmissions.createdAt,
+          updatedAt: competencySubmissions.updatedAt,
+          // User info
+          userName: users.name,
+          userEmail: users.email,
+          // Competency info
+          competencyName: competencies.name,
+          competencyCategory: competencies.category,
+          competencyDescription: competencies.description,
+        })
+        .from(competencySubmissions)
+        .leftJoin(users, eq(competencySubmissions.studentId, users.id))
+        .leftJoin(competencies, eq(competencySubmissions.competencyId, competencies.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(competencySubmissions.submittedAt))
+        .limit(query.limit)
+        .offset(query.offset)
 
-    // Execute query with joins
-    const results = await db
-      .select({
-        id: competencySubmissions.id,
-        studentId: competencySubmissions.studentId,
-        competencyId: competencySubmissions.competencyId,
-        assessmentId: competencySubmissions.assessmentId,
-        evaluationId: competencySubmissions.evaluationId,
-        rotationId: competencySubmissions.rotationId,
-        reviewedBy: competencySubmissions.reviewedBy,
-        status: competencySubmissions.status,
-        submissionType: competencySubmissions.submissionType,
-        evidence: competencySubmissions.evidence,
-        notes: competencySubmissions.notes,
-        feedback: competencySubmissions.feedback,
-        reviewedAt: competencySubmissions.reviewedAt,
-        submittedAt: competencySubmissions.submittedAt,
-        dueDate: competencySubmissions.dueDate,
-        completionDate: competencySubmissions.completionDate,
-        metadata: competencySubmissions.metadata,
-        createdAt: competencySubmissions.createdAt,
-        updatedAt: competencySubmissions.updatedAt,
-        // User info
-        userName: users.name,
-        userEmail: users.email,
-        // Competency info
-        competencyName: competencies.name,
-        competencyCategory: competencies.category,
-        competencyDescription: competencies.description,
+      // Get total count for pagination
+      const totalCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(competencySubmissions)
+        .leftJoin(users, eq(competencySubmissions.studentId, users.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+
+      return NextResponse.json({
+        data: results,
+        pagination: {
+          total: totalCount[0]?.count || 0,
+          limit: query.limit,
+          offset: query.offset,
+          hasMore: query.offset + query.limit < (totalCount[0]?.count || 0),
+        },
       })
-      .from(competencySubmissions)
-      .leftJoin(users, eq(competencySubmissions.studentId, users.id))
-      .leftJoin(competencies, eq(competencySubmissions.competencyId, competencies.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(competencySubmissions.submittedAt))
-      .limit(query.limit)
-      .offset(query.offset)
-
-    // Get total count for pagination
-    const totalCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(competencySubmissions)
-      .leftJoin(users, eq(competencySubmissions.studentId, users.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-
-    return NextResponse.json({
-      data: results,
-      pagination: {
-        total: totalCount[0]?.count || 0,
-        limit: query.limit,
-        offset: query.offset,
-        hasMore: query.offset + query.limit < (totalCount[0]?.count || 0),
-      },
-    })
-  } catch (error) {
-    console.error("Error fetching assessments:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-
+    } catch (error) {
+      console.error("Error fetching assessments:", error)
+      return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    }
   }
 }
 
@@ -296,14 +297,14 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    
+
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateCompetencyCache()
+      await cacheIntegrationService.invalidateByTags(['competency'])
     } catch (cacheError) {
-      console.warn('Cache invalidation error in competency-assessments/route.ts:', cacheError)
+      console.warn("Cache invalidation error in competency-assessments/route.ts:", cacheError)
     }
-    
+
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -377,14 +378,15 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       )
     }
-    
+
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateCompetencyCache()
+      await cacheIntegrationService.invalidateByTags(['competency'])
     } catch (cacheError) {
-      console.warn('Cache invalidation error in competency-assessments/route.ts:', cacheError)
+      console.warn("Cache invalidation error in competency-assessments/route.ts:", cacheError)
     }
-    
+
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+

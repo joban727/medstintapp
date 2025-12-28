@@ -1,9 +1,9 @@
 import { auth } from "@clerk/nextjs/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { cacheIntegrationService } from "@/lib/cache-integration"
 
-
+import type { UserRole } from "@/types"
 interface SessionMetadata {
   role?: string
   schoolId?: string
@@ -74,55 +74,53 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   try {
     // Try to get cached response
     const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:reports/scheduled/[id]/route.ts',
+      "api:reports/scheduled/[id]/route.ts",
       async () => {
         // Original function logic will be wrapped here
         return await executeOriginalLogic()
       },
       300 // 5 minutes TTL
     )
-    
+
     if (cached) {
       return cached
     }
   } catch (cacheError) {
-    console.warn('Cache error in reports/scheduled/[id]/route.ts:', cacheError)
+    console.warn("Cache error in reports/scheduled/[id]/route.ts:", cacheError)
     // Continue with original logic if cache fails
   }
-  
+
   async function executeOriginalLogic() {
+    try {
+      const { userId, sessionClaims } = await auth()
 
-  try {
-    const { userId, sessionClaims } = await auth()
+      if (!userId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
 
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      const userRole = (sessionClaims?.metadata as SessionMetadata)?.role as string
+
+      if (!checkSchedulePermissions(userRole)) {
+        return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+      }
+
+      const { id } = await params
+      const report = scheduledReports.find((r) => r.id === id)
+
+      if (!report) {
+        return NextResponse.json({ error: "Report not found" }, { status: 404 })
+      }
+
+      // Check if user can access this report
+      if (userRole !== ("SCHOOL_ADMIN" as UserRole) && report.createdBy !== userId) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 })
+      }
+
+      return NextResponse.json({ report })
+    } catch (error) {
+      console.error("Error fetching scheduled report:", error)
+      return NextResponse.json({ error: "Failed to fetch scheduled report" }, { status: 500 })
     }
-
-    const userRole = (sessionClaims?.metadata as SessionMetadata)?.role as string
-
-    if (!checkSchedulePermissions(userRole)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    const { id } = await params
-    const report = scheduledReports.find((r) => r.id === id)
-
-    if (!report) {
-      return NextResponse.json({ error: "Report not found" }, { status: 404 })
-    }
-
-    // Check if user can access this report
-    if (userRole !== "SCHOOL_ADMIN" && report.createdBy !== userId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 })
-    }
-
-    return NextResponse.json({ report })
-  } catch (error) {
-    console.error("Error fetching scheduled report:", error)
-    return NextResponse.json({ error: "Failed to fetch scheduled report" }, { status: 500 })
-  }
-
   }
 }
 
@@ -150,7 +148,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const existingReport = scheduledReports[reportIndex]
 
     // Check if user can modify this report
-    if (userRole !== "SCHOOL_ADMIN" && existingReport.createdBy !== userId) {
+    if (userRole !== ("SCHOOL_ADMIN" as UserRole) && existingReport.createdBy !== userId) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
@@ -182,14 +180,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Invalid data", details: error.issues }, { status: 400 })
     }
 
-    
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateReportCache()
+      await cacheIntegrationService.invalidateByTags(["reports"])
     } catch (cacheError) {
-      console.warn('Cache invalidation error in reports/scheduled/[id]/route.ts:', cacheError)
+      console.warn("Cache invalidation error in reports/scheduled/[id]/route.ts:", cacheError)
     }
-    
+
     return NextResponse.json({ error: "Failed to update scheduled report" }, { status: 500 })
   }
 }
@@ -221,7 +218,7 @@ export async function DELETE(
     const existingReport = scheduledReports[reportIndex]
 
     // Check if user can delete this report
-    if (userRole !== "SCHOOL_ADMIN" && existingReport.createdBy !== userId) {
+    if (userRole !== ("SCHOOL_ADMIN" as UserRole) && existingReport.createdBy !== userId) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
@@ -233,14 +230,14 @@ export async function DELETE(
     })
   } catch (error) {
     console.error("Error deleting scheduled report:", error)
-    
+
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateReportCache()
+      await cacheIntegrationService.invalidateByTags(["reports"])
     } catch (cacheError) {
-      console.warn('Cache invalidation error in reports/scheduled/[id]/route.ts:', cacheError)
+      console.warn("Cache invalidation error in reports/scheduled/[id]/route.ts:", cacheError)
     }
-    
+
     return NextResponse.json({ error: "Failed to delete scheduled report" }, { status: 500 })
   }
 }

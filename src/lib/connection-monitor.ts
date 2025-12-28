@@ -65,7 +65,13 @@ interface QueryMetrics {
 }
 
 interface AlertEvent {
-  type: "high_utilization" | "long_wait_time" | "high_error_rate" | "slow_query" | "connection_leak" | "neon_termination"
+  type:
+  | "high_utilization"
+  | "long_wait_time"
+  | "high_error_rate"
+  | "slow_query"
+  | "connection_leak"
+  | "neon_termination"
   severity: "warning" | "critical"
   message: string
   timestamp: Date
@@ -205,11 +211,14 @@ export class ConnectionPoolMonitor extends EventEmitter {
       console.log("Database connection established")
     })
 
-    pool.on("error", (err) => {
+    pool.on("error", (err: Error & { message?: string }) => {
       console.error("Database pool error:", err)
-      
+
       // Handle Neon-specific connection termination errors
-      if (err.message?.includes("57P01") || err.message?.includes("terminating connection due to administrator command")) {
+      if (
+        err.message?.includes("57P01") ||
+        err.message?.includes("terminating connection due to administrator command")
+      ) {
         this.createAlert(
           "neon_termination",
           "warning",
@@ -217,11 +226,11 @@ export class ConnectionPoolMonitor extends EventEmitter {
           undefined,
           this.getCurrentMetrics() || undefined
         )
-        
+
         // Log for debugging
         console.warn("Neon connection termination detected (57P01) - this is expected behavior")
       }
-      
+
       this.counters.failedQueries++
     })
 
@@ -602,8 +611,8 @@ export class ConnectionPoolMonitor extends EventEmitter {
 // Export singleton instance
 export const connectionMonitor = new ConnectionPoolMonitor()
 
-// Auto-start monitoring in production
-if (process.env.NODE_ENV === "production") {
+// Auto-start monitoring in production (but not during build)
+if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build") {
   connectionMonitor.startMonitoring()
 
   // Setup graceful shutdown

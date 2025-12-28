@@ -4,10 +4,28 @@ import { count, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { z } from "zod"
-import { db } from "../database/db"
+import { db } from "@/database/connection-pool"
 import { schools, users } from "../database/schema"
 import { getCurrentUser } from "../lib/auth-clerk"
 import { logAuditEvent } from "../lib/rbac-middleware"
+import type { UserRole } from "@/types"
+
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
 import {
   getSchoolFilteredUsers,
   validateSchoolAccess,
@@ -22,7 +40,7 @@ const userProfileSchema = z.object({
   avatar: z.string().optional(),
 })
 
-// Note: The following schemas are for future MedStint tables that need to be added to schema.ts
+// Note:    // For now, we'll just check if the user exists in our MedStint tables that need to be added to schema.ts
 const timeRecordSchema = z.object({
   date: z.string(),
   hoursWorked: z.number().min(0.5).max(24),
@@ -191,222 +209,4 @@ export async function getAccessibleSchools() {
   })
 }
 
-// =============================================================================
-// MedStint-Specific Actions (Require Additional Schema Tables)
-// =============================================================================
-// Note: The following functions require additional tables to be added to schema.ts:
-// - schools, time_records, evaluations, competency_assessments, clinical_sites
-// These are placeholder implementations that will work once the schema is extended.
 
-// Time Record Actions
-export async function createTimeRecord(formData: FormData) {
-  const user = await getCurrentUser()
-  if (!user) {
-    redirect("/auth/sign-in")
-  }
-
-  try {
-    const data = {
-      date: formData.get("date") as string | null,
-      hoursWorked: Number.parseFloat((formData.get("hoursWorked") as string | null) || "0"),
-      description: formData.get("description") as string | null,
-      supervisorId: formData.get("supervisorId") as string | null,
-    }
-
-    const _validatedData = timeRecordSchema.parse(data)
-
-    // TODO: Implement once time_records table is added to schema
-    // This would create a new time record entry
-    // Time record data validated successfully
-
-    // TODO: Implement once time_records table is added to schema
-    // Placeholder implementation - table doesn't exist yet
-    // Time record creation logic would go here
-    // await db.insert(timeRecords).values({
-    //   id: crypto.randomUUID(),
-    //   studentId: (session.user as any).id,
-    //   supervisorId: validatedData.supervisorId,
-    //   date: new Date(validatedData.date),
-    //   hoursWorked: validatedData.hoursWorked,
-    //   description: validatedData.description,
-    //   status: 'PENDING'
-    // })
-
-    revalidatePath("/dashboard/student")
-    return { success: true, message: "Time record created successfully" }
-  } catch (error) {
-    console.error("Time record creation error:", error)
-    return { success: false, message: "Failed to create time record. Table may not exist yet." }
-  }
-}
-
-export async function approveTimeRecord(_recordId: string) {
-  const user = await getCurrentUser()
-  if (!user) {
-    redirect("/auth/sign-in")
-  }
-
-  try {
-    // TODO: Add role-based authorization once user roles are added to schema
-    // if (!['CLINICAL_PRECEPTOR', 'CLINICAL_SUPERVISOR', 'SCHOOL_ADMIN', 'SUPER_ADMIN'].includes(session.user.role))
-
-    // TODO: Implement once time_records table is added to schema
-    // Time record approval logic would go here
-    // await db.update(timeRecords)
-    //   .set({
-    //     status: 'APPROVED',
-    //     approvedBy: user.id,
-    //     approvedAt: new Date(),
-    //     updatedAt: new Date()
-    //   })
-    //   .where(eq(timeRecords.id, recordId))
-
-    revalidatePath("/dashboard")
-    return { success: true, message: "Time record approved successfully" }
-  } catch (error) {
-    console.error("Time record approval error:", error)
-    return { success: false, message: "Failed to approve time record. Table may not exist yet." }
-  }
-}
-
-export async function getTimeRecords(_limit = 10, _offset = 0) {
-  const user = await getCurrentUser()
-  if (!user) {
-    redirect("/auth/sign-in")
-  }
-
-  try {
-    // TODO: Implement role-based filtering once user roles are added to schema
-    // Placeholder implementation - table doesn't exist yet
-    // Time record fetching logic would go here
-    // const records = await db
-    //   .select({
-    //     id: timeRecords.id,
-    //     date: timeRecords.date,
-    //     hoursWorked: timeRecords.hoursWorked,
-    //     description: timeRecords.description,
-    //     status: timeRecords.status,
-    //     createdAt: timeRecords.createdAt,
-    //     approvedAt: timeRecords.approvedAt,
-    //     supervisorName: users.name
-    //   })
-    //   .from(timeRecords)
-    //   .leftJoin(users, eq(timeRecords.supervisorId, users.id))
-    //   .where(eq(timeRecords.studentId, user.id))
-    //   .orderBy(desc(timeRecords.date))
-    //   .limit(limit)
-    //   .offset(offset)
-
-    return []
-  } catch (error) {
-    console.error("Get time records error:", error)
-    throw new Error("Failed to fetch time records. Table may not exist yet.")
-  }
-}
-
-// =============================================================================
-// Simplified Data Fetching (Works with Current Schema)
-// =============================================================================
-
-export async function getDashboardStats() {
-  const user = await getCurrentUser()
-  if (!user) {
-    redirect("/auth/sign-in")
-  }
-
-  try {
-    // Basic user statistics from current schema using Drizzle ORM
-    const [userStats] = await db
-      .select({
-        totalUsers: count(),
-        verifiedUsers: count(users.emailVerified),
-      })
-      .from(users)
-
-    const stats = userStats
-
-    return {
-      totalUsers: stats.totalUsers,
-      verifiedUsers: stats.verifiedUsers,
-      // TODO: Add MedStint-specific stats once tables are implemented
-      totalRecords: 0,
-      totalHours: 0,
-      pendingApprovals: 0,
-    }
-  } catch (error) {
-    console.error("Get dashboard stats error:", error)
-    throw new Error("Failed to fetch dashboard statistics")
-  }
-}
-
-// Generic data fetching function for development/testing
-export async function executeQuery(_query: string) {
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error("Unauthorized: Authentication required")
-  }
-
-  try {
-    // TODO: Implement safe query execution with Drizzle ORM
-    // Query execution logic would go here
-    throw new Error("Raw query execution not available - use Drizzle ORM instead")
-  } catch (error) {
-    console.error("Execute query error:", error)
-    throw new Error("Failed to execute query")
-  }
-}
-
-// =============================================================================
-// MedStint Schema Extension Guide
-// =============================================================================
-/*
-To complete the MedStint functionality, add these tables to schema.ts:
-
-1. Add role field to users table:
-   role: text("role").default("STUDENT").notNull(),
-   schoolId: text("school_id"),
-   phone: text("phone"),
-   bio: text("bio"),
-
-2. Create schools table:
-   export const schools = pgTable("schools", {
-     id: text("id").primaryKey(),
-     name: text("name").notNull(),
-     address: text("address"),
-     phone: text("phone"),
-     email: text("email"),
-     isActive: boolean("is_active").default(true),
-     createdAt: timestamp("created_at").defaultNow(),
-     updatedAt: timestamp("updated_at").defaultNow()
-   });
-
-3. Create time_records table:
-   export const timeRecords = pgTable("time_records", {
-     id: text("id").primaryKey(),
-     studentId: text("student_id").references(() => users.id),
-     supervisorId: text("supervisor_id").references(() => users.id),
-     date: timestamp("date").notNull(),
-     hoursWorked: integer("hours_worked").notNull(),
-     description: text("description").notNull(),
-     status: text("status").default("PENDING"),
-     approvedBy: text("approved_by"),
-     approvedAt: timestamp("approved_at"),
-     createdAt: timestamp("created_at").defaultNow(),
-     updatedAt: timestamp("updated_at").defaultNow()
-   });
-
-4. Create clinical_sites table:
-   export const clinicalSites = pgTable("clinical_sites", {
-     id: text("id").primaryKey(),
-     name: text("name").notNull(),
-     address: text("address"),
-     type: text("type"),
-     capacity: integer("capacity"),
-     isActive: boolean("is_active").default(true),
-     createdAt: timestamp("created_at").defaultNow(),
-     updatedAt: timestamp("updated_at").defaultNow()
-   });
-
-Once these tables are added, uncomment and update the functions above
-to use Drizzle ORM instead of raw SQL for better type safety.
-*/

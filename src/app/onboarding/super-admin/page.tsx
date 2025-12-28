@@ -1,9 +1,27 @@
 import { currentUser } from "@clerk/nextjs/server"
 import { eq } from "drizzle-orm"
 import { redirect } from "next/navigation"
-import { db } from "@/database/db"
+import { db } from "@/database/connection-pool"
 import { users } from "@/database/schema"
 import { SuperAdminOnboarding } from "../../../components/onboarding/user-type-selection"
+import type { UserRole } from "@/types"
+
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
 // verifyOnboardingState import removed - verification handled by dashboard router
 
 export default async function SuperAdminOnboardingPage() {
@@ -53,23 +71,23 @@ export default async function SuperAdminOnboardingPage() {
             user={
               user
                 ? {
-                    id: user.id,
-                    email: user.email,
-                    name: user.name || "",
-                    role: user.role,
-                    onboardingCompleted: user.onboardingCompleted,
-                    schoolId: null,
-                    programId: null,
-                  }
+                  id: user.id,
+                  email: user.email,
+                  name: user.name || "",
+                  role: user.role || "SUPER_ADMIN" as UserRole,
+                  onboardingCompleted: user.onboardingCompleted,
+                  schoolId: null,
+                  programId: null,
+                }
                 : {
-                    id: "",
-                    email: "",
-                    name: "",
-                    role: "SUPER_ADMIN" as const,
-                    onboardingCompleted: false,
-                    schoolId: null,
-                    programId: null,
-                  }
+                  id: "",
+                  email: "",
+                  name: "",
+                  role: "SUPER_ADMIN" as UserRole,
+                  onboardingCompleted: false,
+                  schoolId: null,
+                  programId: null,
+                }
             }
             clerkUser={{
               id: clerkUser.id,
@@ -80,7 +98,7 @@ export default async function SuperAdminOnboardingPage() {
                   id: email.id,
                   emailAddress: email.emailAddress,
                   verification: email.verification,
-                  linkedTo: email.linkedTo,
+                  linkedTo: email.linkedTo.map((link) => link.id),
                 })) || [],
             }}
           />

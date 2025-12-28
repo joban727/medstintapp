@@ -22,20 +22,26 @@ import {
   CardHeader,
   CardTitle,
 } from "../../../components/ui/card"
+import { PageContainer } from "@/components/ui/page-container"
+import { StatCard, StatGrid } from "@/components/ui/stat-card"
+import { QuickActionCard } from "@/components/ui/quick-action-card"
+import { ActivityList, TaskList } from "@/components/ui/activity-list"
+import { AnalyticsCharts } from "@/components/dashboard/clinical-supervisor/analytics-charts"
+import type { UserRole } from "@/types"
 import { requireAnyRole } from "../../../lib/auth-clerk"
 
 export default async function ClinicalSupervisorDashboardPage() {
   const user = await requireAnyRole(["CLINICAL_SUPERVISOR"], "/dashboard")
 
   return (
-    <div className="space-y-6">
+    <PageContainer>
       {/* Welcome Banner for First-Time Users */}
       <WelcomeBanner userRole="CLINICAL_SUPERVISOR" userName={user.name || "Supervisor"} />
 
       <Suspense fallback={<DashboardStatsSkeleton />}>
         <ClinicalSupervisorDashboardContent user={user} />
       </Suspense>
-    </div>
+    </PageContainer>
   )
 }
 
@@ -43,7 +49,13 @@ interface User {
   id: string
   name: string | null
   email: string
-  role: "STUDENT" | "SUPER_ADMIN" | "SCHOOL_ADMIN" | "CLINICAL_PRECEPTOR" | "CLINICAL_SUPERVISOR"
+  role:
+  | UserRole
+  | "STUDENT"
+  | "SUPER_ADMIN"
+  | "SCHOOL_ADMIN"
+  | "CLINICAL_PRECEPTOR"
+  | "CLINICAL_SUPERVISOR"
   department: string | null
   isActive: boolean
   createdAt: Date
@@ -52,17 +64,19 @@ interface User {
 async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
   // Import database dependencies
   const { db } = await import("@/database/db")
-  const { users, rotations, evaluations } = await import("@/database/schema")
-  const { eq, and, count, desc, gte } = await import("drizzle-orm")
+  const { users, rotations, evaluations, timeRecords } = await import("@/database/schema")
+  const { eq, and, count, desc, gte, sql } = await import("drizzle-orm")
 
   // Fetch real data for clinical supervisor dashboard with error handling
-  let schoolUsers: User[] = []
+  // Using any[] for schoolUsers since getUsersBySchool returns a subset of User fields
+  let schoolUsers: any[] = []
   let stats = {
     totalStudents: 0,
     activeRotations: 0,
     pendingEvaluations: 0,
     completedEvaluations: 0,
   }
+
   interface RecentActivity {
     id: number
     type: string
@@ -82,6 +96,11 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
   let recentActivities: RecentActivity[] = []
   let upcomingTasks: UpcomingTask[] = []
 
+  // Chart Data
+  let studentProgress: { month: string; averageScore: number }[] = []
+  let rotationStatus: { name: string; value: number; color: string }[] = []
+  let evaluationsChartData: { name: string; completed: number; pending: number }[] = []
+
   try {
     // Get users from the same school
     const { getUsersBySchool } = await import("@/app/actions")
@@ -96,9 +115,17 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
     // Get current date for filtering
     const currentDate = new Date()
     const thirtyDaysAgo = new Date(currentDate.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const sixMonthsAgo = new Date(currentDate.getTime() - 180 * 24 * 60 * 60 * 1000)
 
     // Fetch real statistics from database
-    const [rotationsData, evaluationsData, pendingEvaluationsData] = await Promise.allSettled([
+    const [
+      rotationsData,
+      evaluationsData,
+      pendingEvaluationsData,
+      rawEvaluations,
+      rawRotations,
+      pendingTimecards
+    ] = await Promise.allSettled([
       // Active rotations count
       db
         .select({ count: count() })
@@ -118,11 +145,44 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
         .from(rotations)
         .leftJoin(evaluations, eq(evaluations.rotationId, rotations.id))
         .where(and(eq(rotations.supervisorId, user.id), eq(rotations.status, "ACTIVE"))),
+
+      // Raw evaluations for charts (last 6 months)
+      db
+        .select({
+          rating: evaluations.overallRating,
+          createdAt: evaluations.createdAt,
+          specialty: rotations.specialty,
+        })
+        .from(evaluations)
+        .innerJoin(rotations, eq(rotations.id, evaluations.rotationId))
+        .where(and(
+          eq(rotations.supervisorId, user.id),
+          gte(evaluations.createdAt, sixMonthsAgo)
+        )),
+
+      // Raw rotations for charts
+      db
+        .select({
+          status: rotations.status,
+          specialty: rotations.specialty,
+        })
+        .from(rotations)
+        .where(eq(rotations.supervisorId, user.id)),
+
+      // Pending timecards
+      db
+        .select({ count: count() })
+        .from(timeRecords)
+        .innerJoin(rotations, eq(rotations.id, timeRecords.rotationId))
+        .where(and(
+          eq(rotations.supervisorId, user.id),
+          eq(timeRecords.status, "PENDING")
+        ))
     ])
 
     // Extract statistics
     stats = {
-      totalStudents: safeSchoolUsers.filter((u) => u?.role === "STUDENT").length,
+      totalStudents: safeSchoolUsers.filter((u) => u?.role === ("STUDENT" as UserRole)).length,
       activeRotations:
         rotationsData.status === "fulfilled" ? rotationsData.value[0]?.count || 0 : 0,
       pendingEvaluations:
@@ -131,6 +191,63 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
           : 0,
       completedEvaluations:
         evaluationsData.status === "fulfilled" ? evaluationsData.value[0]?.count || 0 : 0,
+    }
+
+    // Process Chart Data
+    if (rawEvaluations.status === "fulfilled" && rawRotations.status === "fulfilled") {
+      const evals = rawEvaluations.value
+      const rots = rawRotations.value
+
+      // Student Progress (Monthly Average)
+      const monthlyScores = new Map<string, { total: number; count: number }>()
+      evals.forEach(e => {
+        const month = e.createdAt.toLocaleString('default', { month: 'short' })
+        const current = monthlyScores.get(month) || { total: 0, count: 0 }
+        monthlyScores.set(month, {
+          total: current.total + Number(e.rating),
+          count: current.count + 1
+        })
+      })
+
+      // Ensure last 6 months are represented
+      const last6Months = Array.from({ length: 6 }, (_, i) => {
+        const d = new Date()
+        d.setMonth(d.getMonth() - i)
+        return d.toLocaleString('default', { month: 'short' })
+      }).reverse()
+
+      studentProgress = last6Months.map(month => {
+        const data = monthlyScores.get(month)
+        return {
+          month,
+          averageScore: data ? Math.round((data.total / data.count) * 20) : 0
+        }
+      })
+
+      // Rotation Status
+      const statusCounts = rots.reduce((acc, r) => {
+        acc[r.status] = (acc[r.status] || 0) + 1
+        return acc
+      }, {} as Record<string, number>)
+
+      rotationStatus = [
+        { name: "Active", value: statusCounts["ACTIVE"] || 0, color: "#22c55e" },
+        { name: "Scheduled", value: statusCounts["SCHEDULED"] || 0, color: "#3b82f6" },
+        { name: "Completed", value: statusCounts["COMPLETED"] || 0, color: "#a855f7" },
+        { name: "Cancelled", value: statusCounts["CANCELLED"] || 0, color: "#ef4444" },
+      ].filter(item => item.value > 0)
+
+      // Evaluations by Specialty
+      const specialties = Array.from(new Set(rots.map(r => r.specialty)))
+      evaluationsChartData = specialties.map(specialty => {
+        const completed = evals.filter(e => e.specialty === specialty).length
+        const pending = rots.filter(r => r.specialty === specialty && r.status === "ACTIVE").length
+        return {
+          name: specialty,
+          completed,
+          pending
+        }
+      }).slice(0, 5) // Limit to top 5
     }
 
     // Fetch recent activities from database
@@ -158,29 +275,51 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
     }))
 
     // Create upcoming tasks based on real data
-    upcomingTasks = [
-      {
+    const pendingTimecardsCount = pendingTimecards.status === "fulfilled" ? pendingTimecards.value[0]?.count || 0 : 0
+
+    upcomingTasks = []
+
+    if (pendingTimecardsCount > 0) {
+      upcomingTasks.push({
         id: 1,
-        title: "Review Mid-Rotation Evaluations",
+        title: "Approve Time Records",
         dueDate: "Today",
         priority: "high",
-        count: Math.max(1, Math.floor(stats.pendingEvaluations / 3)),
-      },
-      {
+        count: pendingTimecardsCount,
+      })
+    }
+
+    if (stats.pendingEvaluations > 0) {
+      upcomingTasks.push({
         id: 2,
-        title: "Approve Rotation Schedules",
-        dueDate: "Tomorrow",
-        priority: "medium",
-        count: Math.max(1, Math.floor(stats.activeRotations / 4)),
-      },
-      {
-        id: 3,
-        title: "Student Progress Reviews",
+        title: "Pending Evaluations",
         dueDate: "This Week",
         priority: "medium",
-        count: Math.max(1, Math.floor(stats.totalStudents / 3)),
-      },
-    ]
+        count: stats.pendingEvaluations,
+      })
+    }
+
+    if (stats.activeRotations > 0) {
+      upcomingTasks.push({
+        id: 3,
+        title: "Active Rotations Review",
+        dueDate: "Ongoing",
+        priority: "low",
+        count: stats.activeRotations,
+      })
+    }
+
+    // Fill with generic if empty
+    if (upcomingTasks.length === 0) {
+      upcomingTasks.push({
+        id: 1,
+        title: "No pending tasks",
+        dueDate: "",
+        priority: "low",
+        count: 0,
+      })
+    }
+
   } catch (error) {
     console.error("Error fetching clinical supervisor dashboard data:", error)
     // Fallback to basic data
@@ -189,7 +328,7 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
       : []
 
     stats = {
-      totalStudents: safeSchoolUsers.filter((u) => u?.role === "STUDENT").length,
+      totalStudents: safeSchoolUsers.filter((u) => u?.role === ("STUDENT" as UserRole)).length,
       activeRotations: 0,
       pendingEvaluations: 0,
       completedEvaluations: 0,
@@ -254,151 +393,93 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
             Welcome back, {user.name}. Oversee student clinical training and progress.
           </p>
         </div>
-        <Badge variant="secondary" className="bg-green-100 text-green-800">
+        <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
           Clinical Supervisor
         </Badge>
       </div>
 
       {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Supervised Students</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.totalStudents}</div>
-            <p className="text-muted-foreground text-xs">+2 new this month</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Active Rotations</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.activeRotations}</div>
-            <p className="text-muted-foreground text-xs">Across 4 departments</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Pending Evaluations</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.pendingEvaluations}</div>
-            <p className="text-muted-foreground text-xs">5 due today</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Completed This Month</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{stats.completedEvaluations}</div>
-            <p className="text-muted-foreground text-xs">+15% from last month</p>
-          </CardContent>
-        </Card>
-      </div>
+      <StatGrid columns={4}>
+        <StatCard
+          title="Supervised Students"
+          value={stats.totalStudents}
+          icon={Users}
+          variant="blue"
+          description="+2 new this month"
+        />
+        <StatCard
+          title="Active Rotations"
+          value={stats.activeRotations}
+          icon={Calendar}
+          variant="green"
+          description="Across 4 departments"
+        />
+        <StatCard
+          title="Pending Evaluations"
+          value={stats.pendingEvaluations}
+          icon={Clock}
+          variant="orange"
+          description="5 due today"
+        />
+        <StatCard
+          title="Completed This Month"
+          value={stats.completedEvaluations}
+          icon={CheckCircle}
+          variant="purple"
+          description="+15% from last month"
+        />
+      </StatGrid>
+
+      {/* Analytics Charts */}
+      <AnalyticsCharts
+        studentProgress={studentProgress}
+        rotationStatus={rotationStatus}
+        evaluations={evaluationsChartData}
+      />
 
       {/* Quick Actions */}
       <div>
         <h2 className="mb-4 font-semibold text-xl">Quick Actions</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {quickActions.map((action) => {
-            const Icon = action.icon
-            return (
-              <Card key={action.title} className="transition-shadow hover:shadow-md">
-                <CardHeader>
-                  <div className="flex items-center space-x-2">
-                    <div className={`rounded-md p-2 ${action.color}`}>
-                      <Icon className="h-4 w-4 text-white" />
-                    </div>
-                    <CardTitle className="text-sm">{action.title}</CardTitle>
-                  </div>
-                  <CardDescription className="text-xs">{action.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button asChild size="sm" className="w-full">
-                    <Link href={action.href}>Access</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            )
-          })}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 stagger-children">
+          {quickActions.map((action) => (
+            <QuickActionCard
+              key={action.title}
+              title={action.title}
+              description={action.description}
+              icon={action.icon}
+              href={action.href}
+              color={action.color}
+            />
+          ))}
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Upcoming Tasks */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Upcoming Tasks</CardTitle>
-            <CardDescription>Important items requiring your attention</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {upcomingTasks.map((task) => (
-              <div
-                key={task.id}
-                className="flex items-center justify-between rounded-lg border p-3"
-              >
-                <div className="flex items-center space-x-3">
-                  <div
-                    className={`h-2 w-2 rounded-full ${
-                      task.priority === "high"
-                        ? "bg-red-500"
-                        : task.priority === "medium"
-                          ? "bg-yellow-500"
-                          : "bg-green-500"
-                    }`}
-                  />
-                  <div>
-                    <p className="font-medium text-sm">{task.title}</p>
-                    <p className="text-muted-foreground text-xs">
-                      {task.dueDate} • {task.count} items
-                    </p>
-                  </div>
-                </div>
-                <Button size="sm" variant="outline">
-                  Review
-                </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <TaskList
+          title="Upcoming Tasks"
+          description="Important items requiring your attention"
+          tasks={upcomingTasks.map(task => ({
+            id: task.id.toString(),
+            title: task.title,
+            dueDate: task.dueDate,
+            priority: task.priority as "high" | "medium" | "low",
+            count: task.count,
+            actionLabel: "Review"
+          }))}
+        />
 
         {/* Recent Activities */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activities</CardTitle>
-            <CardDescription>Latest updates and notifications</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {recentActivities.map((activity) => (
-              <div key={activity.id} className="flex items-start space-x-3 rounded-lg border p-3">
-                <div
-                  className={`rounded-full p-1 ${
-                    activity.type === "alert"
-                      ? "bg-red-100"
-                      : activity.type === "evaluation"
-                        ? "bg-blue-100"
-                        : "bg-green-100"
-                  }`}
-                >
-                  {activity.type === "alert" && <AlertTriangle className="h-3 w-3 text-red-600" />}
-                  {activity.type === "evaluation" && <Star className="h-3 w-3 text-blue-600" />}
-                  {activity.type === "rotation" && <Activity className="h-3 w-3 text-green-600" />}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm">{activity.message}</p>
-                  <p className="text-muted-foreground text-xs">{activity.time}</p>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <ActivityList
+          title="Recent Activities"
+          description="Latest updates and notifications"
+          activities={recentActivities.map(activity => ({
+            id: activity.id.toString(),
+            message: activity.message,
+            time: activity.time,
+            type: activity.type === "alert" ? "warning" : activity.type === "evaluation" ? "info" : "success"
+          }))}
+        />
       </div>
     </div>
   )

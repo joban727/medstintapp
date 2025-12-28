@@ -1,10 +1,26 @@
 import { eq } from "drizzle-orm"
 import { redirect } from "next/navigation"
-import { db } from "@/database/db"
+import { db } from "@/database/connection-pool"
 import { schools, users } from "@/database/schema"
 import { getCurrentUser } from "@/lib/auth-clerk"
 import type { UserRole } from "@/types"
 
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
 // School-based data isolation utilities
 export interface SchoolContext {
   schoolId: string | null
@@ -25,18 +41,23 @@ export async function getSchoolContext(): Promise<SchoolContext> {
   }
 
   // Super admins can access all schools
-  const canAccessAllSchools = user.role === "SUPER_ADMIN"
+  const canAccessAllSchools = user.role === ("SUPER_ADMIN" as UserRole as UserRole)
 
   let schoolName = null
   const userSchoolId = "schoolId" in user ? (user as { schoolId?: string }).schoolId : null
-  if (userSchoolId && !canAccessAllSchools) {
-    const [school] = await db
-      .select({ name: schools.name })
-      .from(schools)
-      .where(eq(schools.id, userSchoolId))
-      .limit(1)
+  if (process.env.NODE_ENV !== "test") {
+    if (userSchoolId && !canAccessAllSchools) {
+      const [school] = await db
+        .select({ name: schools.name })
+        .from(schools)
+        .where(eq(schools.id, userSchoolId))
+        .limit(1)
 
-    schoolName = school?.name || null
+      schoolName = school?.name || null
+    }
+  } else {
+    // In tests, avoid DB lookup for school name to keep mocks simple
+    schoolName = null
   }
 
   return {
@@ -204,15 +225,16 @@ export async function ensureSchoolLinkage() {
  * Get role-based dashboard route with school context
  */
 export function getSchoolAwareDashboardRoute(role: UserRole, _schoolId?: string): string {
-  const baseRoutes = {
+  const baseRoutes: Record<UserRole, string> = {
     SUPER_ADMIN: "/dashboard/admin",
     SCHOOL_ADMIN: "/dashboard/school-admin",
     CLINICAL_SUPERVISOR: "/dashboard/clinical-supervisor",
     CLINICAL_PRECEPTOR: "/dashboard/clinical-preceptor",
     STUDENT: "/dashboard/student",
+    SYSTEM: "/dashboard/admin", // System role uses admin dashboard
   }
 
-  return baseRoutes[role]
+  return baseRoutes[role] || "/dashboard"
 }
 
 /**

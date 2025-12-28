@@ -1,417 +1,218 @@
-import { and, count, desc, eq, like } from "drizzle-orm"
-import { type NextRequest, NextResponse } from "next/server"
+import { and, count, desc, eq, ilike, or } from "drizzle-orm"
+import { type NextRequest } from "next/server"
 import { z } from "zod"
-import { db } from "../../../database/connection-pool"
-import { clinicalSites, rotations } from "../../../database/schema"
-import { getSchoolContext } from "../../../lib/school-utils"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { db } from "@/database/connection-pool"
+import { competencies, programs } from "@/database/schema"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  withErrorHandling,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+} from "@/lib/api-response"
+import { getSchoolContext } from "@/lib/school-utils"
 
+// Ensure this route is always dynamic
+export const dynamic = "force-dynamic"
 
-// Validation schemas
-const createClinicalSiteSchema = z.object({
+const createCompetencySchema = z.object({
   name: z.string().min(1, "Name is required"),
-  address: z.string().min(1, "Address is required"),
-  phone: z.string().min(1, "Phone is required"),
-  email: z.string().email("Invalid email format"),
-  type: z.enum(["HOSPITAL", "CLINIC", "NURSING_HOME", "OUTPATIENT", "OTHER"]),
-  capacity: z.number().min(1, "Capacity must be at least 1"),
-  specialties: z.array(z.string()).optional(),
-  contactPersonName: z.string().optional(),
-  contactPersonTitle: z.string().optional(),
-  contactPersonPhone: z.string().optional(),
-  contactPersonEmail: z.string().email().optional(),
-  requirements: z.array(z.string()).optional(),
+  description: z.string().min(1, "Description is required"),
+  category: z.string().min(1, "Category is required"),
+  level: z.enum(["FUNDAMENTAL", "INTERMEDIATE", "ADVANCED", "EXPERT"]),
+  isRequired: z.boolean().default(false),
+  programId: z.string().optional(),
+  criteria: z.array(z.string()).optional(),
+  templateId: z.string().optional(),
+  source: z.enum(["TEMPLATE", "CUSTOM"]).default("CUSTOM"),
+  deploymentScope: z
+    .enum(["SCHOOL_WIDE", "PROGRAM_SPECIFIC", "USER_SPECIFIC"])
+    .default("PROGRAM_SPECIFIC"),
 })
 
-const updateClinicalSiteSchema = z.object({
+const updateCompetencySchema = z.object({
   name: z.string().min(1).optional(),
-  address: z.string().min(1).optional(),
-  phone: z.string().min(1).optional(),
-  email: z.string().email().optional(),
-  type: z.enum(["HOSPITAL", "CLINIC", "NURSING_HOME", "OUTPATIENT", "OTHER"]).optional(),
-  capacity: z.number().min(1).optional(),
-  specialties: z.array(z.string()).optional(),
+  description: z.string().min(1).optional(),
+  category: z.string().min(1).optional(),
+  level: z.enum(["FUNDAMENTAL", "INTERMEDIATE", "ADVANCED", "EXPERT"]).optional(),
+  isRequired: z.boolean().optional(),
+  programId: z.string().optional(),
+  criteria: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
-  contactPersonName: z.string().optional(),
-  contactPersonTitle: z.string().optional(),
-  contactPersonPhone: z.string().optional(),
-  contactPersonEmail: z.string().email().optional(),
-  requirements: z.array(z.string()).optional(),
 })
 
-// GET /api/clinical-sites - Get clinical sites with filtering
-export async function GET(request: NextRequest) {
-  try {
-    // Try to get cached response
-    const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:competencies/route.ts',
-      async () => {
-        // Original function logic will be wrapped here
-        return await executeOriginalLogic()
-      },
-      300 // 5 minutes TTL
-    )
-    
-    if (cached) {
-      return cached
-    }
-  } catch (cacheError) {
-    console.warn('Cache error in competencies/route.ts:', cacheError)
-    // Continue with original logic if cache fails
+// GET /api/competencies - Get competencies with filtering
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  const context = await getSchoolContext()
+  const { searchParams } = new URL(request.url)
+
+  const search = searchParams.get("search")
+  const category = searchParams.get("category")
+  const level = searchParams.get("level")
+  const programId = searchParams.get("programId")
+  const limit = Number.parseInt(searchParams.get("limit") || "50")
+  const offset = Number.parseInt(searchParams.get("offset") || "0")
+
+  const conditions: any[] = []
+
+  // Filter by school if applicable
+  if (context.schoolId) {
+    conditions.push(eq(competencies.schoolId, context.schoolId))
   }
-  
-  async function executeOriginalLogic() {
 
-  try {
-    const _context = await getSchoolContext()
-    const { searchParams } = new URL(request.url)
+  if (search) conditions.push(ilike(competencies.name, `%${search}%`))
+  if (category) conditions.push(eq(competencies.category, category))
+  if (level) conditions.push(eq(competencies.level, level as any))
+  if (programId) conditions.push(eq(competencies.programId, programId))
 
-    const search = searchParams.get("search")
-    const type = searchParams.get("type")
-    const specialty = searchParams.get("specialty")
-    const isActive = searchParams.get("isActive")
-    const limit = Number.parseInt(searchParams.get("limit") || "50")
-    const offset = Number.parseInt(searchParams.get("offset") || "0")
-    const includeStats = searchParams.get("includeStats") === "true"
-
-    // Build query conditions
-    const conditions = []
-
-    if (search) {
-      conditions.push(like(clinicalSites.name, `%${search}%`))
-    }
-
-    if (type) {
-      conditions.push(
-        eq(
-          clinicalSites.type,
-          type as "HOSPITAL" | "CLINIC" | "NURSING_HOME" | "OUTPATIENT" | "OTHER"
-        )
-      )
-    }
-
-    if (isActive !== null) {
-      conditions.push(eq(clinicalSites.isActive, isActive === "true"))
-    }
-
-    if (specialty) {
-      // Note: This is a simple contains check. In production, you might want more sophisticated JSON querying
-      conditions.push(like(clinicalSites.specialties, `%${specialty}%`))
-    }
-
-    // Execute main query
-    const sites = await db
-      .select()
-      .from(clinicalSites)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(clinicalSites.createdAt))
-      .limit(limit)
-      .offset(offset)
-
-    // Include statistics if requested
-    let sitesWithStats = sites
-    if (includeStats) {
-      sitesWithStats = await Promise.all(
-        sites.map(async (site) => {
-          const [stats] = await db
-            .select({
-              totalRotations: count(rotations.id),
-            })
-            .from(rotations)
-            .where(eq(rotations.clinicalSiteId, site.id))
-
-          const [activeRotations] = await db
-            .select({
-              activeRotations: count(rotations.id),
-            })
-            .from(rotations)
-            .where(and(eq(rotations.clinicalSiteId, site.id), eq(rotations.status, "ACTIVE")))
-
-          return {
-            ...site,
-            specialties: site.specialties ? JSON.parse(site.specialties) : [],
-            requirements: site.requirements ? JSON.parse(site.requirements) : [],
-            stats: {
-              totalRotations: stats?.totalRotations || 0,
-              activeRotations: activeRotations?.activeRotations || 0,
-              availableCapacity: site.capacity - (activeRotations?.activeRotations || 0),
-            },
-          }
-        })
-      )
-    } else {
-      sitesWithStats = sites.map((site) => ({
-        ...site,
-        specialties: site.specialties ? JSON.parse(site.specialties) : [],
-        requirements: site.requirements ? JSON.parse(site.requirements) : [],
-      }))
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: sitesWithStats,
-      pagination: {
-        limit,
-        offset,
-        total: sites.length,
-      },
+  const data = await db
+    .select({
+      competency: competencies,
+      programName: programs.name,
     })
-  } catch (error) {
-    console.error("Error fetching clinical sites:", error)
-    return NextResponse.json({ error: "Failed to fetch clinical sites" }, { status: 500 })
-  }
+    .from(competencies)
+    .leftJoin(programs, eq(competencies.programId, programs.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(competencies.createdAt))
+    .limit(limit)
+    .offset(offset)
 
-  }
-}
+  // Get total count
+  const [countResult] = await db
+    .select({ count: count(competencies.id) })
+    .from(competencies)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
 
-// POST /api/clinical-sites - Create new clinical site
-export async function POST(request: NextRequest) {
-  try {
-    const context = await getSchoolContext()
+  const total = countResult?.count || data.length
 
-    // Only admins can create clinical sites
-    if (!["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(context.userRole)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    const body = await request.json()
-    const validatedData = createClinicalSiteSchema.parse(body)
-
-    // Check if site with same name already exists
-    const [existingSite] = await db
-      .select()
-      .from(clinicalSites)
-      .where(eq(clinicalSites.name, validatedData.name))
-      .limit(1)
-
-    if (existingSite) {
-      return NextResponse.json(
-        { error: "Clinical site with this name already exists" },
-        { status: 400 }
-      )
-    }
-
-    // Create clinical site
-    const [newSite] = await db
-      .insert(clinicalSites)
-      .values({
-        id: crypto.randomUUID(),
-        name: validatedData.name,
-        address: validatedData.address,
-        phone: validatedData.phone,
-        email: validatedData.email,
-        type: validatedData.type,
-        capacity: validatedData.capacity,
-        specialties: JSON.stringify(validatedData.specialties || []),
-        isActive: true,
-        contactPersonName: validatedData.contactPersonName,
-        contactPersonTitle: validatedData.contactPersonTitle,
-        contactPersonPhone: validatedData.contactPersonPhone,
-        contactPersonEmail: validatedData.contactPersonEmail,
-        requirements: JSON.stringify(validatedData.requirements || []),
-      })
-      .returning()
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...newSite,
-        specialties: validatedData.specialties || [],
-        requirements: validatedData.requirements || [],
-      },
-      message: "Clinical site created successfully",
-    })
-  } catch (error) {
-    console.error("Error creating clinical site:", error)
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation failed", details: error.issues },
-        { status: 400 }
-      )
-    }
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateCompetencyCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in competencies/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to create clinical site" }, { status: 500 })
-  }
-}
-
-// PUT /api/clinical-sites - Update clinical site
-export async function PUT(request: NextRequest) {
-  try {
-    const context = await getSchoolContext()
-    const body = await request.json()
-    const { id, ...updateData } = body
-
-    if (!id) {
-      return NextResponse.json({ error: "Clinical site ID is required" }, { status: 400 })
-    }
-
-    // Only admins can update clinical sites
-    if (!["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(context.userRole)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    const validatedData = updateClinicalSiteSchema.parse(updateData)
-
-    // Get existing site
-    const [existingSite] = await db
-      .select()
-      .from(clinicalSites)
-      .where(eq(clinicalSites.id, id))
-      .limit(1)
-
-    if (!existingSite) {
-      return NextResponse.json({ error: "Clinical site not found" }, { status: 404 })
-    }
-
-    // Check if name is being changed and if it conflicts
-    if (validatedData.name && validatedData.name !== existingSite.name) {
-      const [nameConflict] = await db
-        .select()
-        .from(clinicalSites)
-        .where(
-          and(
-            eq(clinicalSites.name, validatedData.name),
-            eq(clinicalSites.id, id) // Exclude current site
-          )
-        )
-        .limit(1)
-
-      if (nameConflict) {
-        return NextResponse.json(
-          { error: "Clinical site with this name already exists" },
-          { status: 400 }
-        )
+  const parsedCompetencies = data.map(({ competency, programName }) => ({
+    ...competency,
+    programName,
+    criteria: (() => {
+      try {
+        return JSON.parse(competency.criteria || "[]")
+      } catch {
+        return []
       }
-    }
+    })(),
+  }))
 
-    // Prepare update values
-    const updateValues: Record<string, unknown> = {
+  return createSuccessResponse(
+    {
+      competencies: parsedCompetencies,
+      pagination: { limit, offset, total },
+    },
+    "Competencies retrieved successfully"
+  )
+})
+
+// POST /api/competencies - Create new competency
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  const context = await getSchoolContext()
+  if (!["SUPER_ADMIN" as any, "SCHOOL_ADMIN" as any].includes(context.userRole)) {
+    return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
+  }
+
+  const body = await request.json()
+  const validatedData = createCompetencySchema.parse(body)
+
+  const [newCompetency] = await db
+    .insert(competencies)
+    .values({
+      id: crypto.randomUUID(),
+      ...validatedData,
+      schoolId: context.schoolId,
+      criteria: JSON.stringify(validatedData.criteria || []),
+      createdBy: context.userId, // Assuming userId is available in context or we need to fetch user
+    })
+    .returning()
+
+  return createSuccessResponse(
+    { competency: newCompetency },
+    "Competency created successfully",
+    HTTP_STATUS.CREATED
+  )
+})
+
+// PUT /api/competencies - Update competency
+export const PUT = withErrorHandling(async (request: NextRequest) => {
+  const context = await getSchoolContext()
+  if (!["SUPER_ADMIN" as any, "SCHOOL_ADMIN" as any].includes(context.userRole)) {
+    return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
+  }
+
+  const body = await request.json()
+  const { id, ...updateData } = body
+
+  if (!id) {
+    return createErrorResponse("Competency ID is required", HTTP_STATUS.BAD_REQUEST)
+  }
+
+  const validatedData = updateCompetencySchema.parse(updateData)
+
+  const [existingCompetency] = await db
+    .select()
+    .from(competencies)
+    .where(eq(competencies.id, id))
+    .limit(1)
+
+  if (!existingCompetency) {
+    return createErrorResponse("Competency not found", HTTP_STATUS.NOT_FOUND)
+  }
+
+  // Ensure school admin can only update their own school's competencies
+  if (
+    context.userRole === ("SCHOOL_ADMIN" as any) &&
+    existingCompetency.schoolId !== context.schoolId
+  ) {
+    return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
+  }
+
+  const [updatedCompetency] = await db
+    .update(competencies)
+    .set({
+      ...validatedData,
+      criteria: validatedData.criteria ? JSON.stringify(validatedData.criteria) : undefined,
       updatedAt: new Date(),
-    }
-
-    // Set fields that are provided
-    if (validatedData.name) updateValues.name = validatedData.name
-    if (validatedData.address) updateValues.address = validatedData.address
-    if (validatedData.phone) updateValues.phone = validatedData.phone
-    if (validatedData.email) updateValues.email = validatedData.email
-    if (validatedData.type) updateValues.type = validatedData.type
-    if (validatedData.capacity) updateValues.capacity = validatedData.capacity
-    if (validatedData.isActive !== undefined) updateValues.isActive = validatedData.isActive
-    if (validatedData.contactPersonName !== undefined)
-      updateValues.contactPersonName = validatedData.contactPersonName
-    if (validatedData.contactPersonTitle !== undefined)
-      updateValues.contactPersonTitle = validatedData.contactPersonTitle
-    if (validatedData.contactPersonPhone !== undefined)
-      updateValues.contactPersonPhone = validatedData.contactPersonPhone
-    if (validatedData.contactPersonEmail !== undefined)
-      updateValues.contactPersonEmail = validatedData.contactPersonEmail
-
-    if (validatedData.specialties) {
-      updateValues.specialties = JSON.stringify(validatedData.specialties)
-    }
-
-    if (validatedData.requirements) {
-      updateValues.requirements = JSON.stringify(validatedData.requirements)
-    }
-
-    const [updatedSite] = await db
-      .update(clinicalSites)
-      .set(updateValues)
-      .where(eq(clinicalSites.id, id))
-      .returning()
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...updatedSite,
-        specialties: updatedSite.specialties ? JSON.parse(updatedSite.specialties) : [],
-        requirements: updatedSite.requirements ? JSON.parse(updatedSite.requirements) : [],
-      },
-      message: "Clinical site updated successfully",
     })
-  } catch (error) {
-    console.error("Error updating clinical site:", error)
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation failed", details: error.issues },
-        { status: 400 }
-      )
-    }
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateCompetencyCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in competencies/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to update clinical site" }, { status: 500 })
+    .where(eq(competencies.id, id))
+    .returning()
+
+  return createSuccessResponse({ competency: updatedCompetency }, "Competency updated successfully")
+})
+
+// DELETE /api/competencies - Delete competency
+export const DELETE = withErrorHandling(async (request: NextRequest) => {
+  const context = await getSchoolContext()
+  const { searchParams } = new URL(request.url)
+  const id = searchParams.get("id")
+
+  if (!id) {
+    return createErrorResponse("Competency ID is required", HTTP_STATUS.BAD_REQUEST)
   }
-}
 
-// DELETE /api/clinical-sites - Delete clinical site
-export async function DELETE(request: NextRequest) {
-  try {
-    const context = await getSchoolContext()
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get("id")
-
-    if (!id) {
-      return NextResponse.json({ error: "Clinical site ID is required" }, { status: 400 })
-    }
-
-    // Only super admins can delete clinical sites
-    if (context.userRole !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    // Check if site has active rotations
-    const [activeRotations] = await db
-      .select({ count: count(rotations.id) })
-      .from(rotations)
-      .where(and(eq(rotations.clinicalSiteId, id), eq(rotations.status, "ACTIVE")))
-
-    if (activeRotations.count > 0) {
-      return NextResponse.json(
-        { error: "Cannot delete clinical site with active rotations" },
-        { status: 400 }
-      )
-    }
-
-    // Get existing site
-    const [existingSite] = await db
-      .select()
-      .from(clinicalSites)
-      .where(eq(clinicalSites.id, id))
-      .limit(1)
-
-    if (!existingSite) {
-      return NextResponse.json({ error: "Clinical site not found" }, { status: 404 })
-    }
-
-    await db.delete(clinicalSites).where(eq(clinicalSites.id, id))
-
-    return NextResponse.json({
-      success: true,
-      message: "Clinical site deleted successfully",
-    })
-  } catch (error) {
-    console.error("Error deleting clinical site:", error)
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateCompetencyCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in competencies/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to delete clinical site" }, { status: 500 })
+  if (!["SUPER_ADMIN" as any, "SCHOOL_ADMIN" as any].includes(context.userRole)) {
+    return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
   }
-}
+
+  const [existingCompetency] = await db
+    .select()
+    .from(competencies)
+    .where(eq(competencies.id, id))
+    .limit(1)
+
+  if (!existingCompetency) {
+    return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
+  }
+
+  if (
+    context.userRole === ("SCHOOL_ADMIN" as any) &&
+    existingCompetency.schoolId !== context.schoolId
+  ) {
+    return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
+  }
+
+  await db.delete(competencies).where(eq(competencies.id, id))
+  return createSuccessResponse(null, "Competency deleted successfully")
+})
+

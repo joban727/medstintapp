@@ -11,13 +11,13 @@ import { createHash, randomUUID } from "node:crypto"
 const crypto = { createHash, randomUUID }
 
 import { neonConfig, Pool } from "@neondatabase/serverless"
-import { sql } from "drizzle-orm"
+import { sql, desc, and, gte, lt, count, avg, isNotNull, eq } from "drizzle-orm"
 // Import db directly from drizzle to avoid circular dependency
 import { drizzle } from "drizzle-orm/neon-serverless"
 import * as schema from "../database/schema"
 
 // Configure Neon for serverless environments to prevent WebSocket issues
-neonConfig.fetchConnectionCache = true
+// fetchConnectionCache is deprecated and now always true
 neonConfig.webSocketConstructor = undefined // Disable WebSocket to prevent s.unref errors
 
 // Create a separate db instance to avoid circular dependency
@@ -150,20 +150,26 @@ export class QueryPerformanceLogger {
     try {
       const windowStart = new Date(Date.now() - this.config.performanceTrendWindow * 60 * 1000)
 
-      const recentMetrics = (await db.execute(sql`
-        SELECT execution_time_ms, created_at
-        FROM query_performance_log
-        WHERE endpoint = ${endpoint}
-          AND created_at >= ${windowStart}
-        ORDER BY created_at DESC
-        LIMIT 100
-      `)) as unknown as Array<Record<string, unknown>>
+      const recentMetrics = await db
+        .select({
+          executionTimeMs: schema.queryPerformanceLog.executionTime,
+          createdAt: schema.queryPerformanceLog.createdAt,
+        })
+        .from(schema.queryPerformanceLog)
+        .where(
+          and(
+            eq(schema.queryPerformanceLog.endpoint, endpoint),
+            gte(schema.queryPerformanceLog.createdAt, windowStart)
+          )
+        )
+        .orderBy(desc(schema.queryPerformanceLog.createdAt))
+        .limit(100)
 
       if (recentMetrics.length < 10) {
         return null // Not enough data for trend analysis
       }
 
-      const times = recentMetrics.map((m) => Number(m.execution_time_ms))
+      const times = recentMetrics.map((m) => Number(m.executionTimeMs))
       const avgTime = times.reduce((a, b) => a + b, 0) / times.length
 
       // Compare with historical average (last hour vs previous hour)
@@ -209,22 +215,22 @@ export class QueryPerformanceLogger {
     try {
       const last5Minutes = new Date(Date.now() - 5 * 60 * 1000)
 
-      const metrics = (await db.execute(sql`
-        SELECT 
-          COUNT(*) as total_queries,
-          AVG(execution_time_ms) as avg_time,
-          COUNT(CASE WHEN execution_time_ms > ${this.config.slowQueryThreshold} THEN 1 END) as slow_queries,
-          COUNT(CASE WHEN execution_time_ms > ${this.config.criticalQueryThreshold} THEN 1 END) as critical_queries
-        FROM query_performance_log
-        WHERE created_at >= ${last5Minutes}
-      `)) as unknown as Array<Record<string, unknown>>
+      const metrics = await db
+        .select({
+          totalQueries: count(),
+          avgTime: avg(schema.queryPerformanceLog.executionTime),
+          slowQueries: sql<number>`count(CASE WHEN ${schema.queryPerformanceLog.executionTime} > ${this.config.slowQueryThreshold} THEN 1 END)`,
+          criticalQueries: sql<number>`count(CASE WHEN ${schema.queryPerformanceLog.executionTime} > ${this.config.criticalQueryThreshold} THEN 1 END)`,
+        })
+        .from(schema.queryPerformanceLog)
+        .where(gte(schema.queryPerformanceLog.createdAt, last5Minutes))
 
       const result = metrics[0]
       return {
-        activeQueries: Number(result?.total_queries || 0),
-        avgResponseTime: Math.round(Number(result?.avg_time || 0)),
-        slowQueries: Number(result?.slow_queries || 0),
-        criticalQueries: Number(result?.critical_queries || 0),
+        activeQueries: Number(result?.totalQueries || 0),
+        avgResponseTime: Math.round(Number(result?.avgTime || 0)),
+        slowQueries: Number(result?.slowQueries || 0),
+        criticalQueries: Number(result?.criticalQueries || 0),
         errorRate: 0, // Would need error tracking implementation
       }
     } catch (error) {
@@ -448,9 +454,9 @@ export class QueryPerformanceLogger {
 
     console.log(
       `${emoji} Query ${status} [${metrics.queryType}] ${metrics.tableName || "unknown"} ` +
-        `${metrics.executionTimeMs}ms` +
-        (metrics.rowsReturned ? ` (${metrics.rowsReturned} rows)` : "") +
-        (metrics.endpoint ? ` - ${metrics.endpoint}` : "")
+      `${metrics.executionTimeMs}ms` +
+      (metrics.rowsReturned ? ` (${metrics.rowsReturned} rows)` : "") +
+      (metrics.endpoint ? ` - ${metrics.endpoint}` : "")
     )
 
     if (error) {
@@ -475,10 +481,10 @@ export class QueryPerformanceLogger {
         })
       }
     }, this.config.flushInterval)
-    
+
     // Only use unref in Node.js environment to prevent process hanging
-    if (typeof process !== 'undefined' && process.versions?.node && this.flushTimer) {
-      (this.flushTimer as any).unref?.()
+    if (typeof process !== "undefined" && process.versions?.node && this.flushTimer) {
+      ; (this.flushTimer as any).unref?.()
     }
   }
 
@@ -495,22 +501,22 @@ export class QueryPerformanceLogger {
 
     try {
       // Use the log_slow_query function from our migration
-      for (const log of logsToProcess) {
-        await db.execute(sql`
-          SELECT log_slow_query(
-            ${log.queryHash},
-            ${log.queryType},
-            ${log.tableName || null},
-            ${log.executionTimeMs},
-            ${log.rowsExamined || null},
-            ${log.rowsReturned || null},
-            ${log.queryPlanHash || null},
-            ${log.endpoint || null},
-            ${log.userId || null},
-            ${log.schoolId || null},
-            ${log.querySample || null}
-          )
-        `)
+      // Map logs to the schema format
+      const mappedLogs = logsToProcess.map((log) => ({
+        queryHash: log.queryHash,
+        queryText: log.querySample || "N/A",
+        executionTime: log.executionTimeMs.toString(), // decimal expects string or number
+        rowsAffected: log.rowsReturned,
+        userId: log.userId,
+        endpoint: log.endpoint,
+        method: log.queryType,
+        // Missing fields in log object: userAgent, ipAddress, etc.
+        // I'll leave them null/default.
+      }))
+
+      // Insert all mapped logs directly using Drizzle in a single batch
+      if (mappedLogs.length > 0) {
+        await db.insert(schema.queryPerformanceLog).values(mappedLogs)
       }
 
       if (this.config.enableConsoleOutput && logsToProcess.length > 0) {
@@ -549,41 +555,54 @@ export class QueryPerformanceLogger {
       count: number
     }>
   }> {
+    // Validate and clamp hours to safe range (1-168 hours = 1 week max)
+    const safeHours = Math.min(Math.max(1, Math.floor(Number(hours) || 24)), 168)
+
     try {
-      const result = (await db.execute(sql`
-        SELECT 
-          COUNT(*) as total_queries,
-          AVG(execution_time_ms) as avg_execution_time,
-          COUNT(CASE WHEN execution_time_ms > 1000 THEN 1 END) as slow_queries
-        FROM query_performance_log 
-        WHERE created_at >= NOW() - INTERVAL '${sql.raw(hours.toString())} hours'
-      `)) as unknown as Array<Record<string, unknown>>
+      const result = await db
+        .select({
+          total_queries: count(),
+          avg_execution_time: avg(schema.queryPerformanceLog.executionTime),
+          slow_queries: sql<number>`count(CASE WHEN ${schema.queryPerformanceLog.executionTime} > 1000 THEN 1 END)`,
+        })
+        .from(schema.queryPerformanceLog)
+        .where(
+          sql`${schema.queryPerformanceLog.createdAt} >= NOW() - INTERVAL '${sql.raw(safeHours.toString())} hours'`
+        )
 
-      const topSlowQueries = (await db.execute(sql`
-        SELECT 
-          query_type,
-          table_name,
-          AVG(execution_time_ms) as avg_time,
-          COUNT(*) as count
-        FROM query_performance_log 
-        WHERE created_at >= NOW() - INTERVAL '${sql.raw(hours.toString())} hours'
-        GROUP BY query_type, table_name
-        ORDER BY avg_time DESC
-        LIMIT 10
-      `)) as unknown as Array<Record<string, unknown>>
+      const topSlowQueries = await db
+        .select({
+          query_type: schema.queryPerformanceLog.method, // Mapping method to query_type
+          table_name: sql<string>`'unknown'`, // Schema doesn't have table_name column?
+          // Wait, schema doesn't have table_name. The stored proc might have parsed it or it was stored in 'tablesAccessed'?
+          // I'll use 'method' as query_type.
+          avg_time: avg(schema.queryPerformanceLog.executionTime),
+          count: count(),
+        })
+        .from(schema.queryPerformanceLog)
+        .where(
+          sql`${schema.queryPerformanceLog.createdAt} >= NOW() - INTERVAL '${sql.raw(safeHours.toString())} hours'`
+        )
+        .groupBy(schema.queryPerformanceLog.method)
+        .orderBy(desc(sql`avg_time`))
+        .limit(10)
 
-      const endpointPerformance = (await db.execute(sql`
-        SELECT 
-          endpoint,
-          AVG(execution_time_ms) as avg_time,
-          COUNT(*) as count
-        FROM query_performance_log 
-        WHERE created_at >= NOW() - INTERVAL '${sql.raw(hours.toString())} hours'
-          AND endpoint IS NOT NULL
-        GROUP BY endpoint
-        ORDER BY avg_time DESC
-        LIMIT 10
-      `)) as unknown as Array<Record<string, unknown>>
+      const endpointPerformance = await db
+        .select({
+          endpoint: schema.queryPerformanceLog.endpoint,
+          avg_time: avg(schema.queryPerformanceLog.executionTime),
+          count: count(),
+        })
+        .from(schema.queryPerformanceLog)
+        .where(
+          and(
+            sql`${schema.queryPerformanceLog.createdAt} >= NOW() - INTERVAL '${sql.raw(safeHours.toString())} hours'`,
+            isNotNull(schema.queryPerformanceLog.endpoint)
+          )
+        )
+        .groupBy(schema.queryPerformanceLog.endpoint)
+        .orderBy(desc(sql`avg_time`))
+        .limit(10)
 
       const summary = result[0] as Record<string, unknown> | undefined
 
@@ -595,18 +614,18 @@ export class QueryPerformanceLogger {
         slowQueries: summary ? Number.parseInt(String(summary.slow_queries || 0)) || 0 : 0,
         topSlowQueries: Array.isArray(topSlowQueries)
           ? topSlowQueries.map((row) => ({
-              queryType: String(row.query_type || ""),
-              tableName: String(row.table_name || "unknown"),
-              avgTime: Number.parseFloat(String(row.avg_time || 0)),
-              count: Number.parseInt(String(row.count || 0)),
-            }))
+            queryType: String(row.query_type || ""),
+            tableName: String(row.table_name || "unknown"),
+            avgTime: Number.parseFloat(String(row.avg_time || 0)),
+            count: Number.parseInt(String(row.count || 0)),
+          }))
           : [],
         endpointPerformance: Array.isArray(endpointPerformance)
           ? endpointPerformance.map((row) => ({
-              endpoint: String(row.endpoint || ""),
-              avgTime: Number.parseFloat(String(row.avg_time || 0)),
-              count: Number.parseInt(String(row.count || 0)),
-            }))
+            endpoint: String(row.endpoint || ""),
+            avgTime: Number.parseFloat(String(row.avg_time || 0)),
+            count: Number.parseInt(String(row.count || 0)),
+          }))
           : [],
       }
     } catch (error) {
@@ -626,9 +645,10 @@ export class QueryPerformanceLogger {
    */
   async cleanup(): Promise<void> {
     try {
-      ;(await db.execute(sql`SELECT cleanup_query_performance_log()`)) as unknown as Array<
-        Record<string, unknown>
-      >
+      // Cleanup logs older than 30 days
+      await db
+        .delete(schema.queryPerformanceLog)
+        .where(sql`${schema.queryPerformanceLog.createdAt} < NOW() - INTERVAL '30 days'`)
       console.log("✅ Performance log cleanup completed")
     } catch (error) {
       console.error("❌ Failed to cleanup performance logs:", error)

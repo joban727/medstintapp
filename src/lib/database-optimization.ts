@@ -1,5 +1,5 @@
 /**
- * Database optimization utilities for the MedStint clock system
+ * Database optimization utilities for MedStint clock system
  * Provides caching, indexing recommendations, and performance monitoring
  */
 
@@ -17,7 +17,7 @@ class DatabaseCache {
     this.cache.set(key, {
       data,
       timestamp: Date.now(),
-      ttl
+      ttl,
     })
   }
 
@@ -55,9 +55,12 @@ class DatabaseCache {
 export const dbCache = new DatabaseCache()
 
 // Cleanup expired cache entries every 10 minutes
-setInterval(() => {
-  dbCache.cleanup()
-}, 10 * 60 * 1000)
+setInterval(
+  () => {
+    dbCache.cleanup()
+  },
+  10 * 60 * 1000
+)
 
 /**
  * Cached user data retrieval
@@ -65,9 +68,9 @@ setInterval(() => {
 export async function getCachedUserData(userId: string) {
   const cacheKey = `user:${userId}`
   const cached = dbCache.get(cacheKey)
-  
+
   if (cached) {
-    logger.debug('Cache hit for user data', { userId })
+    logger.debug({ userId }, "Cache hit for user data")
     return cached
   }
 
@@ -76,10 +79,9 @@ export async function getCachedUserData(userId: string) {
       .select({
         id: users.id,
         email: users.email,
-        firstName: users.firstName,
-        lastName: users.lastName,
+        name: users.name,
         role: users.role,
-        schoolId: users.schoolId
+        schoolId: users.schoolId,
       })
       .from(users)
       .where(eq(users.id, userId))
@@ -87,12 +89,12 @@ export async function getCachedUserData(userId: string) {
 
     if (userData) {
       dbCache.set(cacheKey, userData, 10 * 60 * 1000) // Cache for 10 minutes
-      logger.debug('Cache miss - stored user data', { userId })
+      logger.debug({ userId }, "Cache miss - stored user data")
     }
 
     return userData
   } catch (error) {
-    logger.error('Failed to get cached user data', { userId, error })
+    logger.error({ userId, error: String(error) }, "Failed to get cached user data")
     throw error
   }
 }
@@ -103,9 +105,9 @@ export async function getCachedUserData(userId: string) {
 export async function getCachedRotationData(rotationId: string) {
   const cacheKey = `rotation:${rotationId}`
   const cached = dbCache.get(cacheKey)
-  
+
   if (cached) {
-    logger.debug('Cache hit for rotation data', { rotationId })
+    logger.debug({ rotationId }, "Cache hit for rotation data")
     return cached
   }
 
@@ -113,11 +115,11 @@ export async function getCachedRotationData(rotationId: string) {
     const [rotationData] = await db
       .select({
         id: rotations.id,
-        name: rotations.name,
+        specialty: rotations.specialty,
         clinicalSiteId: rotations.clinicalSiteId,
         startDate: rotations.startDate,
         endDate: rotations.endDate,
-        status: rotations.status
+        status: rotations.status,
       })
       .from(rotations)
       .where(eq(rotations.id, rotationId))
@@ -125,12 +127,12 @@ export async function getCachedRotationData(rotationId: string) {
 
     if (rotationData) {
       dbCache.set(cacheKey, rotationData, 15 * 60 * 1000) // Cache for 15 minutes
-      logger.debug('Cache miss - stored rotation data', { rotationId })
+      logger.debug({ rotationId }, "Cache miss - stored rotation data")
     }
 
     return rotationData
   } catch (error) {
-    logger.error('Failed to get cached rotation data', { rotationId, error })
+    logger.error({ rotationId, error: String(error) }, "Failed to get cached rotation data")
     throw error
   }
 }
@@ -141,9 +143,9 @@ export async function getCachedRotationData(rotationId: string) {
 export async function getCachedSiteData(siteId: string) {
   const cacheKey = `site:${siteId}`
   const cached = dbCache.get(cacheKey)
-  
+
   if (cached) {
-    logger.debug('Cache hit for site data', { siteId })
+    logger.debug({ siteId }, "Cache hit for site data")
     return cached
   }
 
@@ -152,7 +154,7 @@ export async function getCachedSiteData(siteId: string) {
       .select({
         id: clinicalSites.id,
         name: clinicalSites.name,
-        address: clinicalSites.address
+        address: clinicalSites.address,
       })
       .from(clinicalSites)
       .where(eq(clinicalSites.id, siteId))
@@ -160,12 +162,12 @@ export async function getCachedSiteData(siteId: string) {
 
     if (siteData) {
       dbCache.set(cacheKey, siteData, 30 * 60 * 1000) // Cache for 30 minutes
-      logger.debug('Cache miss - stored site data', { siteId })
+      logger.debug({ siteId }, "Cache miss - stored site data")
     }
 
     return siteData
   } catch (error) {
-    logger.error('Failed to get cached site data', { siteId, error })
+    logger.error({ siteId, error: String(error) }, "Failed to get cached site data")
     throw error
   }
 }
@@ -176,9 +178,9 @@ export async function getCachedSiteData(siteId: string) {
 export async function getActiveTimeRecord(studentId: string) {
   const cacheKey = `active_record:${studentId}`
   const cached = dbCache.get(cacheKey)
-  
+
   if (cached) {
-    logger.debug('Cache hit for active time record', { studentId })
+    logger.debug({ studentId }, "Cache hit for active time record")
     return cached
   }
 
@@ -190,27 +192,23 @@ export async function getActiveTimeRecord(studentId: string) {
         rotationId: timeRecords.rotationId,
         clockIn: timeRecords.clockIn,
         notes: timeRecords.notes,
-        location: timeRecords.location
+        clockInLatitude: timeRecords.clockInLatitude,
+        clockInLongitude: timeRecords.clockInLongitude,
       })
       .from(timeRecords)
-      .where(
-        and(
-          eq(timeRecords.studentId, studentId),
-          isNull(timeRecords.clockOut)
-        )
-      )
+      .where(and(eq(timeRecords.studentId, studentId), isNull(timeRecords.clockOut)))
       .orderBy(desc(timeRecords.clockIn))
       .limit(1)
 
     // Cache for shorter time since this changes frequently
     if (activeRecord) {
       dbCache.set(cacheKey, activeRecord, 2 * 60 * 1000) // Cache for 2 minutes
-      logger.debug('Cache miss - stored active time record', { studentId })
+      logger.debug({ studentId }, "Cache miss - stored active time record")
     }
 
     return activeRecord
   } catch (error) {
-    logger.error('Failed to get active time record', { studentId, error })
+    logger.error({ studentId, error: String(error) }, "Failed to get active time record")
     throw error
   }
 }
@@ -221,7 +219,7 @@ export async function getActiveTimeRecord(studentId: string) {
 export function invalidateStudentCache(studentId: string): void {
   dbCache.delete(`active_record:${studentId}`)
   dbCache.delete(`user:${studentId}`)
-  logger.debug('Invalidated student cache', { studentId })
+  logger.debug({ studentId }, "Invalidated student cache")
 }
 
 /**
@@ -229,7 +227,7 @@ export function invalidateStudentCache(studentId: string): void {
  */
 export function invalidateRotationCache(rotationId: string): void {
   dbCache.delete(`rotation:${rotationId}`)
-  logger.debug('Invalidated rotation cache', { rotationId })
+  logger.debug({ rotationId }, "Invalidated rotation cache")
 }
 
 /**
@@ -241,7 +239,7 @@ export class DatabasePerformanceMonitor {
 
   static startQuery(queryName: string): () => void {
     const startTime = Date.now()
-    
+
     return () => {
       const duration = Date.now() - startTime
       DatabasePerformanceMonitor.recordQueryTime(queryName, duration)
@@ -262,12 +260,13 @@ export class DatabasePerformanceMonitor {
     }
 
     // Log slow queries
-    if (duration > 1000) { // More than 1 second
-      logger.warn('Slow database query detected', {
+    if (duration > 1000) {
+      // More than 1 second
+      logger.warn({
         queryName,
         duration,
-        averageDuration: DatabasePerformanceMonitor.getAverageQueryTime(queryName)
-      })
+        averageDuration: DatabasePerformanceMonitor.getAverageQueryTime(queryName),
+      }, "Slow database query detected")
     }
   }
 
@@ -278,7 +277,10 @@ export class DatabasePerformanceMonitor {
     return times.reduce((sum, time) => sum + time, 0) / times.length
   }
 
-  static getQueryStats(): Record<string, { average: number; samples: number; max: number; min: number }> {
+  static getQueryStats(): Record<
+    string,
+    { average: number; samples: number; max: number; min: number }
+  > {
     const stats: Record<string, { average: number; samples: number; max: number; min: number }> = {}
 
     for (const [queryName, times] of DatabasePerformanceMonitor.queryTimes.entries()) {
@@ -287,7 +289,7 @@ export class DatabasePerformanceMonitor {
           average: DatabasePerformanceMonitor.getAverageQueryTime(queryName),
           samples: times.length,
           max: Math.max(...times),
-          min: Math.min(...times)
+          min: Math.min(...times),
         }
       }
     }
@@ -302,20 +304,20 @@ export class DatabasePerformanceMonitor {
  */
 export const RECOMMENDED_INDEXES = [
   // Time records indexes
-  'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_time_records_student_clockout ON time_records(student_id, clock_out) WHERE clock_out IS NULL;',
-  'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_time_records_rotation_date ON time_records(rotation_id, clock_in);',
-  'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_time_records_student_date ON time_records(student_id, clock_in);',
-  
+  "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_time_records_student_clockout ON time_records(student_id, clock_out) WHERE clock_out IS NULL;",
+  "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_time_records_rotation_date ON time_records(rotation_id, clock_in);",
+  "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_time_records_student_date ON time_records(student_id, clock_in);",
+
   // Rotations indexes
-  'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_rotations_site_status ON rotations(clinical_site_id, status);',
-  'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_rotations_student_dates ON rotations(student_id, start_date, end_date);',
-  
+  "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_rotations_site_status ON rotations(clinical_site_id, status);",
+  "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_rotations_student_dates ON rotations(student_id, start_date, end_date);",
+
   // Users indexes
-  'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_school_role ON users(school_id, role);',
-  'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_email_lower ON users(LOWER(email));',
-  
+  "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_school_role ON users(school_id, role);",
+  "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_email_lower ON users(LOWER(email));",
+
   // Clinical sites indexes
-  'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_clinical_sites_school ON clinical_sites(school_id);'
+  "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_clinical_sites_school ON clinical_sites(school_id);",
 ]
 
 /**
@@ -323,28 +325,28 @@ export const RECOMMENDED_INDEXES = [
  * This should be run during deployment or maintenance
  */
 export async function applyRecommendedIndexes(): Promise<void> {
-  logger.info('Applying recommended database indexes')
-  
+  logger.info({}, "Applying recommended database indexes")
+
   for (const indexSql of RECOMMENDED_INDEXES) {
     try {
       await db.execute(sql.raw(indexSql))
-      logger.info('Applied database index', { sql: indexSql })
+      logger.info({ sql: indexSql }, "Applied database index")
     } catch (error) {
-      logger.error('Failed to apply database index', { sql: indexSql, error })
+      logger.error({ sql: indexSql, error: String(error) }, "Failed to apply database index")
     }
   }
-  
-  logger.info('Finished applying recommended database indexes')
+
+  logger.info({}, "Finished applying recommended database indexes")
 }
 
 /**
  * Database health check
  */
 export async function performDatabaseHealthCheck(): Promise<{
-  status: 'healthy' | 'degraded' | 'unhealthy'
+  status: "healthy" | "degraded" | "unhealthy"
   metrics: {
     connectionTest: boolean
-    queryPerformance: Record<string, number>
+    queryPerformance: Record<string, { average: number; samples: number; max: number; min: number }>
     cacheHitRate: number
     activeConnections?: number
   }
@@ -353,29 +355,29 @@ export async function performDatabaseHealthCheck(): Promise<{
     connectionTest: false,
     queryPerformance: DatabasePerformanceMonitor.getQueryStats(),
     cacheHitRate: 0,
-    activeConnections: 0
+    activeConnections: 0,
   }
 
   try {
     // Test basic connectivity
-    const endTimer = DatabasePerformanceMonitor.startQuery('health_check')
+    const endTimer = DatabasePerformanceMonitor.startQuery("health_check")
     await db.execute(sql`SELECT 1`)
     endTimer()
     metrics.connectionTest = true
 
     // Calculate cache hit rate (simplified)
-    const cacheSize = dbCache['cache'].size
+    const cacheSize = dbCache["cache"].size
     metrics.cacheHitRate = cacheSize > 0 ? 0.8 : 0 // Simplified calculation
 
-    const avgQueryTime = Object.values(metrics.queryPerformance)
-      .reduce((sum, stat) => sum + stat.average, 0) / Object.keys(metrics.queryPerformance).length || 0
+    const avgQueryTime =
+      Object.values(metrics.queryPerformance).reduce((sum, stat) => sum + stat.average, 0) /
+      Object.keys(metrics.queryPerformance).length || 0
 
-    const status = avgQueryTime > 2000 ? 'unhealthy' : 
-                  avgQueryTime > 1000 ? 'degraded' : 'healthy'
+    const status = avgQueryTime > 2000 ? "unhealthy" : avgQueryTime > 1000 ? "degraded" : "healthy"
 
     return { status, metrics }
   } catch (error) {
-    logger.error('Database health check failed', { error })
-    return { status: 'unhealthy', metrics }
+    logger.error({ error: String(error) }, "Database health check failed")
+    return { status: "unhealthy", metrics }
   }
 }

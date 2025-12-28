@@ -6,6 +6,24 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
+import type { UserRole } from "@/types"
+
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
 import {
   Card,
   CardContent,
@@ -56,7 +74,6 @@ interface School {
   email: string
   phone: string
   website?: string
-  accreditation: string
   adminId: string | null
   isActive: boolean
   createdAt: string

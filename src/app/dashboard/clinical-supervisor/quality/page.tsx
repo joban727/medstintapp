@@ -56,6 +56,7 @@ interface QualityReview {
   recommendations: string[]
   followUpRequired: boolean
   followUpDate: string | null
+  reviewDate: string
 }
 
 interface QualityMetric {

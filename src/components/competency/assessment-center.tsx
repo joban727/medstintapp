@@ -31,6 +31,10 @@ import { Progress } from "../ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { Textarea } from "../ui/textarea"
 
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 interface CompetencyAssignment {
   id: string
   studentId: string
@@ -99,14 +103,15 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
     try {
       setLoading(true)
       setError(null)
-
       const response = await fetch(
         `/api/competency-assessments?supervisorId=${supervisorId}&includeSubmissions=true&limit=100`
       )
       if (!response.ok) throw new Error("Failed to fetch assignments")
-
-      const data = await response.json()
-      setAssignments(data.assessments || [])
+      const data = await response.json().catch((err) => {
+        console.error("Failed to parse JSON response:", err)
+        throw new Error("Invalid response format")
+      })
+      setAssignments(data.data || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred")
     } finally {
@@ -224,16 +229,16 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="gap-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {['assessment-1', 'assessment-2', 'assessment-3', 'assessment-4'].map((key) => (
+          {["assessment-1", "assessment-2", "assessment-3", "assessment-4"].map((key) => (
             <Card key={key} className="animate-pulse">
-              <CardHeader className="space-y-0 pb-2">
-                <div className="h-4 w-3/4 rounded bg-muted" />
+              <CardHeader className="gap-0 pb-2">
+                <div className="h-4 w-3/4 rounded-md bg-muted" />
               </CardHeader>
               <CardContent>
-                <div className="mb-2 h-8 w-1/2 rounded bg-muted" />
-                <div className="h-3 w-full rounded bg-muted" />
+                <div className="mb-2 h-8 w-1/2 rounded-md bg-muted" />
+                <div className="h-3 w-full rounded-md bg-muted" />
               </CardContent>
             </Card>
           ))}
@@ -258,11 +263,11 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="gap-6">
       {/* Statistics Overview */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex items-center justify-between gap-0 pb-2">
             <CardTitle className="font-medium text-sm">Total Assignments</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -271,23 +276,21 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
             <p className="text-muted-foreground text-xs">{stats.pending} pending review</p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex items-center justify-between gap-0 pb-2">
             <CardTitle className="font-medium text-sm">Approved</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
+            <CheckCircle className="h-4 w-4 text-healthcare-green" />
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl text-green-600">{stats.approved}</div>
+            <div className="font-bold text-2xl text-healthcare-green">{stats.approved}</div>
             <p className="text-muted-foreground text-xs">
               {stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}% completion
               rate
             </p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex items-center justify-between gap-0 pb-2">
             <CardTitle className="font-medium text-sm">Needs Revision</CardTitle>
             <AlertCircle className="h-4 w-4 text-orange-600" />
           </CardHeader>
@@ -296,14 +299,13 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
             <p className="text-muted-foreground text-xs">Requires feedback</p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex items-center justify-between gap-0 pb-2">
             <CardTitle className="font-medium text-sm">Overdue</CardTitle>
-            <Clock className="h-4 w-4 text-red-600" />
+            <Clock className="h-4 w-4 text-error" />
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl text-red-600">{stats.overdue}</div>
+            <div className="font-bold text-2xl text-error">{stats.overdue}</div>
             <p className="text-muted-foreground text-xs">Past due date</p>
           </CardContent>
         </Card>
@@ -316,7 +318,7 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
           <CardDescription>Review and assess student competency submissions</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="gap-4">
             {/* Search */}
             <div className="relative">
               <Search className="absolute top-3 left-3 h-4 w-4 text-muted-foreground" />
@@ -330,7 +332,7 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
 
             {/* Filters */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-2">
+              <div className="gap-2">
                 <Label>Status</Label>
                 <Select
                   value={filters.status}
@@ -348,8 +350,7 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-2">
+              <div className="gap-2">
                 <Label>Priority</Label>
                 <Select
                   value={filters.priority}
@@ -366,8 +367,7 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-2">
+              <div className="gap-2">
                 <Label>Due Date</Label>
                 <Select
                   value={filters.dueDate}
@@ -384,7 +384,6 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="flex items-end">
                 <Button
                   variant="outline"
@@ -410,7 +409,7 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
       </Card>
 
       {/* Assignments List */}
-      <div className="space-y-4">
+      <div className="gap-4">
         {filteredAssignments.length === 0 ? (
           <Card>
             <CardContent className="pt-6">
@@ -441,12 +440,12 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                 >
                   <CardHeader>
                     <div className="flex items-start justify-between">
-                      <div className="space-y-1">
+                      <div className="gap-1">
                         <CardTitle className="text-lg">
                           {assignment.competency?.name || "Unknown Competency"}
                         </CardTitle>
                         <CardDescription>
-                          <div className="flex items-center space-x-4 text-sm">
+                          <div className="flex items-center gap-4 text-sm">
                             <span className="flex items-center">
                               <User className="mr-1 h-3 w-3" />
                               {assignment.student?.name || "Unknown Student"}
@@ -454,7 +453,7 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                             <span className="flex items-center">
                               <Calendar className="mr-1 h-3 w-3" />
                               Due {new Date(assignment.dueDate).toLocaleDateString()}
-                              {isOverdue && <span className="ml-1 text-red-600">(Overdue)</span>}
+                              {isOverdue && <span className="ml-1 text-error">(Overdue)</span>}
                               {!isOverdue && daysUntilDue <= 3 && daysUntilDue > 0 && (
                                 <span className="ml-1 text-orange-600">
                                   ({daysUntilDue} days left)
@@ -464,7 +463,7 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                           </div>
                         </CardDescription>
                       </div>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center gap-2">
                         <Badge
                           variant={
                             assignment.priority === "high"
@@ -493,11 +492,11 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
+                    <div className="gap-4">
                       <div className="grid gap-4 md:grid-cols-2">
                         <div>
                           <h4 className="mb-2 font-medium text-sm">Competency Details</h4>
-                          <div className="space-y-1 text-muted-foreground text-sm">
+                          <div className="gap-1 text-muted-foreground text-sm">
                             <p>
                               <strong>Category:</strong> {assignment.competency?.category || "N/A"}
                             </p>
@@ -512,7 +511,7 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                         </div>
                         <div>
                           <h4 className="mb-2 font-medium text-sm">Student Information</h4>
-                          <div className="space-y-1 text-muted-foreground text-sm">
+                          <div className="gap-1 text-muted-foreground text-sm">
                             <p>
                               <strong>Email:</strong> {assignment.student?.email || "N/A"}
                             </p>
@@ -530,10 +529,10 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                       {assignment.submission && (
                         <div className="border-t pt-4">
                           <h4 className="mb-2 font-medium text-sm">Submission Details</h4>
-                          <div className="space-y-2">
+                          <div className="gap-2">
                             <div className="flex items-center justify-between">
                               <span className="text-sm">Score:</span>
-                              <div className="flex items-center space-x-2">
+                              <div className="flex items-center gap-2">
                                 <Progress
                                   value={
                                     (assignment.submission.score /
@@ -572,7 +571,7 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                         </div>
                       )}
 
-                      <div className="flex justify-end space-x-2">
+                      <div className="flex justify-end gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -593,7 +592,7 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
 
       {/* Assessment Dialog */}
       <Dialog open={assessmentDialogOpen} onOpenChange={setAssessmentDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl" onOpenAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>Assess Competency</DialogTitle>
             <DialogDescription>
@@ -605,11 +604,10 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
               )}
             </DialogDescription>
           </DialogHeader>
-
           {selectedAssignment && (
-            <div className="space-y-4">
+            <div className="gap-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
+                <div className="gap-2">
                   <Label htmlFor="score">Score</Label>
                   <Input
                     id="score"
@@ -628,8 +626,7 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                     Max score: {selectedAssignment.competency?.maxScore || 100}
                   </p>
                 </div>
-
-                <div className="space-y-2">
+                <div className="gap-2">
                   <Label htmlFor="status">Status</Label>
                   <Select
                     value={assessmentForm.status}
@@ -647,8 +644,7 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                   </Select>
                 </div>
               </div>
-
-              <div className="space-y-2">
+              <div className="gap-2">
                 <Label htmlFor="feedback">Feedback</Label>
                 <Textarea
                   id="feedback"
@@ -660,7 +656,6 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
                   rows={4}
                 />
               </div>
-
               {selectedAssignment.competency?.description && (
                 <div className="rounded-lg bg-muted p-3">
                   <h4 className="mb-1 font-medium text-sm">Competency Description</h4>
@@ -671,7 +666,6 @@ export function AssessmentCenter({ supervisorId }: AssessmentCenterProps) {
               )}
             </div>
           )}
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssessmentDialogOpen(false)}>
               Cancel

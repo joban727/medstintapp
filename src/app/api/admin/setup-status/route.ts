@@ -3,36 +3,22 @@ import { NextResponse } from "next/server"
 import { db } from "../../../../database/connection-pool"
 import { users } from "../../../../database/schema"
 import { getCurrentUser } from "../../../../lib/auth-clerk"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { cacheIntegrationService } from "@/lib/cache-integration"
+import type { UserRole } from "@/types"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+  withErrorHandling,
+} from "@/lib/api-response"
 
-
-export async function GET() {
-  try {
-    // Try to get cached response
-    const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:admin/setup-status/route.ts',
-      async () => {
-        // Original function logic will be wrapped here
-        return await executeOriginalLogic()
-      },
-      300 // 5 minutes TTL
-    )
-    
-    if (cached) {
-      return cached
-    }
-  } catch (cacheError) {
-    console.warn('Cache error in admin/setup-status/route.ts:', cacheError)
-    // Continue with original logic if cache fails
-  }
-  
+export const GET = withErrorHandling(async () => {
   async function executeOriginalLogic() {
-
-  try {
     const currentUser = await getCurrentUser()
 
     if (!currentUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     // Check if any super admin already exists
@@ -44,15 +30,27 @@ export async function GET() {
 
     const canSetupAdmin = existingSuperAdmin.length === 0
 
-    return NextResponse.json({
+    return createSuccessResponse({
       canSetupAdmin,
       currentUserRole: currentUser.role,
       hasSuperAdmin: !canSetupAdmin,
     })
-  } catch (error) {
-    console.error("Error checking admin setup status:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 
+  // Try to get cached response
+  const cached = await cacheIntegrationService.cachedApiResponse(
+    "api:admin/setup-status/route.ts",
+    async () => {
+      return await executeOriginalLogic()
+    },
+    300 // 5 minutes TTL
+  )
+
+  if (cached) {
+    return cached
   }
-}
+
+  // Fallback to original logic if cache miss
+  return await executeOriginalLogic()
+})
+

@@ -1,10 +1,8 @@
 import type { Metadata } from "next"
-import { MedStintFeaturesEnhanced } from "@/components/landing/medstint-features-enhanced"
-import { MedStintFooterEnhanced } from "@/components/landing/medstint-footer-enhanced"
-import { MedStintHeroEnhanced } from "@/components/landing/medstint-hero-enhanced"
-import { MedStintStatsEnhanced } from "@/components/landing/medstint-stats-enhanced"
-import { MedStintUserRolesEnhanced } from "@/components/landing/medstint-user-roles-enhanced"
+import { PortalEntry } from "@/components/landing/portal-entry"
 import { site } from "../../config/site"
+import { auth } from "@clerk/nextjs/server"
+import { redirect } from "next/navigation"
 
 export const metadata: Metadata = {
   title: site.name,
@@ -29,14 +27,16 @@ export const metadata: Metadata = {
   },
 }
 
-export default function MedStintHomePage() {
+export default async function MedStintHomePage() {
+  const { userId } = await auth()
+
+  if (userId) {
+    redirect("/dashboard")
+  }
+
   return (
-    <div className="min-h-screen">
-      <MedStintHeroEnhanced />
-      <MedStintFeaturesEnhanced />
-      <MedStintUserRolesEnhanced />
-      <MedStintStatsEnhanced />
-      <MedStintFooterEnhanced />
-    </div>
+    <main className="min-h-screen bg-background">
+      <PortalEntry />
+    </main>
   )
 }

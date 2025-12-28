@@ -4,9 +4,9 @@ import type { NextRequest } from "next/server"
 import { Webhook } from "svix"
 import { db } from "../../../../database/connection-pool"
 import { users } from "../../../../database/schema"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { cacheIntegrationService } from "@/lib/cache-integration"
 
-
+import type { UserRole } from "@/types"
 type ClerkWebhookEvent = {
   type: string
   data: {
@@ -41,8 +41,15 @@ export async function POST(req: NextRequest) {
   const payload = await req.text()
   const _body = JSON.parse(payload)
 
+  // Validate webhook secret is configured
+  const webhookSecret = process.env.CLERK_WEBHOOK_SECRET
+  if (!webhookSecret) {
+    console.error("CLERK_WEBHOOK_SECRET is not configured")
+    return new Response("Webhook not configured", { status: 500 })
+  }
+
   // Create a new Svix instance with your secret.
-  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET || "")
+  const wh = new Webhook(webhookSecret)
 
   let evt: ClerkWebhookEvent
 
@@ -84,7 +91,7 @@ export async function POST(req: NextRequest) {
           name: name,
           image: imageUrl,
           emailVerified: true,
-          role: "STUDENT", // Default role
+          role: "STUDENT" as UserRole, // Default role
           isActive: true,
           onboardingCompleted: false,
           createdAt: new Date(data.created_at),
@@ -116,7 +123,24 @@ export async function POST(req: NextRequest) {
             updatedAt: new Date(),
           })
           .where(eq(users.id, userId))
-        // User deactivated successfully
+
+        // Revoke all Clerk sessions for this user to prevent access after deletion
+        try {
+          const clerkSecretKey = process.env.CLERK_SECRET_KEY
+          if (clerkSecretKey) {
+            await fetch(`https://api.clerk.com/v1/users/${userId}/sessions`, {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${clerkSecretKey}`,
+                "Content-Type": "application/json",
+              },
+            })
+            console.log(`Revoked sessions for deleted user ${userId}`)
+          }
+        } catch (sessionError) {
+          console.error(`Failed to revoke sessions for user ${userId}:`, sessionError)
+          // Continue - user is already soft-deleted, session revocation is best-effort
+        }
         break
 
       default:
@@ -129,3 +153,4 @@ export async function POST(req: NextRequest) {
 
   return new Response("Webhook processed successfully", { status: 200 })
 }
+

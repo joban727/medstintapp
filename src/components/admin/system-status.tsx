@@ -119,13 +119,13 @@ export function SystemStatus({ className }: SystemStatusProps) {
     switch (status) {
       case "healthy":
       case "operational":
-        return "text-green-600 bg-green-100 border-green-200"
+        return "text-healthcare-green bg-green-100 border-green-200"
       case "warning":
       case "degraded":
         return "text-yellow-600 bg-yellow-100 border-yellow-200"
       case "critical":
       case "down":
-        return "text-red-600 bg-red-100 border-red-200"
+        return "text-error bg-red-100 border-red-200"
       default:
         return "text-gray-600 bg-gray-100 border-gray-200"
     }
@@ -149,7 +149,6 @@ export function SystemStatus({ className }: SystemStatusProps) {
 
   const getTrendIcon = (trend?: string) => {
     if (!trend) return null
-
     switch (trend) {
       case "up":
         return <TrendingUp className="h-3 w-3 text-red-500" />
@@ -166,20 +165,20 @@ export function SystemStatus({ className }: SystemStatusProps) {
     return (
       <Card className={className}>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
+          <CardTitle className="flex items-center gap-2">
             <Server className="h-5 w-5" />
             <span>System Status</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {['skeleton-1', 'skeleton-2', 'skeleton-3', 'skeleton-4'].map((key) => (
+          <div className="gap-4">
+            {["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4"].map((key) => (
               <div key={key} className="animate-pulse">
                 <div className="mb-2 flex items-center justify-between">
-                  <div className="h-4 w-24 rounded bg-gray-200" />
-                  <div className="h-4 w-12 rounded bg-gray-200" />
+                  <div className="h-4 w-24 rounded-md bg-gray-200" />
+                  <div className="h-4 w-12 rounded-md bg-gray-200" />
                 </div>
-                <div className="h-2 w-full rounded bg-gray-200" />
+                <div className="h-2 w-full rounded-md bg-gray-200" />
               </div>
             ))}
           </div>
@@ -189,21 +188,21 @@ export function SystemStatus({ className }: SystemStatusProps) {
   }
 
   return (
-    <div className={cn("grid gap-6 lg:grid-cols-2", className)}>
+    <div className={cn("grid gap-6 lg:grid-cols-2 stagger-children", className)}>
       {/* System Metrics */}
-      <Card>
+      <Card className="glass-card-subtle card-hover-lift rounded-xl">
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
+          <CardTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5" />
             <span>System Metrics</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="gap-4">
             {metrics.map((metric) => (
-              <div key={metric.name} className="space-y-2">
+              <div key={metric.name} className="gap-2">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center gap-2">
                     <span className="font-medium text-sm">{metric.name}</span>
                     {getTrendIcon(metric.trend)}
                     {metric.trendValue && (
@@ -223,7 +222,7 @@ export function SystemStatus({ className }: SystemStatusProps) {
                     <span className="ml-1 capitalize">{metric.status}</span>
                   </Badge>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2">
                   <Progress value={(metric.value / metric.max) * 100} className="h-2" />
                   <span className="min-w-[3rem] text-muted-foreground text-xs">
                     {metric.value}
@@ -237,29 +236,29 @@ export function SystemStatus({ className }: SystemStatusProps) {
       </Card>
 
       {/* Service Status */}
-      <Card>
+      <Card className="glass-card-subtle card-hover-lift rounded-xl">
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
+          <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
             <span>Service Status</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <div className="gap-3">
             {services.map((service) => (
               <div
                 key={service.name}
-                className="flex items-center justify-between rounded-lg border p-3"
+                className="list-item-interactive flex items-center justify-between rounded-lg border p-3"
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center gap-3">
                   <div
                     className={cn(
-                      "h-3 w-3 rounded-full",
+                      "health-indicator",
                       service.status === "operational"
-                        ? "bg-green-500"
+                        ? "health-indicator-healthy"
                         : service.status === "degraded"
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
+                          ? "health-indicator-warning"
+                          : "health-indicator-critical"
                     )}
                   />
                   <div>

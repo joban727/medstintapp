@@ -56,7 +56,6 @@ const coreFeatures = [
       "Ensure clinical competency standards",
       "Track student progress objectively",
       "Generate comprehensive reports",
-      "Support accreditation requirements",
     ],
   },
   {
@@ -137,29 +136,32 @@ const getColorClasses = (color: string) => {
     blue: {
       bg: "bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950 dark:to-teal-950",
       icon: "text-cyan-600 dark:text-cyan-400",
-      badge: "bg-gradient-to-r from-cyan-100 to-teal-100 text-cyan-800 dark:from-cyan-900 dark:to-teal-900 dark:text-cyan-300",
+      badge:
+        "bg-gradient-to-r from-cyan-100 to-teal-100 text-cyan-800 dark:from-cyan-900 dark:to-teal-900 dark:text-cyan-300",
       border: "border-cyan-200 dark:border-cyan-800",
       gradient: "from-cyan-600 to-teal-600",
     },
     green: {
       bg: "bg-gradient-to-br from-emerald-50 to-cyan-50 dark:from-emerald-950 dark:to-cyan-950",
       icon: "text-emerald-600 dark:text-emerald-400",
-      badge: "bg-gradient-to-r from-emerald-100 to-cyan-100 text-emerald-800 dark:from-emerald-900 dark:to-cyan-900 dark:text-emerald-300",
+      badge:
+        "bg-gradient-to-r from-emerald-100 to-cyan-100 text-emerald-800 dark:from-emerald-900 dark:to-cyan-900 dark:text-emerald-300",
       border: "border-emerald-200 dark:border-emerald-800",
       gradient: "from-emerald-600 to-cyan-600",
     },
-    // Remove purple color mapping
     orange: {
       bg: "bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950",
       icon: "text-amber-600 dark:text-amber-400",
-      badge: "bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800 dark:from-amber-900 dark:to-orange-900 dark:text-amber-300",
+      badge:
+        "bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800 dark:from-amber-900 dark:to-orange-900 dark:text-amber-300",
       border: "border-amber-200 dark:border-amber-800",
       gradient: "from-amber-600 to-orange-600",
     },
     amber: {
       bg: "bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950 dark:to-amber-950",
       icon: "text-orange-600 dark:text-orange-400",
-      badge: "bg-gradient-to-r from-orange-100 to-amber-100 text-orange-800 dark:from-orange-900 dark:to-amber-900 dark:text-orange-300",
+      badge:
+        "bg-gradient-to-r from-orange-100 to-amber-100 text-orange-800 dark:from-orange-900 dark:to-amber-900 dark:text-orange-300",
       border: "border-orange-200 dark:border-orange-800",
       gradient: "from-orange-600 to-amber-600",
     },
@@ -199,7 +201,7 @@ export const MedStintFeaturesEnhanced = () => {
                   <TabsTrigger
                     key={feature.id}
                     value={feature.id}
-                    className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-teal-600 data-[state=active]:text-white border border-slate-200 dark:border-slate-700 hover:bg-cyan-50 dark:hover:bg-cyan-900/20"
+                    className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-teal-600 data-[state=active]:text-white border border-slate-200 dark:border-slate-700 hover:bg-cyan-50 transition-colors duration-200 dark:hover:bg-cyan-900/20"
                   >
                     <feature.icon className="h-4 w-4" />
                     {feature.title.split(" ")[0]}
@@ -238,7 +240,10 @@ export const MedStintFeaturesEnhanced = () => {
                                 </h4>
                                 <ul className="space-y-2">
                                   {feature.features.map((item, index) => (
-                                    <li key={`feature-${item.slice(0, 20)}-${index}`} className="flex items-center gap-2">
+                                    <li
+                                      key={`feature-${item.slice(0, 20)}-${index}`}
+                                      className="flex items-center gap-2"
+                                    >
                                       <CheckCircle
                                         className={`h-4 w-4 ${colors.icon} flex-shrink-0`}
                                       />
@@ -256,9 +261,12 @@ export const MedStintFeaturesEnhanced = () => {
                                 </h4>
                                 <ul className="space-y-2">
                                   {feature.benefits.map((item, index) => (
-                                    <li key={`benefit-${item.slice(0, 20)}-${index}`} className="flex items-center gap-2">
+                                    <li
+                                      key={`benefit-${item.slice(0, 20)}-${index}`}
+                                      className="flex items-center gap-2"
+                                    >
                                       <div
-                                        className={`h-2 w-2 rounded-full ${colors.bg.replace("50", "500").replace("950", "400")}`}
+                                        className={`h-2 w-2 rounded-full bg-gradient-to-r ${colors.gradient}`}
                                       />
                                       <span className="text-slate-600 dark:text-slate-300">
                                         {item}
@@ -279,26 +287,26 @@ export const MedStintFeaturesEnhanced = () => {
 
                           <div className="relative">
                             <div
-                              className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${colors.gradient} opacity-10 blur-3xl`}
+                              className={`absolute inset-0 rounded-xl bg-gradient-to-br ${colors.gradient} opacity-10 blur-3xl`}
                             />
                             <div className="relative rounded-xl bg-slate-50 p-6 dark:bg-slate-800">
                               <div className="space-y-4">
-                                <div className="h-4 w-32 rounded bg-slate-200 dark:bg-slate-700" />
+                                <div className="h-4 w-32 rounded-md bg-slate-200 dark:bg-slate-700" />
                                 <div className="space-y-2">
-                                  <div className="h-3 w-full rounded bg-slate-200 dark:bg-slate-700" />
-                                  <div className="h-3 w-4/5 rounded bg-slate-200 dark:bg-slate-700" />
-                                  <div className="h-3 w-3/5 rounded bg-slate-200 dark:bg-slate-700" />
+                                  <div className="h-3 w-full rounded-md bg-slate-200 dark:bg-slate-700" />
+                                  <div className="h-3 w-4/5 rounded-md bg-slate-200 dark:bg-slate-700" />
+                                  <div className="h-3 w-3/5 rounded-md bg-slate-200 dark:bg-slate-700" />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 pt-4">
                                   <div className={`rounded-lg ${colors.bg} p-4`}>
-                                    <div className="mb-2 h-8 w-8 rounded bg-slate-200 dark:bg-slate-700" />
-                                    <div className="mb-1 h-3 w-full rounded bg-slate-200 dark:bg-slate-700" />
-                                    <div className="h-2 w-3/4 rounded bg-slate-200 dark:bg-slate-700" />
+                                    <div className="mb-2 h-8 w-8 rounded-md bg-slate-200 dark:bg-slate-700" />
+                                    <div className="mb-1 h-3 w-full rounded-md bg-slate-200 dark:bg-slate-700" />
+                                    <div className="h-2 w-3/4 rounded-md bg-slate-200 dark:bg-slate-700" />
                                   </div>
                                   <div className={`rounded-lg ${colors.bg} p-4`}>
-                                    <div className="mb-2 h-8 w-8 rounded bg-slate-200 dark:bg-slate-700" />
-                                    <div className="mb-1 h-3 w-full rounded bg-slate-200 dark:bg-slate-700" />
-                                    <div className="h-2 w-3/4 rounded bg-slate-200 dark:bg-slate-700" />
+                                    <div className="mb-2 h-8 w-8 rounded-md bg-slate-200 dark:bg-slate-700" />
+                                    <div className="mb-1 h-3 w-full rounded-md bg-slate-200 dark:bg-slate-700" />
+                                    <div className="h-2 w-3/4 rounded-md bg-slate-200 dark:bg-slate-700" />
                                   </div>
                                 </div>
                               </div>
@@ -327,12 +335,12 @@ export const MedStintFeaturesEnhanced = () => {
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {additionalFeatures.map((feature, index) => (
                 <Card
-                  key={`additional-feature-${feature.title.replace(/\s+/g, '-').toLowerCase()}-${index}`}
+                  key={`additional-feature-${feature.title.replace(/\s+/g, "-").toLowerCase()}-${index}`}
                   className="group hover:-translate-y-1 border-slate-200 transition-all duration-300 hover:shadow-lg dark:border-slate-700"
                 >
                   <CardContent className="p-6">
                     <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-r from-cyan-100 to-teal-100 transition-all duration-300 group-hover:from-cyan-200 group-hover:to-teal-200 dark:from-cyan-900 dark:to-teal-900 group-hover:dark:from-cyan-800 group-hover:dark:to-teal-800">
-                      <feature.icon className="h-6 w-6 text-cyan-600 transition-colors group-hover:text-cyan-700 dark:text-cyan-400 group-hover:dark:text-cyan-300" />
+                      <feature.icon className="h-6 w-6 text-cyan-600 transition-colors duration-200 group-hover:text-cyan-700 dark:text-cyan-400 group-hover:dark:text-cyan-300" />
                     </div>
                     <h4 className="mb-2 font-semibold text-slate-900 dark:text-white">
                       {feature.title}
@@ -347,7 +355,7 @@ export const MedStintFeaturesEnhanced = () => {
           </div>
 
           {/* CTA Section */}
-          <div className="rounded-2xl bg-gradient-to-r from-cyan-600 to-teal-600 p-8 text-center text-white lg:p-12">
+          <div className="rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 p-8 text-center text-white lg:p-12">
             <h3 className="mb-4 font-bold text-3xl">Ready to Transform Your Clinical Education?</h3>
             <p className="mx-auto mb-8 max-w-2xl text-cyan-100">
               Join hundreds of medical institutions already using MedStint to streamline their

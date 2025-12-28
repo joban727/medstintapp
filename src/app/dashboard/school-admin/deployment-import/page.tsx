@@ -112,7 +112,7 @@ export default function DeploymentImportPage() {
 
   const recentDeployments = [
     {
-      name: "Internal Medicine Q1 2024",
+      name: "General Radiology Q1 2024",
       status: "Active",
       progress: 78,
       assigned: 24,
@@ -120,7 +120,7 @@ export default function DeploymentImportPage() {
       dueDate: "2024-03-15",
     },
     {
-      name: "Surgery Skills Assessment",
+      name: "MRI Safety Assessment",
       status: "Active",
       progress: 45,
       assigned: 12,
@@ -128,7 +128,7 @@ export default function DeploymentImportPage() {
       dueDate: "2024-02-28",
     },
     {
-      name: "Pediatrics Rotation Eval",
+      name: "Pediatric Radiology Eval",
       status: "Completed",
       progress: 100,
       assigned: 18,

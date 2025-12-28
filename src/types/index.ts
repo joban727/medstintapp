@@ -1,3 +1,5 @@
+import React from "react"
+
 // User and Authentication Types
 export type UserRole =
   | "SUPER_ADMIN"
@@ -5,6 +7,7 @@ export type UserRole =
   | "CLINICAL_PRECEPTOR"
   | "CLINICAL_SUPERVISOR"
   | "STUDENT"
+  | "SYSTEM"
 
 export interface User {
   id: string
@@ -39,7 +42,6 @@ export interface School {
   phone: string
   email: string
   website?: string
-  accreditation: string
   isActive: boolean
   adminId: string
   programs: Program[]
@@ -52,6 +54,7 @@ export interface Program {
   name: string
   description: string
   duration: number // in months
+  classYear: number
   schoolId: string
   isActive: boolean
   requirements: string[]
@@ -69,12 +72,10 @@ export interface ClinicalSite {
   capacity: number
   specialties: string[]
   isActive: boolean
-  contactPerson: {
-    name: string
-    title: string
-    phone: string
-    email: string
-  }
+  contactPersonName?: string
+  contactPersonTitle?: string
+  contactPersonPhone?: string
+  contactPersonEmail?: string
   requirements: string[]
   createdAt: Date
   updatedAt: Date
@@ -100,9 +101,9 @@ export interface Rotation {
   preceptorId: string
   supervisorId?: string
   specialty: string
-  startDate: Date
-  endDate: Date
-  requiredHours: number
+  startDate?: Date
+  endDate?: Date
+  requiredHours?: number
   completedHours: number
   status: "SCHEDULED" | "ACTIVE" | "COMPLETED" | "CANCELLED"
   objectives: string[]
@@ -116,6 +117,7 @@ export interface TimeRecord {
   id: string
   studentId: string
   rotationId: string
+  clinicalPreceptorId?: string
   date: Date
   clockIn: Date
   clockOut?: Date
@@ -273,11 +275,11 @@ export interface Report {
   id: string
   name: string
   type:
-    | "STUDENT_PROGRESS"
-    | "CLINICAL_HOURS"
-    | "COMPETENCY_TRACKING"
-    | "SITE_UTILIZATION"
-    | "CUSTOM"
+  | "STUDENT_PROGRESS"
+  | "CLINICAL_HOURS"
+  | "COMPETENCY_TRACKING"
+  | "SITE_UTILIZATION"
+  | "CUSTOM"
   description: string
   parameters: ReportParameter[]
   generatedBy: string
@@ -354,15 +356,15 @@ export interface FormField {
   name: string
   label: string
   type:
-    | "text"
-    | "email"
-    | "password"
-    | "number"
-    | "date"
-    | "select"
-    | "textarea"
-    | "checkbox"
-    | "radio"
+  | "text"
+  | "email"
+  | "password"
+  | "number"
+  | "date"
+  | "select"
+  | "textarea"
+  | "checkbox"
+  | "radio"
   required: boolean
   placeholder?: string
   options?: { value: string; label: string }[]

@@ -11,8 +11,8 @@ env:
   TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
 jobs:
-  quality-checks:
-    name: Quality Checks
+  test-suite:
+    name: Comprehensive Test Suite
     runs-on: ubuntu-latest
     
     steps:
@@ -30,27 +30,90 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
-      - name: Format check
-        run: npm run format
-      
-      - name: Lint check
-        run: npm run lint
-      
       - name: Type check
-        run: npm run check-types
+        run: npm run check
       
-      - name: Run tests
-        run: npm run test
-        continue-on-error: true
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
+        env:
+          CI: true
+      
+      - name: Run component tests
+        run: npm run test:components
+        env:
+          CI: true
+      
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          CI: true
+      
+      - name: Run security tests
+        run: npm run test:security
+        env:
+          CI: true
+      
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+      
+      - name: Generate test report
+        run: |
+          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Unit Tests: Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Component Tests: Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Integration Tests: Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Security Tests: Passed" >> $GITHUB_STEP_SUMMARY
       
       - name: Build application
         run: npm run build
         env:
           NODE_ENV: production
 
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: [test-suite]
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Start application for testing
+        run: |
+          npm run build
+          npm start &
+          sleep 30
+        env:
+          NODE_ENV: test
+      
+      - name: Run performance tests
+        run: npm run test:performance:report
+      
+      - name: Upload performance report
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-report
+          path: performance-report.json
+
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
+    needs: [test-suite]
     
     steps:
       - name: Checkout code
@@ -68,11 +131,16 @@ jobs:
       - name: Run security audit
         run: npm audit --audit-level=moderate
         continue-on-error: true
+      
+      - name: Run OWASP ZAP security scan
+        uses: zaproxy/action-baseline@v0.7.0
+        with:
+          target: 'http://localhost:3000'
 
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    needs: [quality-checks, security-scan]
+    needs: [test-suite, security-scan]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
     steps:

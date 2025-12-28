@@ -25,6 +25,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+import type { DateRange } from "react-day-picker"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card"
@@ -33,6 +34,10 @@ import { Progress } from "../ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs"
 import { toast } from "sonner"
+
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
 
 interface ReportData {
   summary: {
@@ -130,7 +135,7 @@ export function ComprehensiveReportsDashboard({
 }: ComprehensiveReportsDashboardProps) {
   const [reportData, setReportData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
     to: new Date(),
   })
@@ -146,8 +151,8 @@ export function ComprehensiveReportsDashboard({
     try {
       setLoading(true)
       const params = new URLSearchParams({
-        from: dateRange.from.toISOString(),
-        to: dateRange.to.toISOString(),
+        from: dateRange?.from?.toISOString() ?? "",
+        to: dateRange?.to?.toISOString() ?? "",
         ...(selectedProgram !== "all" && { program: selectedProgram }),
         ...(selectedDepartment !== "all" && { department: selectedDepartment }),
         ...(institutionId && { institutionId }),
@@ -155,14 +160,18 @@ export function ComprehensiveReportsDashboard({
 
       const response = await fetch(`/api/reports/comprehensive?${params}`)
       if (response.ok) {
-        const data = await response.json()
+        const data = await response.json().catch((err) => {
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
+        })
         setReportData(data)
       } else {
         toast.error("Failed to load report data")
       }
     } catch (error) {
-      console.error("Failed to fetch report data:", error)
-      toast.error("Failed to load report data")
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+      console.error("[ComprehensiveReportsDashboard] Operation failed:", error)
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -171,8 +180,8 @@ export function ComprehensiveReportsDashboard({
   const exportReport = async (format: "pdf" | "csv" | "excel") => {
     try {
       const params = new URLSearchParams({
-        from: dateRange.from.toISOString(),
-        to: dateRange.to.toISOString(),
+        from: dateRange?.from?.toISOString() ?? "",
+        to: dateRange?.to?.toISOString() ?? "",
         format,
         type: reportType,
         ...(selectedProgram !== "all" && { program: selectedProgram }),
@@ -196,8 +205,9 @@ export function ComprehensiveReportsDashboard({
         toast.error("Failed to export report")
       }
     } catch (error) {
-      console.error("Failed to export report:", error)
-      toast.error("Failed to export report")
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+      console.error("[ComprehensiveReportsDashboard] Operation failed:", error)
+      toast.error(errorMessage)
     }
   }
 
@@ -226,8 +236,9 @@ export function ComprehensiveReportsDashboard({
         toast.error("Failed to create scheduled report")
       }
     } catch (error) {
-      console.error("Failed to create scheduled report:", error)
-      toast.error("Failed to create scheduled report")
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+      console.error("[ComprehensiveReportsDashboard] Operation failed:", error)
+      toast.error(errorMessage)
     }
   }
 
@@ -238,9 +249,9 @@ export function ComprehensiveReportsDashboard({
           {[...Array(6)].map((_, i) => (
             <Card key={i}>
               <CardContent className="p-6">
-                <div className="animate-pulse space-y-2">
-                  <div className="h-4 bg-muted rounded w-1/2" />
-                  <div className="h-8 bg-muted rounded w-3/4" />
+                <div className="space-y-2 animate-pulse">
+                  <div className="h-4 bg-muted rounded-md w-1/2" />
+                  <div className="h-8 bg-muted rounded-md w-3/4" />
                 </div>
               </CardContent>
             </Card>
@@ -255,9 +266,7 @@ export function ComprehensiveReportsDashboard({
       <div className="text-center py-8">
         <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
         <div className="mt-4 text-lg font-medium">No report data available</div>
-        <div className="text-muted-foreground">
-          Try adjusting your filters or date range
-        </div>
+        <div className="text-muted-foreground">Try adjusting your filters or date range</div>
       </div>
     )
   }
@@ -279,7 +288,7 @@ export function ComprehensiveReportsDashboard({
             date={dateRange}
             onDateChange={(range) => range && setDateRange(range)}
           />
-          <Select value={selectedProgram} onValueChange={setSelectedProgram}>
+          <Select aria-label="Program" value={selectedProgram} onValueChange={setSelectedProgram}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Program" />
             </SelectTrigger>
@@ -290,7 +299,11 @@ export function ComprehensiveReportsDashboard({
               <SelectItem value="pharmacy">Pharmacy</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+          <Select
+            aria-label="Department"
+            value={selectedDepartment}
+            onValueChange={setSelectedDepartment}
+          >
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Department" />
             </SelectTrigger>
@@ -351,7 +364,9 @@ export function ComprehensiveReportsDashboard({
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{reportData.summary.completionRate.toFixed(1)}%</div>
+            <div className="text-2xl font-bold">
+              {reportData.summary.completionRate.toFixed(1)}%
+            </div>
             <Progress value={reportData.summary.completionRate} className="mt-2" />
           </CardContent>
         </Card>
@@ -370,7 +385,9 @@ export function ComprehensiveReportsDashboard({
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{reportData.summary.totalHours.toLocaleString()}</div>
+            <div className="text-2xl font-bold">
+              {reportData.summary.totalHours.toLocaleString()}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -500,7 +517,7 @@ export function ComprehensiveReportsDashboard({
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ level, total }) => `${level} (${total})`}
+                      label={({ payload }) => `${payload.level} (${payload.total})`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="total"
@@ -599,7 +616,9 @@ export function ComprehensiveReportsDashboard({
             <Card className="md:col-span-2">
               <CardHeader>
                 <CardTitle>Score Distribution</CardTitle>
-                <CardDescription>Distribution of student scores across all competencies</CardDescription>
+                <CardDescription>
+                  Distribution of student scores across all competencies
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>

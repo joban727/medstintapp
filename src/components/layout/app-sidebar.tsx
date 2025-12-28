@@ -1,202 +1,306 @@
 "use client"
 
 import {
-  Activity,
-  Award,
-  BarChart3,
-  Calendar,
-  CheckCircle,
-  Clock,
-  Shield,
-  Users,
-} from "lucide-react"
-import { useId } from "react"
-import { site } from "../../config/site"
-import { Badge } from "../ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card"
+    RiAwardLine,
+    RiBarChartLine,
+    RiCalendarLine,
+    RiClockwiseLine,
+    RiFileTextLine,
+    RiHospitalLine,
+    RiLineChartLine,
+    RiMagicLine,
+    RiSchoolLine,
+    RiSettingsLine,
+    RiSpeedUpLine,
+    RiStethoscopeLine,
+    RiTeamLine,
+    RiUserLine,
+} from "@remixicon/react"
+import Image from "next/image"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import * as React from "react"
+import { NavUser } from "@/components/layout/nav-user"
+import {
+    Sidebar,
+    SidebarContent,
+    SidebarFooter,
+    SidebarGroup,
+    SidebarGroupContent,
+    SidebarGroupLabel,
+    SidebarHeader,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    SidebarSeparator,
+} from "@/components/ui/sidebar"
+import { site } from "@/config/site"
+import type { UserRole } from "@/types"
+import { useTheme } from "next-themes"
 
-const features = [
-  {
-    icon: Calendar,
-    title: "Clinical Rotation Management",
-    description: site.features.clinicalRotations,
-    details:
-      "Schedule, track, and manage clinical rotations with automated assignments and real-time updates.",
-    color: "blue",
-    benefits: ["Automated scheduling", "Conflict resolution", "Site coordination"],
-  },
-  {
-    icon: Clock,
-    title: "Time Tracking & Logging",
-    description: site.features.timeTracking,
-    details:
-      "Comprehensive time logging with approval workflows and automated compliance reporting.",
-    color: "green",
-    benefits: ["Digital timesheets", "Approval workflows", "Compliance tracking"],
-  },
-  {
-    icon: Award,
-    title: "Competency Assessment",
-    description: site.features.competencyAssessment,
-    details:
-      "Track student progress with standardized competency evaluations and skills validation.",
-    color: "purple",
-    benefits: ["Skills tracking", "Progress monitoring", "Standardized assessments"],
-  },
-  {
-    icon: BarChart3,
-    title: "Real-time Reporting",
-    description: site.features.reporting,
-    details:
-      "Generate comprehensive reports with real-time analytics and compliance documentation.",
-    color: "orange",
-    benefits: ["Custom dashboards", "Export capabilities", "Compliance reports"],
-  },
-  {
-    icon: Shield,
-    title: "HIPAA Compliance",
-    description: site.features.hipaaCompliant,
-    details: "Enterprise-grade security with full HIPAA compliance and data protection measures.",
-    color: "red",
-    benefits: ["Data encryption", "Access controls", "Audit trails"],
-  },
-  {
-    icon: Users,
-    title: "Multi-Role Management",
-    description:
-      "Comprehensive role-based access control for all stakeholders in medical education.",
-    details:
-      "Support for administrators, preceptors, supervisors, and students with tailored interfaces.",
-    color: "indigo",
-    benefits: ["Role-based access", "Custom permissions", "Tailored dashboards"],
-  },
-]
-
-const getColorClasses = (color: string) => {
-  const colorMap = {
-    blue: {
-      bg: "bg-blue-50 dark:bg-blue-950",
-      icon: "text-blue-600 dark:text-blue-400",
-      badge: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-    },
-    green: {
-      bg: "bg-green-50 dark:bg-green-950",
-      icon: "text-green-600 dark:text-green-400",
-      badge: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-    },
-    purple: {
-      bg: "bg-purple-50 dark:bg-purple-950",
-      icon: "text-purple-600 dark:text-purple-400",
-      badge: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-    },
-    orange: {
-      bg: "bg-orange-50 dark:bg-orange-950",
-      icon: "text-orange-600 dark:text-orange-400",
-      badge: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300",
-    },
-    red: {
-      bg: "bg-red-50 dark:bg-red-950",
-      icon: "text-red-600 dark:text-red-400",
-      badge: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
-    },
-    indigo: {
-      bg: "bg-indigo-50 dark:bg-indigo-950",
-      icon: "text-indigo-600 dark:text-indigo-400",
-      badge: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300",
-    },
-  }
-  return colorMap[color as keyof typeof colorMap] || colorMap.blue
+const validateEmail = (email: string): boolean => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
-export const MedStintFeaturesSection = () => {
-  const sectionId = useId()
-  return (
-    <section id={`features-${sectionId}`} className="bg-white py-20 lg:py-32 dark:bg-slate-900">
-      <div className="container mx-auto px-4">
-        <div className="mx-auto max-w-7xl">
-          {/* Section Header */}
-          <div className="mb-16 text-center">
-            <Badge className="mb-4 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-              Platform Features
-            </Badge>
-            <h2 className="mb-4 font-bold text-3xl text-slate-900 tracking-tight sm:text-4xl lg:text-5xl dark:text-white">
-              Everything You Need for
-              <span className="bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-                {" "}
-                Clinical Education
-              </span>
-            </h2>
-            <p className="mx-auto max-w-3xl text-slate-600 text-xl dark:text-slate-300">
-              Comprehensive tools designed specifically for medical education institutions to
-              streamline operations and enhance student outcomes.
-            </p>
-          </div>
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+    return allowedRoles.includes(userRole)
+}
 
-          {/* Features Grid */}
-          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {features.map((feature, index) => {
-              const colors = getColorClasses(feature.color)
-              const IconComponent = feature.icon
+const isAdmin = (userRole: UserRole): boolean => {
+    return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
 
-              return (
-                <Card
-                  key={`feature-${feature.title.replace(/\s+/g, "-").toLowerCase()}-${index}`}
-                  className="group hover:-translate-y-1 relative overflow-hidden border-0 shadow-lg transition-all duration-300 hover:shadow-xl"
-                >
-                  <CardHeader className="pb-4">
-                    <div
-                      className={`inline-flex h-12 w-12 items-center justify-center rounded-lg ${colors.bg} mb-4`}
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+    return hasRole(userRole, [
+        "SCHOOL_ADMIN" as UserRole,
+        "ADMIN" as UserRole,
+        "SUPER_ADMIN" as UserRole,
+    ])
+}
+
+// Role-based navigation data
+const getRoleBasedNavigation = (userRole: UserRole) => {
+    const baseItems = [{ title: "Settings", url: "/dashboard/settings", icon: RiSettingsLine }]
+
+    switch (userRole) {
+        case "SUPER_ADMIN":
+            return {
+                navMain: [
+                    {
+                        title: "",
+                        items: [
+                            { title: "Dashboard", url: "/dashboard/admin", icon: RiSpeedUpLine },
+                            { title: "Reports", url: "/dashboard/admin/reports", icon: RiBarChartLine },
+                            { title: "Users", url: "/dashboard/admin/users", icon: RiUserLine },
+                            { title: "Schools", url: "/dashboard/admin/schools", icon: RiSchoolLine },
+                            { title: "Clinical Sites", url: "/dashboard/admin/sites", icon: RiHospitalLine },
+                            { title: "Audit Logs", url: "/dashboard/admin/audit", icon: RiFileTextLine },
+                        ],
+                    },
+                    {
+                        title: "",
+                        items: baseItems,
+                    },
+                ],
+            }
+
+        case "SCHOOL_ADMIN":
+            return {
+                navMain: [
+                    {
+                        title: "",
+                        items: [
+                            { title: "Dashboard", url: "/dashboard/school-admin", icon: RiSpeedUpLine },
+                            { title: "Reports", url: "/dashboard/school-admin/reports", icon: RiBarChartLine },
+                            { title: "Students", url: "/dashboard/school-admin/students", icon: RiUserLine },
+                            { title: "Faculty & Staff", url: "/dashboard/school-admin/faculty-staff", icon: RiTeamLine },
+                            { title: "Programs", url: "/dashboard/school-admin/programs", icon: RiSchoolLine },
+                            { title: "Clinical Sites", url: "/dashboard/school-admin/sites", icon: RiHospitalLine },
+                            { title: "Rotations", url: "/dashboard/school-admin/rotations", icon: RiCalendarLine },
+                            { title: "Time Records", url: "/dashboard/school-admin/time-records", icon: RiClockwiseLine },
+                            { title: "Competencies", url: "/dashboard/school-admin/competencies", icon: RiAwardLine },
+                        ],
+                    },
+                    {
+                        title: "",
+                        items: [
+                            { title: "School Setup", url: "/dashboard/school-admin/setup", icon: RiMagicLine },
+                            ...baseItems,
+                        ],
+                    },
+                ],
+            }
+
+        case "CLINICAL_PRECEPTOR":
+            return {
+                navMain: [
+                    {
+                        title: "",
+                        items: [
+                            { title: "Dashboard", url: "/dashboard/clinical-preceptor", icon: RiSpeedUpLine },
+                            { title: "Reports", url: "/dashboard/clinical-preceptor/reports", icon: RiBarChartLine },
+                            { title: "My Students", url: "/dashboard/clinical-preceptor/students", icon: RiUserLine },
+                            { title: "Time Records", url: "/dashboard/clinical-preceptor/time-records", icon: RiClockwiseLine },
+                            { title: "Schedule", url: "/dashboard/clinical-preceptor/schedule", icon: RiCalendarLine },
+                            { title: "Evaluations", url: "/dashboard/clinical-preceptor/evaluations", icon: RiFileTextLine },
+                            { title: "Competencies", url: "/dashboard/clinical-preceptor/competencies", icon: RiAwardLine },
+                        ],
+                    },
+                    {
+                        title: "",
+                        items: baseItems,
+                    },
+                ],
+            }
+
+        case "CLINICAL_SUPERVISOR":
+            return {
+                navMain: [
+                    {
+                        title: "",
+                        items: [
+                            { title: "Dashboard", url: "/dashboard/clinical-supervisor", icon: RiSpeedUpLine },
+                            { title: "Reports", url: "/dashboard/clinical-supervisor/reports", icon: RiLineChartLine },
+                            { title: "Analytics", url: "/dashboard/clinical-supervisor/analytics", icon: RiBarChartLine },
+                            { title: "Students", url: "/dashboard/clinical-supervisor/students", icon: RiUserLine },
+                            { title: "Progress", url: "/dashboard/clinical-supervisor/progress", icon: RiBarChartLine },
+                            { title: "Competencies", url: "/dashboard/clinical-supervisor/competencies", icon: RiAwardLine },
+                            { title: "Skills", url: "/dashboard/clinical-supervisor/skills", icon: RiStethoscopeLine },
+                            { title: "Assessments", url: "/dashboard/clinical-supervisor/assessments", icon: RiFileTextLine },
+                            { title: "Evaluations", url: "/dashboard/clinical-supervisor/evaluations", icon: RiFileTextLine },
+                            { title: "Quality", url: "/dashboard/clinical-supervisor/quality", icon: RiAwardLine },
+                        ],
+                    },
+                    {
+                        title: "",
+                        items: baseItems,
+                    },
+                ],
+            }
+
+        case "STUDENT":
+            return {
+                navMain: [
+                    {
+                        title: "",
+                        items: [
+                            { title: "Dashboard", url: "/dashboard/student", icon: RiSpeedUpLine },
+                            { title: "Rotations", url: "/dashboard/student/rotations", icon: RiCalendarLine },
+                            { title: "Clinical Sites", url: "/dashboard/student/clinical-sites", icon: RiHospitalLine },
+                            { title: "Time Records", url: "/dashboard/student/time-records", icon: RiClockwiseLine },
+                        ],
+                    },
+                    {
+                        title: "",
+                        items: baseItems,
+                    },
+                ],
+            }
+
+        default:
+            return {
+                navMain: [
+                    {
+                        title: "",
+                        items: [
+                            { title: "Dashboard", url: "/dashboard", icon: RiSpeedUpLine },
+                            { title: "Settings", url: "/dashboard/settings", icon: RiSettingsLine },
+                        ],
+                    },
+                ],
+            }
+    }
+}
+
+function SidebarLogo() {
+    return (
+        <div className="flex justify-center gap-2 px-2 transition-[padding] duration-300 ease-out group-data-[collapsible=icon]:px-0">
+            <Link
+                className="group/logo inline-flex items-center gap-2.5 transition-all duration-300 ease-out"
+                href="/dashboard"
+            >
+                <span className="sr-only">{site.name}</span>
+                <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition-transform duration-300 ease-out group-data-[collapsible=icon]:scale-110">
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-5 w-5"
                     >
-                      <IconComponent className={`h-6 w-6 ${colors.icon}`} />
-                    </div>
-                    <CardTitle className="font-semibold text-slate-900 text-xl dark:text-white">
-                      {feature.title}
-                    </CardTitle>
-                    <CardDescription className="text-slate-600 dark:text-slate-300">
-                      {feature.details}
-                    </CardDescription>
-                  </CardHeader>
-
-                  <CardContent className="pt-0">
-                    {/* Benefits List */}
-                    <div className="mb-4 space-y-2">
-                      {feature.benefits.map((benefit, benefitIndex) => (
-                        <div
-                          key={`benefit-${feature.title}-${benefitIndex}`}
-                          className="flex items-center gap-2"
-                        >
-                          <CheckCircle className="h-4 w-4 flex-shrink-0 text-green-600 dark:text-green-400" />
-                          <span className="text-slate-600 text-sm dark:text-slate-400">
-                            {benefit}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Feature Badge */}
-                    <Badge className={`${colors.badge} text-xs`}>Core Feature</Badge>
-                  </CardContent>
-
-                  {/* Hover Effect */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-green-600/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                </Card>
-              )
-            })}
-          </div>
-
-          {/* Bottom CTA */}
-          <div className="mt-16 text-center">
-            <div className="mb-4 inline-flex items-center gap-2 text-slate-500 text-sm dark:text-slate-400">
-              <Activity className="h-4 w-4" />
-              <span>Trusted by leading medical institutions</span>
-            </div>
-            <p className="mx-auto max-w-2xl text-slate-600 dark:text-slate-300">
-              Join the growing community of medical schools and healthcare institutions using
-              MedStint to transform their clinical education programs.
-            </p>
-          </div>
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                    </svg>
+                </div>
+                <span
+                    className="group-data-[collapsible=icon]:-ml-2 truncate font-bold text-xl text-sidebar-foreground transition-[margin,opacity,transform,width] duration-300 ease-out group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:scale-95 group-data-[collapsible=icon]:opacity-0"
+                >
+                    {site.name}
+                </span>
+            </Link>
         </div>
-      </div>
-    </section>
-  )
+    )
+}
+
+interface User {
+    id: string
+    email: string
+    name: string
+    role: UserRole
+    schoolId: string | null
+    programId: string | null
+}
+
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+    user: User
+}
+
+export function AppSidebar({ user, ...props }: AppSidebarProps) {
+    const pathname = usePathname()
+    const navigationData = getRoleBasedNavigation(user.role)
+
+    // Determine if this role has complex navigation (multiple links per category)
+    const hasComplexNavigation = ["SCHOOL_ADMIN", "SUPER_ADMIN", "CLINICAL_SUPERVISOR"].includes(
+        user.role
+    )
+
+    return (
+        <Sidebar collapsible="icon" variant="inset" {...props}>
+            <SidebarHeader className="mb-4 h-13 justify-center max-md:mt-2">
+                <SidebarLogo />
+            </SidebarHeader>
+            <SidebarContent className="-mt-2" data-tutorial="sidebar-nav">
+                {navigationData.navMain.map((item, index) => (
+                    <React.Fragment key={`${item.title}-${index}`}>
+                        <SidebarGroup>
+                            {/* Only show section title if there are more than 2 items */}
+                            {item.items.length > 2 && (
+                                <SidebarGroupLabel className="text-sidebar-foreground/60 uppercase">
+                                    {item.title}
+                                </SidebarGroupLabel>
+                            )}
+                            <SidebarGroupContent>
+                                <SidebarMenu>
+                                    {item.items.map((item) => {
+                                        const isActive = pathname === item.url
+                                        return (
+                                            <SidebarMenuItem key={item.title}>
+                                                <SidebarMenuButton
+                                                    asChild
+                                                    className="group/menu-button group-data-[collapsible=icon]:!px-[5px] h-9 gap-3 font-medium transition-all duration-300 ease-out [&>svg]:size-auto hover:bg-sidebar-accent"
+                                                    tooltip={item.title}
+                                                    isActive={isActive}
+                                                >
+                                                    <Link href={item.url} className="flex items-center gap-3">
+                                                        {item.icon && (
+                                                            <item.icon
+                                                                className="text-sidebar-foreground/70 group-data-[active=true]/menu-button:text-sidebar-accent-foreground"
+                                                                size={22}
+                                                                aria-hidden="true"
+                                                            />
+                                                        )}
+                                                        <span className="text-sidebar-foreground group-data-[active=true]/menu-button:text-sidebar-accent-foreground">{item.title}</span>
+                                                    </Link>
+                                                </SidebarMenuButton>
+                                            </SidebarMenuItem>
+                                        )
+                                    })}
+                                </SidebarMenu>
+                            </SidebarGroupContent>
+                        </SidebarGroup>
+                        {/* Add separator between groups for complex navigation, but not after the last group */}
+                        {hasComplexNavigation && index < navigationData.navMain.length - 1 && (
+                            <SidebarSeparator className="my-2" />
+                        )}
+                    </React.Fragment>
+                ))}
+            </SidebarContent>
+            <SidebarFooter>
+                <NavUser user={user} />
+            </SidebarFooter>
+        </Sidebar>
+    )
 }

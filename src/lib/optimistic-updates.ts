@@ -6,11 +6,11 @@
 
 interface OptimisticUpdate<T = any> {
   id: string
-  type: 'clock-in' | 'clock-out' | 'status-update'
+  type: "clock-in" | "clock-out" | "status-update"
   optimisticData: T
   originalData?: T
   timestamp: number
-  status: 'pending' | 'confirmed' | 'failed' | 'rolled-back'
+  status: "pending" | "confirmed" | "failed" | "rolled-back"
   retryCount: number
   maxRetries: number
 }
@@ -28,7 +28,7 @@ const DEFAULT_OPTIMISTIC_CONFIG: OptimisticConfig = {
   retryDelay: 1000, // 1 second
   rollbackDelay: 5000, // 5 seconds before auto-rollback
   enableAutoRollback: true,
-  persistFailedUpdates: false
+  persistFailedUpdates: false,
 }
 
 export class OptimisticUpdatesService {
@@ -53,7 +53,7 @@ export class OptimisticUpdatesService {
    */
   applyOptimisticUpdate<T>(
     id: string,
-    type: OptimisticUpdate['type'],
+    type: OptimisticUpdate["type"],
     optimisticData: T,
     originalData?: T
   ): OptimisticUpdate<T> {
@@ -63,9 +63,9 @@ export class OptimisticUpdatesService {
       optimisticData,
       originalData,
       timestamp: Date.now(),
-      status: 'pending',
+      status: "pending",
       retryCount: 0,
-      maxRetries: this.config.maxRetries
+      maxRetries: this.config.maxRetries,
     }
 
     this.updates.set(id, update)
@@ -75,8 +75,8 @@ export class OptimisticUpdatesService {
     if (this.config.enableAutoRollback) {
       setTimeout(() => {
         const currentUpdate = this.updates.get(id)
-        if (currentUpdate && currentUpdate.status === 'pending') {
-          this.rollbackUpdate(id, 'timeout')
+        if (currentUpdate && currentUpdate.status === "pending") {
+          this.rollbackUpdate(id, "timeout")
         }
       }, this.config.rollbackDelay)
     }
@@ -91,13 +91,13 @@ export class OptimisticUpdatesService {
     const update = this.updates.get(id)
     if (!update) return false
 
-    update.status = 'confirmed'
+    update.status = "confirmed"
     if (confirmedData) {
       update.optimisticData = confirmedData
     }
 
     this.notifySubscribers(id, update)
-    
+
     // Clean up confirmed updates after a delay
     setTimeout(() => {
       this.updates.delete(id)
@@ -113,35 +113,35 @@ export class OptimisticUpdatesService {
     const update = this.updates.get(id)
     if (!update) return false
 
-    update.status = 'failed'
+    update.status = "failed"
     update.retryCount++
 
     // Attempt retry if within limits and requested
     if (shouldRetry && update.retryCount <= update.maxRetries) {
       setTimeout(() => {
         const currentUpdate = this.updates.get(id)
-        if (currentUpdate && currentUpdate.status === 'failed') {
-          currentUpdate.status = 'pending'
+        if (currentUpdate && currentUpdate.status === "failed") {
+          currentUpdate.status = "pending"
           this.notifySubscribers(id, currentUpdate)
         }
       }, this.config.retryDelay * update.retryCount) // Exponential backoff
-      
+
       return true
     }
 
     // Rollback if retries exhausted
-    this.rollbackUpdate(id, 'max-retries-exceeded')
+    this.rollbackUpdate(id, "max-retries-exceeded")
     return false
   }
 
   /**
    * Rollback an optimistic update
    */
-  rollbackUpdate(id: string, reason: 'timeout' | 'max-retries-exceeded' | 'manual'): boolean {
+  rollbackUpdate(id: string, reason: "timeout" | "max-retries-exceeded" | "manual"): boolean {
     const update = this.updates.get(id)
     if (!update) return false
 
-    update.status = 'rolled-back'
+    update.status = "rolled-back"
     this.notifySubscribers(id, update)
 
     // Clean up rolled-back updates
@@ -159,8 +159,8 @@ export class OptimisticUpdatesService {
    */
   getOptimisticData<T>(id: string): T | null {
     const update = this.updates.get(id)
-    if (!update || update.status === 'rolled-back') {
-      return update?.originalData as T || null
+    if (!update || update.status === "rolled-back") {
+      return (update?.originalData as T) || null
     }
     return update.optimisticData as T
   }
@@ -170,20 +170,17 @@ export class OptimisticUpdatesService {
    */
   isPending(id: string): boolean {
     const update = this.updates.get(id)
-    return update?.status === 'pending' || false
+    return update?.status === "pending" || false
   }
 
   /**
    * Subscribe to updates for a specific ID or type
    */
-  subscribe(
-    idOrType: string,
-    callback: (update: OptimisticUpdate) => void
-  ): () => void {
+  subscribe(idOrType: string, callback: (update: OptimisticUpdate) => void): () => void {
     if (!this.subscribers.has(idOrType)) {
       this.subscribers.set(idOrType, new Set())
     }
-    
+
     this.subscribers.get(idOrType)!.add(callback)
 
     // Return unsubscribe function
@@ -205,19 +202,19 @@ export class OptimisticUpdatesService {
     // Notify specific ID subscribers
     const idSubscribers = this.subscribers.get(id)
     if (idSubscribers) {
-      idSubscribers.forEach(callback => callback(update))
+      idSubscribers.forEach((callback) => callback(update))
     }
 
     // Notify type subscribers
     const typeSubscribers = this.subscribers.get(update.type)
     if (typeSubscribers) {
-      typeSubscribers.forEach(callback => callback(update))
+      typeSubscribers.forEach((callback) => callback(update))
     }
 
     // Notify global subscribers
-    const globalSubscribers = this.subscribers.get('*')
+    const globalSubscribers = this.subscribers.get("*")
     if (globalSubscribers) {
-      globalSubscribers.forEach(callback => callback(update))
+      globalSubscribers.forEach((callback) => callback(update))
     }
   }
 
@@ -225,7 +222,7 @@ export class OptimisticUpdatesService {
    * Get all pending updates
    */
   getPendingUpdates(): OptimisticUpdate[] {
-    return Array.from(this.updates.values()).filter(update => update.status === 'pending')
+    return Array.from(this.updates.values()).filter((update) => update.status === "pending")
   }
 
   /**
@@ -239,13 +236,13 @@ export class OptimisticUpdatesService {
     rolledBack: number
   } {
     const updates = Array.from(this.updates.values())
-    
+
     return {
       total: updates.length,
-      pending: updates.filter(u => u.status === 'pending').length,
-      confirmed: updates.filter(u => u.status === 'confirmed').length,
-      failed: updates.filter(u => u.status === 'failed').length,
-      rolledBack: updates.filter(u => u.status === 'rolled-back').length
+      pending: updates.filter((u) => u.status === "pending").length,
+      confirmed: updates.filter((u) => u.status === "confirmed").length,
+      failed: updates.filter((u) => u.status === "failed").length,
+      rolledBack: updates.filter((u) => u.status === "rolled-back").length,
     }
   }
 
@@ -271,18 +268,16 @@ export interface ClockStatus {
 /**
  * Apply optimistic clock-in update
  */
-export function applyOptimisticClockIn(
-  studentId: string
-): OptimisticUpdate<ClockStatus> {
+export function applyOptimisticClockIn(studentId: string): OptimisticUpdate<ClockStatus> {
   const optimisticData: ClockStatus = {
     isClocked: true,
     clockedInAt: new Date().toISOString(),
-    currentDuration: 0
+    currentDuration: 0,
   }
 
   return optimisticUpdates.applyOptimisticUpdate(
     `clock-status-${studentId}`,
-    'clock-in',
+    "clock-in",
     optimisticData
   )
 }
@@ -297,12 +292,12 @@ export function applyOptimisticClockOut(
   const optimisticData: ClockStatus = {
     isClocked: false,
     clockedInAt: undefined,
-    currentDuration: undefined
+    currentDuration: undefined,
   }
 
   return optimisticUpdates.applyOptimisticUpdate(
     `clock-status-${studentId}`,
-    'clock-out',
+    "clock-out",
     optimisticData,
     originalStatus
   )
@@ -311,21 +306,14 @@ export function applyOptimisticClockOut(
 /**
  * Confirm clock operation
  */
-export function confirmClockOperation(
-  studentId: string,
-  confirmedData?: ClockStatus
-): boolean {
+export function confirmClockOperation(studentId: string, confirmedData?: ClockStatus): boolean {
   return optimisticUpdates.confirmUpdate(`clock-status-${studentId}`, confirmedData)
 }
 
 /**
  * Fail clock operation
  */
-export function failClockOperation(
-  studentId: string,
-  error: Error,
-  shouldRetry = true
-): boolean {
+export function failClockOperation(studentId: string, error: Error, shouldRetry = true): boolean {
   return optimisticUpdates.failUpdate(`clock-status-${studentId}`, error, shouldRetry)
 }
 

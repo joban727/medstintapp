@@ -1,6 +1,13 @@
 import type { NextConfig } from "next"
+// Force rebuild 3again 2
 
 const nextConfig: NextConfig = {
+  // Keep parity with prior JS config for build resilience
+  typescript: {
+    // ignoreBuildErrors: false, // Default
+  },
+  // Note: eslint config removed - no longer supported in Next.js 16
+  // Use eslint.config.js or .eslintrc for ESLint configuration
   // Production optimizations
   compress: true,
   poweredByHeader: false,

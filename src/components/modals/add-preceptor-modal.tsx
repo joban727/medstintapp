@@ -7,7 +7,6 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import * as z from "zod"
-
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -35,6 +34,10 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 const addPreceptorSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Please enter a valid email address"),
@@ -48,14 +51,21 @@ const addPreceptorSchema = z.object({
 
 type AddPreceptorFormData = z.infer<typeof addPreceptorSchema>
 
+interface ClinicalSiteOption {
+  id: string
+  name: string
+}
+
 interface AddPreceptorModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
+  clinicalSites: ClinicalSiteOption[]
 }
 
-export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPreceptorModalProps) {
+export function AddPreceptorModal({ open, onOpenChange, onSuccess, clinicalSites }: AddPreceptorModalProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const form = useForm<AddPreceptorFormData>({
     resolver: zodResolver(addPreceptorSchema),
@@ -73,6 +83,8 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPrecepto
 
   const onSubmit = async (data: AddPreceptorFormData) => {
     setIsLoading(true)
+    setIsSubmitting(true)
+
     try {
       const response = await fetch("/api/preceptors", {
         method: "POST",
@@ -87,7 +99,10 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPrecepto
       })
 
       if (!response.ok) {
-        const error = await response.json()
+        const error = await response.json().catch((err) => {
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
+        })
         throw new Error(error.message || "Failed to create preceptor")
       }
 
@@ -96,16 +111,21 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPrecepto
       onOpenChange(false)
       onSuccess?.()
     } catch (error) {
-      console.error("Error creating preceptor:", error)
-      toast.error(error instanceof Error ? error.message : "Failed to create preceptor")
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+      console.error("[AddPreceptorModal] Operation failed:", error)
+      toast.error(errorMessage)
     } finally {
       setIsLoading(false)
+      setIsSubmitting(false)
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent
+        className="max-h-[90vh] max-w-2xl overflow-y-auto"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5" />
@@ -116,9 +136,8 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPrecepto
             their account.
           </DialogDescription>
         </DialogHeader>
-
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="gap-6" noValidate>
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -127,13 +146,12 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPrecepto
                   <FormItem>
                     <FormLabel>Full Name *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Dr. John Smith" {...field} />
+                      <Input placeholder="Dr. John Smith" aria-label="Dr. John Smith" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="email"
@@ -141,14 +159,18 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPrecepto
                   <FormItem>
                     <FormLabel>Email Address *</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="john.smith@hospital.com" {...field} />
+                      <Input
+                        type="email"
+                        placeholder="john.smith@hospital.com"
+                        aria-label="john.smith@hospital.com"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -156,47 +178,64 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPrecepto
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Medical Specialty *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      aria-label="Select specialty"
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select specialty" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="Internal Medicine">Internal Medicine</SelectItem>
-                        <SelectItem value="Surgery">Surgery</SelectItem>
-                        <SelectItem value="Pediatrics">Pediatrics</SelectItem>
-                        <SelectItem value="Emergency Medicine">Emergency Medicine</SelectItem>
-                        <SelectItem value="Family Medicine">Family Medicine</SelectItem>
-                        <SelectItem value="Psychiatry">Psychiatry</SelectItem>
-                        <SelectItem value="Cardiology">Cardiology</SelectItem>
-                        <SelectItem value="Neurology">Neurology</SelectItem>
-                        <SelectItem value="Orthopedics">Orthopedics</SelectItem>
-                        <SelectItem value="Radiology">Radiology</SelectItem>
-                        <SelectItem value="Anesthesiology">Anesthesiology</SelectItem>
-                        <SelectItem value="Dermatology">Dermatology</SelectItem>
+                        <SelectItem value="General Radiology">General Radiology</SelectItem>
+                        <SelectItem value="MRI">MRI</SelectItem>
+                        <SelectItem value="Ultrasound / Sonography">Ultrasound / Sonography</SelectItem>
+                        <SelectItem value="CT Scan">CT Scan</SelectItem>
+                        <SelectItem value="Nuclear Medicine">Nuclear Medicine</SelectItem>
+                        <SelectItem value="Mammography">Mammography</SelectItem>
+                        <SelectItem value="Interventional Radiology">Interventional Radiology</SelectItem>
+                        <SelectItem value="Fluoroscopy">Fluoroscopy</SelectItem>
+                        <SelectItem value="Mobile Radiography">Mobile Radiography</SelectItem>
+                        <SelectItem value="Surgical Radiography">Surgical Radiography</SelectItem>
+                        <SelectItem value="Trauma Radiography">Trauma Radiography</SelectItem>
+                        <SelectItem value="Pediatric Radiology">Pediatric Radiology</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="clinicalSite"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Clinical Site *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="General Hospital" {...field} />
-                    </FormControl>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select clinical site" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {clinicalSites.map((site) => (
+                          <SelectItem key={site.id} value={site.id}>
+                            {site.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -205,13 +244,19 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPrecepto
                   <FormItem>
                     <FormLabel>Years of Experience *</FormLabel>
                     <FormControl>
-                      <Input type="number" min="1" max="50" placeholder="10" {...field} />
+                      <Input
+                        type="number"
+                        min="1"
+                        max="50"
+                        placeholder="10"
+                        aria-label="10"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="maxCapacity"
@@ -219,14 +264,20 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPrecepto
                   <FormItem>
                     <FormLabel>Max Student Capacity *</FormLabel>
                     <FormControl>
-                      <Input type="number" min="1" max="20" placeholder="4" {...field} />
+                      <Input
+                        type="number"
+                        min="1"
+                        max="20"
+                        placeholder="4"
+                        aria-label="4"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-
             <FormField
               control={form.control}
               name="department"
@@ -234,13 +285,16 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPrecepto
                 <FormItem>
                   <FormLabel>Department</FormLabel>
                   <FormControl>
-                    <Input placeholder="Department of Internal Medicine" {...field} />
+                    <Input
+                      placeholder="Department of Radiology"
+                      aria-label="Department of Radiology"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-
             <FormField
               control={form.control}
               name="bio"
@@ -250,6 +304,7 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPrecepto
                   <FormControl>
                     <Textarea
                       placeholder="Brief professional background and areas of expertise..."
+                      aria-label="Brief professional background and areas of expertise..."
                       rows={3}
                       {...field}
                     />
@@ -258,7 +313,6 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess }: AddPrecepto
                 </FormItem>
               )}
             />
-
             <DialogFooter>
               <Button
                 type="button"

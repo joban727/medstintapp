@@ -4,27 +4,34 @@ import { nanoid } from "nanoid"
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "../../../../database/connection-pool"
 import { programs, schools, users } from "../../../../database/schema"
-import { cacheIntegrationService } from '@/lib/cache-integration'
-
+import { cacheIntegrationService } from "@/lib/cache-integration"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  withErrorHandling,
+  withErrorHandlingAsync,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+} from "@/lib/api-response"
 
 export async function POST(request: NextRequest) {
-  try {
+  return withErrorHandlingAsync(async () => {
     const clerkUser = await currentUser()
 
     if (!clerkUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     const body = await request.json()
-    const { name, address, phone, email, website, accreditation, programs: schoolPrograms } = body
+    const { name, address, phone, email, website, programs: schoolPrograms } = body
 
     if (!name) {
-      return NextResponse.json({ error: "School name is required" }, { status: 400 })
+      return createErrorResponse("School name is required", HTTP_STATUS.BAD_REQUEST)
     }
 
     // Create the school
     const schoolId = nanoid()
-    const [school] = await db
+    const schoolResults = await db
       .insert(schools)
       .values({
         id: schoolId,
@@ -33,13 +40,15 @@ export async function POST(request: NextRequest) {
         phone: phone?.trim() || null,
         email: email?.trim() || null,
         website: website || null,
-        accreditation: accreditation || "LCME",
+        accreditation: body.accreditation || "Other",
         isActive: true,
         adminId: clerkUser.id,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
       .returning()
+
+    const school = (schoolResults as typeof schools.$inferSelect[])[0]
 
     // Create programs if provided
     const createdPrograms = []
@@ -77,22 +86,23 @@ export async function POST(request: NextRequest) {
       })
       .where(eq(users.id, clerkUser.id))
 
-    return NextResponse.json({
-      id: schoolId,
-      name: school.name,
-      email: school.email,
-      programs: createdPrograms,
-    })
-  } catch (error) {
-    console.error("Error creating school:", error)
-    
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateAllCache()
+      await cacheIntegrationService.clear()
     } catch (cacheError) {
-      console.warn('Cache invalidation error in schools/create/route.ts:', cacheError)
+      console.warn("Cache invalidation error in schools/create/route.ts:", cacheError)
     }
-    
-    return NextResponse.json({ error: "Failed to create school" }, { status: 500 })
-  }
+
+    return createSuccessResponse(
+      {
+        id: schoolId,
+        name: school.name,
+        email: school.email,
+        programs: createdPrograms,
+      },
+      undefined,
+      HTTP_STATUS.CREATED
+    )
+  })
 }
+

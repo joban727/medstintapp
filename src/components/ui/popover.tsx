@@ -2,7 +2,6 @@
 
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 import type * as React from "react"
-
 import { cn } from "@/lib/utils"
 
 function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
@@ -19,11 +18,10 @@ function PopoverContent({
   sideOffset = 4,
   showArrow = false,
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Content> & {
-  showArrow?: boolean
-}) {
+}: React.ComponentProps<typeof PopoverPrimitive.Content> & { showArrow?: boolean }) {
   return (
     <PopoverPrimitive.Portal>
+      {" "}
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}
@@ -34,17 +32,16 @@ function PopoverContent({
         )}
         {...props}
       >
-        {props.children}
+        {" "}
+        {props.children}{" "}
         {showArrow && (
           <PopoverPrimitive.Arrow className="-my-px fill-popover drop-shadow-[0_1px_0_hsl(var(--border))]" />
-        )}
-      </PopoverPrimitive.Content>
+        )}{" "}
+      </PopoverPrimitive.Content>{" "}
     </PopoverPrimitive.Portal>
   )
 }
-
 function PopoverAnchor({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Anchor>) {
   return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />
 }
-
 export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger }

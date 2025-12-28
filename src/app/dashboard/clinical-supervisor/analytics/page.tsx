@@ -17,7 +17,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
 import {
@@ -36,34 +36,32 @@ import {
   SelectValue,
 } from "../../../../components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs"
+import { toast } from "sonner"
 
-// Mock data for analytics
-const _performanceTrends = [
-  { month: "Jan", avgScore: 78, passRate: 85, satisfaction: 4.2 },
-  { month: "Feb", avgScore: 82, passRate: 88, satisfaction: 4.3 },
-  { month: "Mar", avgScore: 85, passRate: 90, satisfaction: 4.4 },
-  { month: "Apr", avgScore: 83, passRate: 87, satisfaction: 4.1 },
-  { month: "May", avgScore: 87, passRate: 92, satisfaction: 4.5 },
-  { month: "Jun", avgScore: 89, passRate: 94, satisfaction: 4.6 },
-]
-
-// TODO: Replace with actual API calls for analytics data
-const competencyData: {
-  id: string
-  name: string
-  completed: number
-  total: number
-  avgScore: number
-}[] = []
-const _assessmentTypes: { type: string; count: number; avgScore: number }[] = []
-const sitePerformance: {
-  id: string
-  name: string
-  students: number
-  avgScore: number
-  passRate: number
-}[] = []
-const _radarData: { subject: string; score: number }[] = []
+interface AnalyticsData {
+  sitePerformance: {
+    id: string
+    name: string
+    students: number
+    avgScore: number
+    passRate: number
+  }[]
+  competencyData: {
+    id: string
+    name: string
+    completed: number
+    total: number
+    avgScore: number
+  }[]
+  predictiveInsights: {
+    id: string
+    type: string
+    title: string
+    description: string
+    confidence: number
+    action: string
+  }[]
+}
 
 const riskFactors = [
   { factor: "Low Attendance", impact: "High", frequency: 15, trend: "up" },
@@ -73,37 +71,31 @@ const riskFactors = [
   { factor: "Technical Skills", impact: "Low", frequency: 5, trend: "down" },
 ]
 
-const predictiveInsights = [
-  {
-    id: "1",
-    type: "risk",
-    title: "Students at Risk of Failure",
-    description: "3 students showing early warning signs based on performance patterns",
-    confidence: 85,
-    action: "Schedule intervention meetings",
-  },
-  {
-    id: "2",
-    type: "opportunity",
-    title: "High Performers Ready for Advanced Training",
-    description: "7 students exceeding expectations and ready for additional challenges",
-    confidence: 92,
-    action: "Offer advanced rotation opportunities",
-  },
-  {
-    id: "3",
-    type: "trend",
-    title: "Communication Skills Improvement",
-    description: "Overall communication scores trending upward across all sites",
-    confidence: 78,
-    action: "Continue current training methods",
-  },
-]
-
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState("6months")
   const [selectedSite, setSelectedSite] = useState("all")
   const [selectedCompetency, setSelectedCompetency] = useState("all")
+  const [data, setData] = useState<AnalyticsData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  const fetchData = async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch(`/api/analytics/clinical-supervisor?timeRange=${timeRange}`)
+      if (!response.ok) throw new Error("Failed to fetch analytics")
+      const result = await response.json()
+      setData(result)
+    } catch (error) {
+      console.error("Error fetching analytics:", error)
+      toast.error("Failed to load analytics data")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+  }, [timeRange])
 
   const getImpactColor = (impact: string) => {
     switch (impact) {
@@ -145,18 +137,20 @@ export default function AnalyticsPage() {
   }
 
   // Calculate key metrics
+  const sitePerformance = data?.sitePerformance || []
+  const competencyData = data?.competencyData || []
+  const predictiveInsights = data?.predictiveInsights || []
+
   const totalStudents = sitePerformance.reduce((sum, site) => sum + site.students, 0)
-  const overallAvgScore = Math.round(
-    sitePerformance.reduce((sum, site) => sum + site.avgScore * site.students, 0) / totalStudents
-  )
-  const overallPassRate = Math.round(
-    sitePerformance.reduce((sum, site) => sum + site.passRate * site.students, 0) / totalStudents
-  )
-  const competencyCompletion = Math.round(
-    (competencyData.reduce((sum, comp) => sum + comp.completed / comp.total, 0) /
-      competencyData.length) *
-      100
-  )
+  const overallAvgScore = totalStudents > 0
+    ? Math.round(sitePerformance.reduce((sum, site) => sum + site.avgScore * site.students, 0) / totalStudents)
+    : 0
+  const overallPassRate = totalStudents > 0
+    ? Math.round(sitePerformance.reduce((sum, site) => sum + site.passRate * site.students, 0) / totalStudents)
+    : 0
+  const competencyCompletion = competencyData.length > 0
+    ? Math.round((competencyData.reduce((sum, comp) => sum + (comp.total > 0 ? comp.completed / comp.total : 0), 0) / competencyData.length) * 100)
+    : 0
 
   return (
     <div className="space-y-6">
@@ -169,8 +163,8 @@ export default function AnalyticsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
-            <RefreshCw className="mr-2 h-4 w-4" />
+          <Button variant="outline" onClick={fetchData} disabled={isLoading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
             Refresh Data
           </Button>
           <Button>
@@ -327,7 +321,7 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {riskFactors.map((factor, _) => (
+                {riskFactors.map((factor) => (
                   <div
                     key={`risk-factor-${factor.factor.replace(/\s+/g, "-").toLowerCase()}-${factor.frequency}`}
                     className="flex items-center justify-between rounded-lg border p-3"
@@ -414,7 +408,7 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {competencyData.map((comp, _) => (
+                {competencyData.map((comp) => (
                   <div
                     key={`competency-${comp.name.replace(/\s+/g, "-").toLowerCase()}-${comp.total}`}
                     className="flex items-center justify-between rounded-lg border p-3"
@@ -431,10 +425,10 @@ export default function AnalyticsPage() {
                         <div className="text-muted-foreground text-sm">Avg Score</div>
                       </div>
                       <div className="w-32">
-                        <Progress value={(comp.completed / comp.total) * 100} />
+                        <Progress value={comp.total > 0 ? (comp.completed / comp.total) * 100 : 0} />
                       </div>
                       <div className="font-medium text-sm">
-                        {Math.round((comp.completed / comp.total) * 100)}%
+                        {Math.round(comp.total > 0 ? (comp.completed / comp.total) * 100 : 0)}%
                       </div>
                     </div>
                   </div>
@@ -461,7 +455,7 @@ export default function AnalyticsPage() {
 
           {/* Site Details */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {sitePerformance.map((site, _) => (
+            {sitePerformance.map((site) => (
               <Card key={`site-${site.name.replace(/\s+/g, "-").toLowerCase()}-${site.students}`}>
                 <CardHeader>
                   <CardTitle className="text-lg">{site.name}</CardTitle>

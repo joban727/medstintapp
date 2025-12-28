@@ -10,10 +10,10 @@ import {
   progressSnapshots,
   users,
 } from "../../../database/schema"
-import { cache, invalidateRelatedCaches } from "../../../lib/redis-cache"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { cache, invalidateRelatedCaches } from "@/lib/neon-cache"
+import { cacheIntegrationService } from "@/lib/cache-integration"
 
-
+import type { UserRole } from "@/types"
 // Validation schemas
 const progressQuerySchema = z.object({
   userId: z.string().optional(),
@@ -55,8 +55,11 @@ async function checkPermissions(userId: string, targetUserId?: string) {
   }
 
   const userRole = user[0].role
-  const isAdmin = ["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(userRole)
-  const isSupervisor = ["CLINICAL_SUPERVISOR", "CLINICAL_PRECEPTOR"].includes(userRole)
+  const isAdmin = userRole !== null && ["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(userRole as UserRole)
+  const isSupervisor = userRole !== null && [
+    "CLINICAL_SUPERVISOR" as UserRole,
+    "CLINICAL_PRECEPTOR" as UserRole,
+  ].includes(userRole as UserRole)
   const isOwnData = userId === targetUserId
 
   return {
@@ -72,147 +75,153 @@ export async function GET(request: NextRequest) {
   try {
     // Try to get cached response
     const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:competency-progress/route.ts',
+      "api:competency-progress/route.ts",
       async () => {
         // Original function logic will be wrapped here
         return await executeOriginalLogic()
       },
       300 // 5 minutes TTL
     )
-    
+
     if (cached) {
       return cached
     }
   } catch (cacheError) {
-    console.warn('Cache error in competency-progress/route.ts:', cacheError)
+    console.warn("Cache error in competency-progress/route.ts:", cacheError)
     // Continue with original logic if cache fails
   }
-  
+
   async function executeOriginalLogic() {
+    console.log("executeOriginalLogic called")
+    try {
+      const { userId } = await auth()
+      console.log("Auth userId:", userId)
+      if (!userId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
 
-  try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+      const { searchParams } = new URL(request.url)
+      const query = progressQuerySchema.parse(Object.fromEntries(searchParams))
+      console.log("Query parsed:", query)
 
-    const { searchParams } = new URL(request.url)
-    const query = progressQuerySchema.parse(Object.fromEntries(searchParams))
+      // Check permissions
+      const permissions = await checkPermissions(userId, query.userId)
+      console.log("Permissions:", permissions)
+      if (!permissions.canView) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      }
 
-    // Check permissions
-    const permissions = await checkPermissions(userId, query.userId)
-    if (!permissions.canView) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    // Try to get from cache first
-    const _cacheParams = {
-      userId: query.userId || (permissions.userRole === "STUDENT" ? userId : undefined),
-      competencyId: query.competencyId,
-      assignmentId: query.assignmentId,
-      status: query.status,
-      startDate: query.startDate,
-      endDate: query.endDate,
-      limit: query.limit,
-      offset: query.offset,
-    }
-
-    const cachedProgress = await cache.getUserProgress(query.userId || userId, query.competencyId)
-    if (cachedProgress) {
-      return NextResponse.json(cachedProgress)
-    }
-
-    // Build query conditions
-    const conditions = []
-
-    if (query.userId) {
-      conditions.push(eq(progressSnapshots.userId, query.userId))
-    } else if (permissions.userRole === "STUDENT") {
-      // Students can only see their own progress
-      conditions.push(eq(progressSnapshots.userId, userId))
-    } else if (permissions.schoolId && !permissions.userRole.includes("SUPER_ADMIN")) {
-      // School-level filtering for non-super admins
-      conditions.push(eq(users.schoolId, permissions.schoolId))
-    }
-
-    if (query.competencyId) {
-      conditions.push(eq(progressSnapshots.competencyId, query.competencyId))
-    }
-
-    if (query.assignmentId) {
-      conditions.push(eq(progressSnapshots.assignmentId, query.assignmentId))
-    }
-
-    if (query.status) {
-      conditions.push(eq(progressSnapshots.status, query.status))
-    }
-
-    if (query.startDate) {
-      conditions.push(gte(progressSnapshots.snapshotDate, new Date(query.startDate)))
-    }
-
-    if (query.endDate) {
-      conditions.push(lte(progressSnapshots.snapshotDate, new Date(query.endDate)))
-    }
-
-    // Execute query with joins
-    const results = await db
-      .select({
-        id: progressSnapshots.id,
-        userId: progressSnapshots.userId,
-        competencyId: progressSnapshots.competencyId,
-        assignmentId: progressSnapshots.assignmentId,
-        progressPercentage: progressSnapshots.progressPercentage,
-        status: progressSnapshots.status,
-        snapshotDate: progressSnapshots.snapshotDate,
-        metadata: progressSnapshots.metadata,
-        createdAt: progressSnapshots.createdAt,
-        updatedAt: progressSnapshots.updatedAt,
-        // User info
-        userName: users.name,
-        userEmail: users.email,
-        // Competency info
-        competencyName: competencies.name,
-        competencyCategory: competencies.category,
-        // Assignment info
-        assignmentDueDate: competencyAssignments.dueDate,
-        assignmentStatus: competencyAssignments.status,
-      })
-      .from(progressSnapshots)
-      .leftJoin(users, eq(progressSnapshots.userId, users.id))
-      .leftJoin(competencies, eq(progressSnapshots.competencyId, competencies.id))
-      .leftJoin(competencyAssignments, eq(progressSnapshots.assignmentId, competencyAssignments.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(progressSnapshots.snapshotDate))
-      .limit(query.limit)
-      .offset(query.offset)
-
-    // Get total count for pagination
-    const totalCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(progressSnapshots)
-      .leftJoin(users, eq(progressSnapshots.userId, users.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-
-    const responseData = {
-      data: results,
-      pagination: {
-        total: totalCount[0]?.count || 0,
+      // Try to get from cache first
+      const _cacheParams = {
+        userId:
+          query.userId || (permissions.userRole === ("STUDENT" as UserRole) ? userId : undefined),
+        competencyId: query.competencyId,
+        assignmentId: query.assignmentId,
+        status: query.status,
+        startDate: query.startDate,
+        endDate: query.endDate,
         limit: query.limit,
         offset: query.offset,
-        hasMore: query.offset + query.limit < (totalCount[0]?.count || 0),
-      },
+      }
+
+      const cachedProgress = await cache.getUserProgress(query.userId || userId, query.competencyId)
+      if (cachedProgress) {
+        return NextResponse.json(cachedProgress)
+      }
+
+      // Build query conditions
+      const conditions = []
+
+      if (query.userId) {
+        conditions.push(eq(progressSnapshots.userId, query.userId))
+      } else if (permissions.userRole === ("STUDENT" as UserRole)) {
+        // Students can only see their own progress
+        conditions.push(eq(progressSnapshots.userId, userId))
+      } else if (permissions.schoolId && permissions.userRole && !permissions.userRole.includes("SUPER_ADMIN")) {
+        // School-level filtering for non-super admins
+        conditions.push(eq(users.schoolId, permissions.schoolId))
+      }
+
+      if (query.competencyId) {
+        conditions.push(eq(progressSnapshots.competencyId, query.competencyId))
+      }
+
+      if (query.assignmentId) {
+        conditions.push(eq(progressSnapshots.assignmentId, query.assignmentId))
+      }
+
+      if (query.status) {
+        conditions.push(eq(progressSnapshots.status, query.status))
+      }
+
+      if (query.startDate) {
+        conditions.push(gte(progressSnapshots.snapshotDate, new Date(query.startDate)))
+      }
+
+      if (query.endDate) {
+        conditions.push(lte(progressSnapshots.snapshotDate, new Date(query.endDate)))
+      }
+
+      // Execute query with joins
+      const results = await db
+        .select({
+          id: progressSnapshots.id,
+          userId: progressSnapshots.userId,
+          competencyId: progressSnapshots.competencyId,
+          assignmentId: progressSnapshots.assignmentId,
+          progressPercentage: progressSnapshots.progressPercentage,
+          status: progressSnapshots.status,
+          snapshotDate: progressSnapshots.snapshotDate,
+          metadata: progressSnapshots.metadata,
+          createdAt: progressSnapshots.createdAt,
+          updatedAt: progressSnapshots.updatedAt,
+          // User info
+          userName: users.name,
+          userEmail: users.email,
+          // Competency info
+          competencyName: competencies.name,
+          competencyCategory: competencies.category,
+          // Assignment info
+          assignmentDueDate: competencyAssignments.dueDate,
+          assignmentStatus: competencyAssignments.status,
+        })
+        .from(progressSnapshots)
+        .leftJoin(users, eq(progressSnapshots.userId, users.id))
+        .leftJoin(competencies, eq(progressSnapshots.competencyId, competencies.id))
+        .leftJoin(
+          competencyAssignments,
+          eq(progressSnapshots.assignmentId, competencyAssignments.id)
+        )
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(progressSnapshots.snapshotDate))
+        .limit(query.limit)
+        .offset(query.offset)
+
+      // Get total count for pagination
+      const totalCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(progressSnapshots)
+        .leftJoin(users, eq(progressSnapshots.userId, users.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+
+      const responseData = {
+        data: results,
+        pagination: {
+          total: totalCount[0]?.count || 0,
+          limit: query.limit,
+          offset: query.offset,
+          hasMore: query.offset + query.limit < (totalCount[0]?.count || 0),
+        },
+      }
+
+      // Cache the result
+      await cache.setUserProgress(query.userId || userId, responseData, query.competencyId)
+
+      return NextResponse.json(responseData)
+    } catch (error) {
+      console.error("Error fetching progress snapshots:", error)
+      return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
-
-    // Cache the result
-    await cache.setUserProgress(query.userId || userId, responseData, query.competencyId)
-
-    return NextResponse.json(responseData)
-  } catch (error) {
-    console.error("Error fetching progress snapshots:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-
   }
 }
 
@@ -289,14 +298,14 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    
+
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateCompetencyCache()
+      await cacheIntegrationService.invalidateByTags(['competency'])
     } catch (cacheError) {
-      console.warn('Cache invalidation error in competency-progress/route.ts:', cacheError)
+      console.warn("Cache invalidation error in competency-progress/route.ts:", cacheError)
     }
-    
+
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -383,14 +392,15 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       )
     }
-    
+
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateCompetencyCache()
+      await cacheIntegrationService.invalidateByTags(['competency'])
     } catch (cacheError) {
-      console.warn('Cache invalidation error in competency-progress/route.ts:', cacheError)
+      console.warn("Cache invalidation error in competency-progress/route.ts:", cacheError)
     }
-    
+
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+

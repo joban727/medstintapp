@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server"
 import { neon, neonConfig } from "@neondatabase/serverless"
 
 // Configure Neon for serverless environments to prevent WebSocket issues
-neonConfig.fetchConnectionCache = true
+// fetchConnectionCache is deprecated and now always true
 neonConfig.webSocketConstructor = undefined // Disable WebSocket to prevent s.unref errors
 
 /**

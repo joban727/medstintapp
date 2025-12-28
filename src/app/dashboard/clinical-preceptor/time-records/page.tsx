@@ -45,7 +45,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../../../components/ui/table"
-import { db } from "../../../../database/db"
+import { db } from "@/database/connection-pool"
 import {
   clinicalSites,
   rotations,
@@ -293,7 +293,7 @@ export default async function TimeRecordsPage() {
                         <AvatarFallback>
                           {record.studentName
                             ?.split(" ")
-                            .map((n) => n[0])
+                            .map((n: string) => n[0])
                             .join("") || "U"}
                         </AvatarFallback>
                       </Avatar>
@@ -312,7 +312,7 @@ export default async function TimeRecordsPage() {
                   <TableCell>
                     <div className="text-sm">
                       <div>
-                        {new Date(record.clockIn).toLocaleTimeString()} -{" "}
+                        {record.clockIn ? new Date(record.clockIn).toLocaleTimeString() : "N/A"} -{" "}
                         {record.clockOut
                           ? new Date(record.clockOut).toLocaleTimeString()
                           : "In Progress"}
@@ -441,12 +441,12 @@ export default async function TimeRecordsPage() {
                         <div className="text-muted-foreground text-sm">
                           {correction.originalClockIn && correction.originalClockOut
                             ? `${new Date(correction.originalClockIn).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })} - ${new Date(correction.originalClockOut).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}`
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })} - ${new Date(correction.originalClockOut).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}`
                             : "No time recorded"}
                         </div>
                       </TableCell>
@@ -459,27 +459,27 @@ export default async function TimeRecordsPage() {
                         <div className="text-sm">
                           {(correction.correctionType === "CLOCK_IN_TIME" ||
                             correction.correctionType === "CLOCK_OUT_TIME") && (
-                            <div>
-                              {requestedChanges.newClockIn && (
-                                <div>
-                                  In:{" "}
-                                  {new Date(requestedChanges.newClockIn).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </div>
-                              )}
-                              {requestedChanges.newClockOut && (
-                                <div>
-                                  Out:{" "}
-                                  {new Date(requestedChanges.newClockOut).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )}
+                              <div>
+                                {requestedChanges.newClockIn && (
+                                  <div>
+                                    In:{" "}
+                                    {new Date(requestedChanges.newClockIn).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </div>
+                                )}
+                                {requestedChanges.newClockOut && (
+                                  <div>
+                                    Out:{" "}
+                                    {new Date(requestedChanges.newClockOut).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           {correction.correctionType === "ACTIVITIES" && (
                             <div className="truncate">{requestedChanges.newActivities}</div>
                           )}

@@ -13,6 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 interface TimeRecordsFilterFormProps {
   defaultValues: {
     search?: string
@@ -40,19 +44,24 @@ export function TimeRecordsFilterForm({ defaultValues }: TimeRecordsFilterFormPr
         <CardDescription>Filter timecard records by various criteria</CardDescription>
       </CardHeader>
       <CardContent>
-        <form ref={formRef} method="GET" className="space-y-4">
+        <form ref={formRef} method="GET" className="gap-4" noValidate>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-2">
+            <div className="gap-2">
               <label className="font-medium text-sm">Search</label>
               <Input
                 placeholder="Student name, email, or rotation..."
+                aria-label="Student name, email, or rotation..."
                 defaultValue={defaultValues.search || ""}
                 name="search"
               />
             </div>
-            <div className="space-y-2">
+            <div className="gap-2">
               <label className="font-medium text-sm">Status</label>
-              <Select defaultValue={defaultValues.status || "all"} name="status">
+              <Select
+                aria-label="All statuses"
+                defaultValue={defaultValues.status || "all"}
+                name="status"
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
@@ -64,11 +73,11 @@ export function TimeRecordsFilterForm({ defaultValues }: TimeRecordsFilterFormPr
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
+            <div className="gap-2">
               <label className="font-medium text-sm">Date From</label>
               <Input type="date" defaultValue={defaultValues.dateFrom || ""} name="dateFrom" />
             </div>
-            <div className="space-y-2">
+            <div className="gap-2">
               <label className="font-medium text-sm">Date To</label>
               <Input type="date" defaultValue={defaultValues.dateTo || ""} name="dateTo" />
             </div>

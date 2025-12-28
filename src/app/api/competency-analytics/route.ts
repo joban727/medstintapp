@@ -12,10 +12,10 @@ import {
   progressSnapshots,
   users,
 } from "../../../database/schema"
-import { cache, invalidateRelatedCaches } from "../../../lib/redis-cache"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { cache, invalidateRelatedCaches } from "@/lib/neon-cache"
+import { cacheIntegrationService } from "@/lib/cache-integration"
 
-
+import type { UserRole } from "@/types"
 // Validation schemas
 const analyticsQuerySchema = z.object({
   userId: z.string().nullable().optional(),
@@ -62,16 +62,19 @@ async function checkPermissions(userId: string, targetUserId?: string) {
   }
 
   const userRole = user[0].role
-  const isAdmin = ["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(userRole)
-  const isSupervisor = ["CLINICAL_SUPERVISOR", "CLINICAL_PRECEPTOR"].includes(userRole)
-  const isStudent = userRole === "STUDENT"
+  const isAdmin = userRole !== null && ["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(userRole as UserRole)
+  const isSupervisor = userRole !== null && [
+    "CLINICAL_SUPERVISOR" as UserRole,
+    "CLINICAL_PRECEPTOR" as UserRole,
+  ].includes(userRole as UserRole)
+  const isStudent = userRole === ("STUDENT" as UserRole)
   const isOwnData = userId === targetUserId
 
   return {
     canView: isAdmin || isSupervisor || (isStudent && isOwnData),
     canViewAll: isAdmin || isSupervisor,
     canGenerate: isAdmin || isSupervisor,
-    userRole,
+    userRole: userRole || "STUDENT",
     schoolId: user[0].schoolId,
   }
 }
@@ -294,181 +297,179 @@ export async function GET(request: NextRequest) {
   try {
     // Try to get cached response
     const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:competency-analytics/route.ts',
+      "api:competency-analytics/route.ts",
       async () => {
         // Original function logic will be wrapped here
         return await executeOriginalLogic()
       },
       300 // 5 minutes TTL
     )
-    
+
     if (cached) {
       return cached
     }
   } catch (cacheError) {
-    console.warn('Cache error in competency-analytics/route.ts:', cacheError)
+    console.warn("Cache error in competency-analytics/route.ts:", cacheError)
     // Continue with original logic if cache fails
   }
-  
+
   async function executeOriginalLogic() {
-
-  try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const queryParams = {
-      analyticsType: searchParams.get("analyticsType") || "PROGRESS_OVERVIEW",
-      userId: searchParams.get("userId"),
-      schoolId: searchParams.get("schoolId"),
-      competencyId: searchParams.get("competencyId"),
-      startDate: searchParams.get("startDate"),
-      endDate: searchParams.get("endDate"),
-    }
-
-    const validatedParams = analyticsQuerySchema.parse(queryParams)
-    const {
-      analyticsType,
-      userId: targetUserId,
-      schoolId,
-      competencyId,
-      startDate,
-      endDate,
-    } = validatedParams
-
-    // Check permissions
-    const permissions = await checkPermissions(userId, targetUserId || undefined)
-    if (!permissions.canView) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    // Enhanced cache key with version for cache busting
-    const cacheVersion = "v2" // Increment when query structure changes
-    const _cacheKey = `analytics:${cacheVersion}:${analyticsType}:${targetUserId || "all"}:${schoolId || "all"}:${competencyId || "all"}:${startDate || "all"}:${endDate || "all"}`
-
-    // Try to get from cache first with different TTLs based on query type
-    const cachedResult = await cache.getAnalytics({
-      analyticsType: analyticsType || "DEFAULT",
-      userId: targetUserId || undefined,
-      schoolId: schoolId || undefined,
-      competencyId: competencyId || undefined,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
-    })
-    if (cachedResult) {
-      return NextResponse.json({
-        ...cachedResult,
-        cached: true,
-        cacheTimestamp: new Date().toISOString(),
-      })
-    }
-
-    const startTime = Date.now()
-    let result: unknown
-
-    switch (analyticsType) {
-      case "PROGRESS_OVERVIEW":
-        result = await generateProgressOverview(
-          targetUserId || undefined,
-          schoolId || undefined,
-          competencyId || undefined,
-          startDate || undefined,
-          endDate || undefined
-        )
-        break
-      case "COMPETENCY_PERFORMANCE":
-        result = await generateCompetencyPerformance(
-          targetUserId || undefined,
-          schoolId || undefined,
-          competencyId || undefined,
-          startDate || undefined,
-          endDate || undefined
-        )
-        break
-      default: {
-        // Get stored analytics from database with optimized query
-        const conditions = []
-        if (targetUserId) conditions.push(eq(learningAnalytics.userId, targetUserId))
-        if (schoolId) conditions.push(eq(learningAnalytics.schoolId, schoolId))
-        if (competencyId) conditions.push(eq(learningAnalytics.competencyId, competencyId))
-        if (startDate) conditions.push(gte(learningAnalytics.createdAt, new Date(startDate)))
-        if (endDate) conditions.push(lte(learningAnalytics.createdAt, new Date(endDate)))
-
-        result = await db
-          .select({
-            id: learningAnalytics.id,
-            metricType: learningAnalytics.metricType,
-            metricValue: learningAnalytics.metricValue,
-            timePeriod: learningAnalytics.timePeriod,
-            aggregationLevel: learningAnalytics.aggregationLevel,
-            metadata: learningAnalytics.metadata,
-            recordedAt: learningAnalytics.recordedAt,
-            createdAt: learningAnalytics.createdAt,
-            userId: learningAnalytics.userId,
-            schoolId: learningAnalytics.schoolId,
-            competencyId: learningAnalytics.competencyId,
-          })
-          .from(learningAnalytics)
-          .where(conditions.length > 0 ? and(...conditions) : undefined)
-          .orderBy(desc(learningAnalytics.createdAt))
-          .limit(100)
+    try {
+      const { userId } = await auth()
+      if (!userId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
       }
-    }
 
-    const executionTime = Date.now() - startTime
+      const { searchParams } = new URL(request.url)
+      const queryParams = {
+        analyticsType: searchParams.get("analyticsType") || "PROGRESS_OVERVIEW",
+        userId: searchParams.get("userId"),
+        schoolId: searchParams.get("schoolId"),
+        competencyId: searchParams.get("competencyId"),
+        startDate: searchParams.get("startDate"),
+        endDate: searchParams.get("endDate"),
+      }
 
-    // Log slow queries for monitoring
-    if (executionTime > 1000) {
-      console.warn(
-        `Slow analytics query detected: ${analyticsType}, execution time: ${executionTime}ms, params:`,
-        validatedParams
-      )
-    }
+      const validatedParams = analyticsQuerySchema.parse(queryParams)
+      const {
+        analyticsType,
+        userId: targetUserId,
+        schoolId,
+        competencyId,
+        startDate,
+        endDate,
+      } = validatedParams
 
-    // Dynamic cache TTL based on query complexity and data freshness requirements
-    let _cacheTTL = 900 // Default 15 minutes
-    if (analyticsType === "PROGRESS_OVERVIEW") {
-      _cacheTTL = 300 // 5 minutes for more dynamic data
-    } else if (analyticsType === "COMPETENCY_PERFORMANCE") {
-      _cacheTTL = 1800 // 30 minutes for more stable performance data
-    }
+      // Check permissions
+      const permissions = await checkPermissions(userId, targetUserId || undefined)
+      if (!permissions.canView) {
+        return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+      }
 
-    // Cache the result with metadata
-    const resultData = result as Record<string, unknown>
-    await cache.setAnalytics(
-      {
+      // Enhanced cache key with version for cache busting
+      const cacheVersion = "v2" // Increment when query structure changes
+      const _cacheKey = `analytics:${cacheVersion}:${analyticsType}:${targetUserId || "all"}:${schoolId || "all"}:${competencyId || "all"}:${startDate || "all"}:${endDate || "all"}`
+
+      // Try to get from cache first with different TTLs based on query type
+      const cachedResult = await cache.getAnalytics({
         analyticsType: analyticsType || "DEFAULT",
         userId: targetUserId || undefined,
         schoolId: schoolId || undefined,
         competencyId: competencyId || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-      },
-      {
+      })
+      if (cachedResult) {
+        return NextResponse.json({
+          ...cachedResult,
+          cached: true,
+          cacheTimestamp: new Date().toISOString(),
+        })
+      }
+
+      const startTime = Date.now()
+      let result: unknown
+
+      switch (analyticsType) {
+        case "PROGRESS_OVERVIEW":
+          result = await generateProgressOverview(
+            targetUserId || undefined,
+            schoolId || undefined,
+            competencyId || undefined,
+            startDate || undefined,
+            endDate || undefined
+          )
+          break
+        case "COMPETENCY_PERFORMANCE":
+          result = await generateCompetencyPerformance(
+            targetUserId || undefined,
+            schoolId || undefined,
+            competencyId || undefined,
+            startDate || undefined,
+            endDate || undefined
+          )
+          break
+        default: {
+          // Get stored analytics from database with optimized query
+          const conditions = []
+          if (targetUserId) conditions.push(eq(learningAnalytics.userId, targetUserId))
+          if (schoolId) conditions.push(eq(learningAnalytics.schoolId, schoolId))
+          if (competencyId) conditions.push(eq(learningAnalytics.competencyId, competencyId))
+          if (startDate) conditions.push(gte(learningAnalytics.createdAt, new Date(startDate)))
+          if (endDate) conditions.push(lte(learningAnalytics.createdAt, new Date(endDate)))
+
+          result = await db
+            .select({
+              id: learningAnalytics.id,
+              metricType: learningAnalytics.metricType,
+              metricValue: learningAnalytics.metricValue,
+              timePeriod: learningAnalytics.timePeriod,
+              aggregationLevel: learningAnalytics.aggregationLevel,
+              metadata: learningAnalytics.metadata,
+              recordedAt: learningAnalytics.recordedAt,
+              createdAt: learningAnalytics.createdAt,
+              userId: learningAnalytics.userId,
+              schoolId: learningAnalytics.schoolId,
+              competencyId: learningAnalytics.competencyId,
+            })
+            .from(learningAnalytics)
+            .where(conditions.length > 0 ? and(...conditions) : undefined)
+            .orderBy(desc(learningAnalytics.createdAt))
+            .limit(100)
+        }
+      }
+
+      const executionTime = Date.now() - startTime
+
+      // Log slow queries for monitoring
+      if (executionTime > 1000) {
+        console.warn(
+          `Slow analytics query detected: ${analyticsType}, execution time: ${executionTime}ms, params:`,
+          validatedParams
+        )
+      }
+
+      // Dynamic cache TTL based on query complexity and data freshness requirements
+      let _cacheTTL = 900 // Default 15 minutes
+      if (analyticsType === "PROGRESS_OVERVIEW") {
+        _cacheTTL = 300 // 5 minutes for more dynamic data
+      } else if (analyticsType === "COMPETENCY_PERFORMANCE") {
+        _cacheTTL = 1800 // 30 minutes for more stable performance data
+      }
+
+      // Cache the result with metadata
+      const resultData = result as Record<string, unknown>
+      await cache.setAnalytics(
+        {
+          analyticsType: analyticsType || "DEFAULT",
+          userId: targetUserId || undefined,
+          schoolId: schoolId || undefined,
+          competencyId: competencyId || undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+        },
+        {
+          ...resultData,
+          metadata: {
+            generatedAt: new Date().toISOString(),
+            executionTime,
+            queryParams: validatedParams,
+          },
+        }
+      )
+
+      return NextResponse.json({
         ...resultData,
         metadata: {
           generatedAt: new Date().toISOString(),
           executionTime,
-          queryParams: validatedParams,
+          cached: false,
         },
-      }
-    )
-
-    return NextResponse.json({
-      ...resultData,
-      metadata: {
-        generatedAt: new Date().toISOString(),
-        executionTime,
-        cached: false,
-      },
-    })
-  } catch (error) {
-    console.error("Analytics API error:", error)
-    return NextResponse.json({ error: "Failed to fetch analytics data" }, { status: 500 })
-  }
-
+      })
+    } catch (error) {
+      console.error("Analytics API error:", error)
+      return NextResponse.json({ error: "Failed to fetch analytics data" }, { status: 500 })
+    }
   }
 }
 
@@ -518,14 +519,14 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    
+
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateCompetencyCache()
+      await cacheIntegrationService.invalidateByTags(['competency'])
     } catch (cacheError) {
-      console.warn('Cache invalidation error in competency-analytics/route.ts:', cacheError)
+      console.warn("Cache invalidation error in competency-analytics/route.ts:", cacheError)
     }
-    
+
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -560,14 +561,15 @@ export async function DELETE(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error cleaning up analytics:", error)
-    
+
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateCompetencyCache()
+      await cacheIntegrationService.invalidateByTags(['competency'])
     } catch (cacheError) {
-      console.warn('Cache invalidation error in competency-analytics/route.ts:', cacheError)
+      console.warn("Cache invalidation error in competency-analytics/route.ts:", cacheError)
     }
-    
+
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+

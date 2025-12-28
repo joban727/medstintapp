@@ -1,25 +1,28 @@
-import { type NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
-import { db } from '@/database/db'
-import { 
-  timeRecords, 
-  clinicalSites, 
-  clinicalSiteLocations, 
+import { type NextRequest, NextResponse } from "next/server"
+import { auth } from "@clerk/nextjs/server"
+import { db } from "@/database/connection-pool"
+import {
+  timeRecords,
+  clinicalSites,
+  clinicalSiteLocations,
   locationVerifications,
-  locationAccuracyLogs 
-} from '@/database/schema'
-import { eq, and } from 'drizzle-orm'
+  locationAccuracyLogs,
+  rotations,
+} from "@/database/schema"
+import { eq, and } from "drizzle-orm"
+import { withErrorHandling } from "@/lib/api-response"
 
 interface LocationVerificationRequest {
-  verificationType: 'clock_in' | 'clock_out'
+  timeRecordId: string
+  verificationType: "clock_in" | "clock_out"
   userLatitude: number
   userLongitude: number
   userAccuracy: number
-  locationSource: 'gps' | 'network' | 'passive'
+  locationSource: "gps" | "network" | "manual"
   clinicalSiteLocationId?: string
   distanceFromSite: number
   isWithinGeofence: boolean
-  verificationStatus: 'approved' | 'flagged' | 'rejected'
+  verificationStatus: "approved" | "flagged" | "rejected"
   flagReason?: string
   metadata?: any
 }
@@ -36,7 +39,7 @@ interface VerificationResult {
   isValid: boolean
   proximity: ProximityCheck
   accuracy: {
-    level: 'high' | 'medium' | 'low'
+    level: "high" | "medium" | "low"
     acceptable: boolean
     value: number
   }
@@ -73,270 +76,263 @@ async function verifyLocationProximity(
         rotationId: timeRecords.rotationId,
         siteName: clinicalSites.name,
         siteAddress: clinicalSites.address,
-        siteLatitude: clinicalSites.latitude,
-        siteLongitude: clinicalSites.longitude,
-        allowedRadius: clinicalSites.allowedRadius
       })
       .from(timeRecords)
       .leftJoin(clinicalSites, eq(timeRecords.rotationId, clinicalSites.id))
-      .where(
-        and(
-          eq(timeRecords.id, timeRecordId),
-          eq(timeRecords.studentId, userId)
-        )
-      )
+      .where(and(eq(timeRecords.id, timeRecordId), eq(timeRecords.studentId, userId)))
       .limit(1)
 
     if (recordWithSite.length === 0) {
       return {
         isWithinRange: false,
         distance: 0,
-        allowedRadius: 0
+        allowedRadius: 0,
       }
     }
 
     const siteData = recordWithSite[0]
 
-    // If no site coordinates are available, skip proximity check
-    if (!siteData.siteLatitude || !siteData.siteLongitude) {
-      return {
-        isWithinRange: true, // Allow if no site coordinates
-        distance: 0,
-        allowedRadius: 0,
-        siteName: siteData.siteName || undefined,
-        siteAddress: siteData.siteAddress || undefined
+    // Try to get location data from clinicalSiteLocations if the site has one
+    if (siteData.rotationId) {
+      const siteLocations = await db
+        .select({
+          latitude: clinicalSiteLocations.latitude,
+          longitude: clinicalSiteLocations.longitude,
+          radius: clinicalSiteLocations.radius,
+        })
+        .from(clinicalSiteLocations)
+        .where(eq(clinicalSiteLocations.clinicalSiteId, siteData.rotationId))
+        .limit(1)
+
+      if (siteLocations.length > 0) {
+        const loc = siteLocations[0]
+        const siteLatitude = Number.parseFloat(loc.latitude)
+        const siteLongitude = Number.parseFloat(loc.longitude)
+        const allowedRadius = loc.radius || 100
+
+        // Calculate distance between user location and site
+        const distance = calculateDistance(userLatitude, userLongitude, siteLatitude, siteLongitude)
+
+        return {
+          isWithinRange: distance <= allowedRadius,
+          distance: Math.round(distance),
+          allowedRadius,
+          siteName: siteData.siteName || undefined,
+          siteAddress: siteData.siteAddress || undefined,
+        }
       }
     }
 
-    const siteLatitude = Number.parseFloat(siteData.siteLatitude)
-    const siteLongitude = Number.parseFloat(siteData.siteLongitude)
-    const allowedRadius = siteData.allowedRadius || 100 // Default 100m radius
-
-    // Calculate distance between user location and site
-    const distance = calculateDistance(
-      userLatitude,
-      userLongitude,
-      siteLatitude,
-      siteLongitude
-    )
-
+    // If no site coordinates are available, allow clock in/out
     return {
-      isWithinRange: distance <= allowedRadius,
-      distance: Math.round(distance),
-      allowedRadius,
+      isWithinRange: true, // Allow if no site coordinates
+      distance: 0,
+      allowedRadius: 0,
       siteName: siteData.siteName || undefined,
-      siteAddress: siteData.siteAddress || undefined
+      siteAddress: siteData.siteAddress || undefined,
     }
-
   } catch (error) {
-    console.error('Proximity verification error:', error)
+    console.error("Proximity verification error:", error)
     return {
       isWithinRange: false,
       distance: 0,
-      allowedRadius: 0
+      allowedRadius: 0,
     }
   }
 }
 
 function validateLocationAccuracy(accuracy: number): {
-  level: 'high' | 'medium' | 'low'
+  level: "high" | "medium" | "low"
   acceptable: boolean
 } {
   if (accuracy <= 10) {
-    return { level: 'high', acceptable: true }
-  }if (accuracy <= 50) {
-    return { level: 'medium', acceptable: true }
-  }if (accuracy <= 100) {
-    return { level: 'low', acceptable: true }
+    return { level: "high", acceptable: true }
   }
-    return { level: 'low', acceptable: false }
+  if (accuracy <= 50) {
+    return { level: "medium", acceptable: true }
+  }
+  if (accuracy <= 100) {
+    return { level: "low", acceptable: true }
+  }
+  return { level: "low", acceptable: false }
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const { userId } = await auth()
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  const { userId } = await auth()
 
-    const body = await request.json()
-    const {
-      verificationType,
-      userLatitude,
-      userLongitude,
-      userAccuracy,
-      locationSource,
-      clinicalSiteLocationId,
-      distanceFromSite,
-      isWithinGeofence,
-      verificationStatus,
-      flagReason,
-      metadata
-    }: LocationVerificationRequest = body
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-    // Validate input
-    if (!verificationType || typeof userLatitude !== 'number' || typeof userLongitude !== 'number' || typeof userAccuracy !== 'number') {
-      return NextResponse.json(
-        { error: 'Invalid request data' },
-        { status: 400 }
-      )
-    }
+  const body = await request.json()
+  const {
+    timeRecordId,
+    verificationType,
+    userLatitude,
+    userLongitude,
+    userAccuracy,
+    locationSource,
+    clinicalSiteLocationId,
+  }: LocationVerificationRequest = body
 
-    // Validate coordinate ranges
-    if (userLatitude < -90 || userLatitude > 90 || userLongitude < -180 || userLongitude > 180) {
-      return NextResponse.json(
-        { error: 'Invalid coordinates' },
-        { status: 400 }
-      )
-    }
+  // Validate input
+  if (
+    !verificationType ||
+    typeof userLatitude !== "number" ||
+    typeof userLongitude !== "number" ||
+    typeof userAccuracy !== "number"
+  ) {
+    return NextResponse.json({ error: "Invalid request data" }, { status: 400 })
+  }
 
-    // Save location verification record
-    const verificationRecord = await db
-      .insert(locationVerifications)
-      .values({
-        userId,
-        verificationType,
-        userLatitude: userLatitude.toString(),
-        userLongitude: userLongitude.toString(),
-        userAccuracy,
-        locationSource,
-        clinicalSiteLocationId,
-        distanceFromSite,
-        isWithinGeofence,
-        verificationStatus,
-        flagReason,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        createdAt: new Date(),
-      })
-      .returning()
+  // Validate coordinate ranges
+  if (userLatitude < -90 || userLatitude > 90 || userLongitude < -180 || userLongitude > 180) {
+    return NextResponse.json({ error: "Invalid coordinates" }, { status: 400 })
+  }
 
-    // Log accuracy data for analytics
-    await db
-      .insert(locationAccuracyLogs)
-      .values({
-        userId,
-        latitude: userLatitude.toString(),
-        longitude: userLongitude.toString(),
-        accuracy: userAccuracy,
-        source: locationSource,
-        verificationType,
-        verificationStatus,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        createdAt: new Date(),
-      })
+  // Get the time record to find the clinical site
+  const timeRecord = await db
+    .select({
+      rotationId: timeRecords.rotationId,
+    })
+    .from(timeRecords)
+    .where(and(eq(timeRecords.id, timeRecordId), eq(timeRecords.studentId, userId)))
+    .limit(1)
 
-    const verification = verificationRecord[0]
+  if (timeRecord.length === 0) {
+    return NextResponse.json({ error: "Time record not found" }, { status: 404 })
+  }
 
-    return NextResponse.json({
+  // Get clinical site ID from rotation
+  const [rotation] = await db
+    .select({ clinicalSiteId: rotations.clinicalSiteId })
+    .from(rotations)
+    .where(eq(rotations.id, timeRecord[0].rotationId))
+    .limit(1)
+
+  if (!rotation) {
+    return NextResponse.json({ error: "Rotation not found" }, { status: 404 })
+  }
+
+  // Perform server-side validation
+  // Import dynamically to avoid circular dependencies if any (though here it should be fine)
+  const { validateLocationWithGeofence, saveLocationVerification } = await import("@/services/location-validation")
+
+  const validationResult = await validateLocationWithGeofence({
+    userId,
+    latitude: userLatitude,
+    longitude: userLongitude,
+    accuracy: userAccuracy,
+    clinicalSiteId: rotation.clinicalSiteId,
+    strictMode: false // Soft validation for now
+  })
+
+  // Save the verification record
+  const verificationId = await saveLocationVerification(
+    timeRecordId,
+    verificationType,
+    validationResult,
+    userLatitude,
+    userLongitude,
+    userAccuracy,
+    locationSource || "manual"
+  )
+
+  return NextResponse.json(
+    {
       success: true,
-      verificationId: verification.id,
-      status: verificationStatus,
-      isWithinGeofence,
-      distanceFromSite,
-      flagReason,
-      timestamp: verification.createdAt,
-    }, { status: 200 })
+      verificationId: verificationId,
+      status: validationResult.isValid ? "approved" : "flagged",
+      isWithinGeofence: validationResult.isWithinGeofence,
+      distanceFromSite: validationResult.distanceFromSite,
+      flagReason: validationResult.errors.join("; ") || validationResult.warnings.join("; "),
+      timestamp: new Date(),
+    },
+    { status: 200 }
+  )
+})
 
-  } catch (error) {
-    console.error('Location verification error:', error)
-    
-    return NextResponse.json(
-      { 
-        error: 'Internal server error',
-        message: 'Failed to save location verification'
-      },
-      { status: 500 }
-    )
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  const { userId } = await auth()
+
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-}
 
-export async function GET(request: NextRequest) {
-  try {
-    const { userId } = await auth()
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+  const { searchParams } = new URL(request.url)
+  const timeRecordId = searchParams.get("timeRecordId")
 
-    const { searchParams } = new URL(request.url)
-    const timeRecordId = searchParams.get('timeRecordId')
+  if (!timeRecordId) {
+    return NextResponse.json({ error: "Time record ID is required" }, { status: 400 })
+  }
 
-    if (!timeRecordId) {
-      return NextResponse.json(
-        { error: 'Time record ID is required' },
-        { status: 400 }
-      )
-    }
+  // Get site information for the time record
+  const siteInfo = await db
+    .select({
+      siteName: clinicalSites.name,
+      siteAddress: clinicalSites.address,
+      sitePhone: clinicalSites.phone,
+      siteEmail: clinicalSites.email,
+      clinicalSiteId: clinicalSites.id,
+    })
+    .from(timeRecords)
+    .leftJoin(clinicalSites, eq(timeRecords.rotationId, clinicalSites.id))
+    .where(and(eq(timeRecords.id, timeRecordId), eq(timeRecords.studentId, userId)))
+    .limit(1)
 
-    // Get site information for the time record
-    const siteInfo = await db
+  if (siteInfo.length === 0) {
+    return NextResponse.json({ error: "Time record not found or access denied" }, { status: 404 })
+  }
+
+  const site = siteInfo[0]
+
+  // Get location data from clinicalSiteLocations if available
+  let siteLatitude: string | null = null
+  let siteLongitude: string | null = null
+  let allowedRadius = 100
+
+  if (site.clinicalSiteId) {
+    const locations = await db
       .select({
-        siteName: clinicalSites.name,
-        siteAddress: clinicalSites.address,
-        siteLatitude: clinicalSites.latitude,
-        siteLongitude: clinicalSites.longitude,
-        allowedRadius: clinicalSites.allowedRadius,
-        sitePhone: clinicalSites.phone,
-        siteEmail: clinicalSites.email
+        latitude: clinicalSiteLocations.latitude,
+        longitude: clinicalSiteLocations.longitude,
+        radius: clinicalSiteLocations.radius,
       })
-      .from(timeRecords)
-      .leftJoin(clinicalSites, eq(timeRecords.rotationId, clinicalSites.id))
-      .where(
-        and(
-          eq(timeRecords.id, timeRecordId),
-          eq(timeRecords.studentId, userId)
-        )
-      )
+      .from(clinicalSiteLocations)
+      .where(eq(clinicalSiteLocations.clinicalSiteId, site.clinicalSiteId))
       .limit(1)
 
-    if (siteInfo.length === 0) {
-      return NextResponse.json(
-        { error: 'Time record not found or access denied' },
-        { status: 404 }
-      )
+    if (locations.length > 0) {
+      siteLatitude = locations[0].latitude
+      siteLongitude = locations[0].longitude
+      allowedRadius = locations[0].radius || 100
     }
-
-    const site = siteInfo[0]
-
-    const response = {
-      timeRecordId,
-      site: {
-        name: site.siteName,
-        address: site.siteAddress,
-        coordinates: site.siteLatitude && site.siteLongitude ? {
-          latitude: Number.parseFloat(site.siteLatitude),
-          longitude: Number.parseFloat(site.siteLongitude)
-        } : null,
-        allowedRadius: site.allowedRadius || 100,
-        contact: {
-          phone: site.sitePhone,
-          email: site.siteEmail
-        }
-      },
-      requirements: {
-        maxAccuracy: 100, // meters
-        proximityRequired: !!site.siteLatitude && !!site.siteLongitude
-      }
-    }
-
-    return NextResponse.json(response, { status: 200 })
-
-  } catch (error) {
-    console.error('Site info retrieval error:', error)
-    
-    return NextResponse.json(
-      { 
-        error: 'Internal server error',
-        message: 'Failed to retrieve site information'
-      },
-      { status: 500 }
-    )
   }
-}
+
+  const response = {
+    timeRecordId,
+    site: {
+      name: site.siteName,
+      address: site.siteAddress,
+      coordinates:
+        siteLatitude && siteLongitude
+          ? {
+            latitude: Number.parseFloat(siteLatitude),
+            longitude: Number.parseFloat(siteLongitude),
+          }
+          : null,
+      allowedRadius,
+      contact: {
+        phone: site.sitePhone,
+        email: site.siteEmail,
+      },
+    },
+    requirements: {
+      maxAccuracy: 100, // meters
+      proximityRequired: !!siteLatitude && !!siteLongitude,
+    },
+  }
+
+  return NextResponse.json(response, { status: 200 })
+})
+

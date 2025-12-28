@@ -6,7 +6,7 @@ const createHash =
 
 import { and, count, eq } from "drizzle-orm"
 import type { NextResponse } from "next/server"
-import { db } from "@/database/db"
+import { db } from "@/database/connection-pool"
 import {
   auditLogs,
   competencies,

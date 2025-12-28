@@ -38,7 +38,7 @@ import {
   TableRow,
 } from "../../../../components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs"
-import { db } from "../../../../database/db"
+import { db } from "@/database/connection-pool"
 import { evaluations, timeRecords, users } from "../../../../database/schema"
 import { requireAnyRole } from "../../../../lib/auth-clerk"
 
@@ -54,16 +54,16 @@ export default async function StudentProgressPage() {
 
   const students = userSchoolId
     ? await db
-        .select({
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          image: users.image,
-          createdAt: users.createdAt,
-          programId: users.programId,
-        })
-        .from(users)
-        .where(and(eq(users.schoolId, userSchoolId), eq(users.role, "STUDENT")))
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        image: users.image,
+        createdAt: users.createdAt,
+        programId: users.programId,
+      })
+      .from(users)
+      .where(and(eq(users.schoolId, userSchoolId), eq(users.role, "STUDENT")))
     : []
 
   // Fetch progress data for each student
@@ -276,7 +276,7 @@ export default async function StudentProgressPage() {
                             <AvatarFallback>
                               {student.name
                                 ?.split(" ")
-                                .map((n) => n[0])
+                                .map((n: string) => n[0])
                                 .join("") || "U"}
                             </AvatarFallback>
                           </Avatar>

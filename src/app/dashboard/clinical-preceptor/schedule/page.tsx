@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm"
+import { eq, or } from "drizzle-orm"
 import {
   Calendar,
   ChevronLeft,
@@ -26,8 +26,8 @@ import {
   CardTitle,
 } from "../../../../components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs"
-import { db } from "../../../../database/db"
-import { rotations, users } from "../../../../database/schema"
+import { db } from "@/database/connection-pool"
+import { rotations, users, meetings, assessments, evaluations } from "../../../../database/schema"
 import { requireAnyRole } from "../../../../lib/auth-clerk"
 
 export default async function PreceptorSchedulePage() {
@@ -50,41 +50,115 @@ export default async function PreceptorSchedulePage() {
     .where(eq(rotations.preceptorId, user.id))
     .orderBy(rotations.startDate)
 
-  // Generate schedule events from real rotation data
+  // Fetch meetings
+  const meetingsData = await db
+    .select({
+      id: meetings.id,
+      title: meetings.title,
+      startTime: meetings.startTime,
+      endTime: meetings.endTime,
+      type: meetings.type,
+      location: meetings.location,
+      status: meetings.status,
+      studentId: meetings.studentId,
+      studentName: users.name,
+      studentEmail: users.email,
+    })
+    .from(meetings)
+    .leftJoin(users, eq(meetings.studentId, users.id))
+    .where(eq(meetings.organizerId, user.id))
+
+  // Fetch assessments
+  const assessmentsData = await db
+    .select({
+      id: assessments.id,
+      date: assessments.date,
+      type: assessments.type,
+      studentId: assessments.studentId,
+      studentName: users.name,
+      studentEmail: users.email,
+    })
+    .from(assessments)
+    .leftJoin(users, eq(assessments.studentId, users.id))
+    .where(eq(assessments.assessorId, user.id))
+
+  // Fetch evaluations
+  const evaluationsData = await db
+    .select({
+      id: evaluations.id,
+      date: evaluations.observationDate,
+      type: evaluations.type,
+      studentId: evaluations.studentId,
+      studentName: users.name,
+      studentEmail: users.email,
+    })
+    .from(evaluations)
+    .leftJoin(users, eq(evaluations.studentId, users.id))
+    .where(eq(evaluations.evaluatorId, user.id))
+
+  // Combine into unified events
+  const scheduleEvents = [
+    ...meetingsData.map(m => ({
+      id: m.id,
+      title: m.title,
+      start: m.startTime,
+      end: m.endTime,
+      date: m.startTime,
+      time: m.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      duration: (m.endTime.getTime() - m.startTime.getTime()) / (1000 * 60),
+      type: 'meeting',
+      status: m.status.toLowerCase(),
+      location: m.location || 'Virtual',
+      studentName: m.studentName,
+      studentEmail: m.studentEmail,
+      meetingType: m.type === 'VIRTUAL' ? 'virtual' : 'in-person',
+      priority: 'medium'
+    })),
+    ...assessmentsData.map(a => ({
+      id: a.id,
+      title: `Assessment: ${a.type}`,
+      start: a.date,
+      end: new Date(a.date.getTime() + 60 * 60 * 1000), // Assume 1 hour
+      date: a.date,
+      time: a.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      duration: 60,
+      type: 'assessment',
+      status: 'confirmed',
+      location: 'Clinical Site',
+      studentName: a.studentName,
+      studentEmail: a.studentEmail,
+      meetingType: 'in-person',
+      priority: 'high'
+    })),
+    ...evaluationsData.map(e => ({
+      id: e.id,
+      title: `Evaluation: ${e.type || 'General'}`,
+      start: e.date,
+      end: new Date(e.date.getTime() + 30 * 60 * 1000), // Assume 30 mins
+      date: e.date,
+      time: e.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      duration: 30,
+      type: 'evaluation',
+      status: 'confirmed',
+      location: 'Clinical Site',
+      studentName: e.studentName,
+      studentEmail: e.studentEmail,
+      meetingType: 'in-person',
+      priority: 'medium'
+    }))
+  ]
+
   const currentDate = new Date()
   const currentWeek = getWeekDates(currentDate)
 
-  // TODO: Replace with actual schedule API integration
-  // Fetch schedule events from database/API
-  const scheduleEvents: {
-    id: string
-    title: string
-    start: Date
-    end: Date
-    date: Date
-    time: string
-    duration: number
-    type: string
-    status: string
-    location?: string
-    description?: string
-    attendees?: string[]
-    studentEmail?: string
-    studentName?: string
-    meetingType?: string
-    priority?: string
-  }[] = [] // TODO: Implement actual schedule data fetching
-
-  // For now, use empty array until API integration is complete
-  const mockScheduleEvents: typeof scheduleEvents = scheduleEvents
-
-  const todayEvents = mockScheduleEvents.filter(
+  const todayEvents = scheduleEvents.filter(
     (event) => event.date.toDateString() === currentDate.toDateString()
   )
 
-  const upcomingEvents = mockScheduleEvents.filter((event) => event.date > currentDate).slice(0, 5)
+  const upcomingEvents = scheduleEvents.filter((event) => event.date > currentDate).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 5)
 
   const typeColors = {
+    meeting: "bg-blue-100 text-blue-800",
     orientation: "bg-blue-100 text-blue-800",
     "check-in": "bg-green-100 text-green-800",
     evaluation: "bg-orange-100 text-orange-800",
@@ -94,6 +168,8 @@ export default async function PreceptorSchedulePage() {
 
   const statusColors = {
     confirmed: "bg-green-100 text-green-800",
+    scheduled: "bg-green-100 text-green-800",
+    completed: "bg-gray-100 text-gray-800",
     pending: "bg-yellow-100 text-yellow-800",
     cancelled: "bg-red-100 text-red-800",
   }
@@ -143,7 +219,7 @@ export default async function PreceptorSchedulePage() {
           <CardContent>
             <div className="font-bold text-2xl">{todayEvents.length}</div>
             <p className="text-muted-foreground text-xs">
-              {todayEvents.filter((e) => e.status === "confirmed").length} confirmed
+              {todayEvents.filter((e) => e.status === "confirmed" || e.status === "scheduled").length} confirmed
             </p>
           </CardContent>
         </Card>
@@ -153,9 +229,9 @@ export default async function PreceptorSchedulePage() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl">{mockScheduleEvents.length}</div>
+            <div className="font-bold text-2xl">{scheduleEvents.length}</div>
             <p className="text-muted-foreground text-xs">
-              {mockScheduleEvents.reduce((sum, e) => sum + e.duration, 0)} total minutes
+              {scheduleEvents.reduce((sum, e) => sum + e.duration, 0)} total minutes
             </p>
           </CardContent>
         </Card>
@@ -167,7 +243,7 @@ export default async function PreceptorSchedulePage() {
           <CardContent>
             <div className="font-bold text-2xl">
               {
-                new Set(mockScheduleEvents.filter((e) => e.studentEmail).map((e) => e.studentEmail))
+                new Set(scheduleEvents.filter((e) => e.studentEmail).map((e) => e.studentEmail))
                   .size
               }
             </div>
@@ -182,7 +258,7 @@ export default async function PreceptorSchedulePage() {
           <CardContent>
             <div className="font-bold text-2xl">
               {
-                mockScheduleEvents.filter((e) => e.type === "evaluation" || e.type === "assessment")
+                scheduleEvents.filter((e) => e.type === "evaluation" || e.type === "assessment")
                   .length
               }
             </div>
@@ -249,17 +325,16 @@ export default async function PreceptorSchedulePage() {
                         {day.toLocaleDateString("en-US", { weekday: "short" })}
                       </div>
                       <div
-                        className={`font-bold text-lg ${
-                          day.toDateString() === currentDate.toDateString()
+                        className={`font-bold text-lg ${day.toDateString() === currentDate.toDateString()
                             ? "mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600"
                             : ""
-                        }`}
+                          }`}
                       >
                         {day.getDate()}
                       </div>
                     </div>
                     <div className="space-y-2">
-                      {mockScheduleEvents
+                      {scheduleEvents
                         .filter((event) => event.date.toDateString() === day.toDateString())
                         .map((event) => {
                           const timeSlot = Number.parseInt(event.time.split(":")[0]) - 8
@@ -322,11 +397,11 @@ export default async function PreceptorSchedulePage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge className={typeColors[event.type as keyof typeof typeColors]}>
+                          <Badge className={typeColors[event.type as keyof typeof typeColors] || "bg-gray-100"}>
                             {event.type.toUpperCase()}
                           </Badge>
                           <Badge
-                            className={statusColors[event.status as keyof typeof statusColors]}
+                            className={statusColors[event.status as keyof typeof statusColors] || "bg-gray-100"}
                           >
                             {event.status.toUpperCase()}
                           </Badge>
@@ -425,7 +500,7 @@ export default async function PreceptorSchedulePage() {
                         </div>
                         <div className="mt-1 flex items-center gap-2">
                           <Badge
-                            className={typeColors[event.type as keyof typeof typeColors]}
+                            className={typeColors[event.type as keyof typeof typeColors] || "bg-gray-100"}
                             variant="outline"
                           >
                             {event.type}
@@ -440,7 +515,7 @@ export default async function PreceptorSchedulePage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge className={statusColors[event.status as keyof typeof statusColors]}>
+                      <Badge className={statusColors[event.status as keyof typeof statusColors] || "bg-gray-100"}>
                         {event.status}
                       </Badge>
                       <Button size="sm" variant="outline">

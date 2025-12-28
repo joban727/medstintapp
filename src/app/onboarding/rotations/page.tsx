@@ -2,9 +2,26 @@ import { currentUser } from "@clerk/nextjs/server"
 import { eq } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { RotationsOnboarding } from "../../../components/onboarding/rotations-onboarding"
-import { db } from "../../../database/db"
+import { db } from "@/database/connection-pool"
 import { users } from "../../../database/schema"
+import type { UserRole } from "@/types"
 
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
 export default async function RotationsOnboardingPage() {
   const clerkUser = await currentUser()
 
@@ -34,7 +51,7 @@ export default async function RotationsOnboardingPage() {
   }
 
   // Verify user is school admin
-  if (user?.role !== "SCHOOL_ADMIN") {
+  if (user?.role !== ("SCHOOL_ADMIN" as UserRole)) {
     redirect("/onboarding")
   }
 

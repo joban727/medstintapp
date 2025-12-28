@@ -21,18 +21,18 @@ export interface WalkthroughStep {
   attachTo?: {
     element: string
     on:
-      | "top"
-      | "bottom"
-      | "left"
-      | "right"
-      | "top-start"
-      | "top-end"
-      | "bottom-start"
-      | "bottom-end"
-      | "left-start"
-      | "left-end"
-      | "right-start"
-      | "right-end"
+    | "top"
+    | "bottom"
+    | "left"
+    | "right"
+    | "top-start"
+    | "top-end"
+    | "bottom-start"
+    | "bottom-end"
+    | "left-start"
+    | "left-end"
+    | "right-start"
+    | "right-end"
   }
   buttons?: Array<{
     text: string
@@ -101,7 +101,7 @@ export function GuidedWalkthrough({
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [showPreview, setShowPreview] = useState(!autoStart)
-  const tourRef = useRef<Shepherd.Tour | null>(null)
+  const tourRef = useRef<InstanceType<typeof Shepherd.Tour> | null>(null)
   const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set())
 
   const progress = ((currentStepIndex + 1) / config.steps.length) * 100
@@ -116,10 +116,13 @@ export function GuidedWalkthrough({
       useModalOverlay: true,
       defaultStepOptions: {
         classes: "shepherd-theme-custom",
-        scrollTo: true,
+        scrollTo: { behavior: "smooth", block: "center" },
         modalOverlayOpeningPadding: 8,
         modalOverlayOpeningRadius: 8,
         canClickTarget: false,
+        floatingUIOptions: {
+          middleware: [],
+        },
         when: {
           show: function () {
             const stepIndex = tour.steps.findIndex((step) => step === this)
@@ -140,7 +143,6 @@ export function GuidedWalkthrough({
     // Add steps to tour
     config.steps.forEach((step, index) => {
       const isLastStep = index === config.steps.length - 1
-
       const buttons = step.buttons || [
         {
           text: "Back",
@@ -163,11 +165,15 @@ export function GuidedWalkthrough({
         })
       }
 
+      // Check if target element exists, otherwise show step centered (no attachTo)
+      const targetElement = step.attachTo?.element ? document.querySelector(step.attachTo.element) : null
+      const attachToConfig = targetElement ? step.attachTo : undefined
+
       tour.addStep({
         id: step.id,
         title: step.title,
         text: step.text,
-        attachTo: step.attachTo,
+        attachTo: attachToConfig,
         buttons: buttons.map((button) => ({
           text: button.text,
           classes: button.classes || "shepherd-button-primary",
@@ -240,13 +246,16 @@ export function GuidedWalkthrough({
     return tour
   }, [config, onComplete, onSkip, onCancel, onStepChange, allowSkip])
 
-  // Start tour
+  // Start tour with delay to ensure DOM is ready
   const startTour = () => {
-    const tour = initializeTour()
-    tour.start()
-    setIsPlaying(true)
-    setIsPaused(false)
     setShowPreview(false)
+    // Small delay to ensure dashboard components are rendered
+    setTimeout(() => {
+      const tour = initializeTour()
+      tour.start()
+      setIsPlaying(true)
+      setIsPaused(false)
+    }, 500)
   }
 
   // Pause/Resume tour
@@ -316,25 +325,25 @@ export function GuidedWalkthrough({
           border-radius: 8px;
           box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
         }
-        
+
         .shepherd-theme-custom .shepherd-header {
           background: #f8fafc;
           border-bottom: 1px solid #e2e8f0;
           padding: 16px;
         }
-        
+
         .shepherd-theme-custom .shepherd-text {
           padding: 16px;
           font-size: 14px;
           line-height: 1.5;
         }
-        
+
         .shepherd-theme-custom .shepherd-footer {
           padding: 12px 16px;
           background: #f8fafc;
           border-top: 1px solid #e2e8f0;
         }
-        
+
         .shepherd-button-primary {
           background: #3b82f6;
           color: white;
@@ -345,11 +354,11 @@ export function GuidedWalkthrough({
           cursor: pointer;
           transition: background-color 0.2s;
         }
-        
+
         .shepherd-button-primary:hover {
           background: #2563eb;
         }
-        
+
         .shepherd-button-secondary {
           background: #f1f5f9;
           color: #475569;
@@ -361,7 +370,7 @@ export function GuidedWalkthrough({
           transition: all 0.2s;
           margin-right: 8px;
         }
-        
+
         .shepherd-button-secondary:hover {
           background: #e2e8f0;
         }
@@ -381,7 +390,7 @@ export function GuidedWalkthrough({
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <BookOpen className="h-5 w-5 text-blue-600" />
+                    <BookOpen className="h-5 w-5 text-medical-primary" />
                     <CardTitle className="text-lg">{config.title}</CardTitle>
                   </div>
                   <Button
@@ -399,7 +408,8 @@ export function GuidedWalkthrough({
                   </Badge>
                 )}
               </CardHeader>
-              <CardContent className="space-y-4">
+
+              <CardContent className="gap-4">
                 <p className="text-gray-700 text-sm">{config.description}</p>
 
                 <div className="flex items-center gap-4 text-gray-600 text-xs">
@@ -410,9 +420,12 @@ export function GuidedWalkthrough({
                 {config.prerequisites && config.prerequisites.length > 0 && (
                   <div className="rounded-lg bg-amber-50 p-3">
                     <h4 className="mb-1 font-medium text-amber-900 text-xs">Prerequisites:</h4>
-                    <ul className="space-y-1 text-amber-800 text-xs">
+                    <ul className="gap-1 text-amber-800 text-xs">
                       {config.prerequisites.map((prereq, index) => (
-                        <li key={`prereq-${prereq.replace(/\s+/g, '-').toLowerCase()}-${prereq.length}`} className="flex items-start gap-1">
+                        <li
+                          key={`prereq-${prereq.replace(/\s+/g, "-").toLowerCase()}-${prereq.length}`}
+                          className="flex items-start gap-1"
+                        >
                           <span className="mt-0.5 text-amber-600">•</span>
                           <span>{prereq}</span>
                         </li>
@@ -422,7 +435,7 @@ export function GuidedWalkthrough({
                 )}
 
                 {showProgress && isPlaying && (
-                  <div className="space-y-2">
+                  <div className="gap-2">
                     <div className="flex justify-between text-gray-600 text-xs">
                       <span>Progress</span>
                       <span>
@@ -459,7 +472,6 @@ export function GuidedWalkthrough({
                       </Button>
                     </>
                   )}
-
                   {allowSkip && (
                     <Button variant="outline" onClick={skipTour} size="sm">
                       <SkipForward className="h-4 w-4" />

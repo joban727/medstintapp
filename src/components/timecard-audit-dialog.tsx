@@ -17,10 +17,14 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 interface AuditLogEntry {
   id: string
   action: string
-  details: Record<string, any>
+  details: Record<string, string | number | boolean | null>
   performedBy: {
     id: string
     name: string | null
@@ -35,7 +39,7 @@ interface TimecardCorrectionAudit {
   id: string
   correctionType: string
   status: string
-  requestedChanges: Record<string, any>
+  requestedChanges: Record<string, string | number | Date | null>
   reason: string
   createdAt: Date
   reviewedAt: Date | null
@@ -94,12 +98,21 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
     try {
       const response = await fetch(`/api/timecard-audit/${timeRecordId}`)
       if (!response.ok) {
-        throw new Error("Failed to fetch audit data")
+        const errorData = await response
+          .json()
+          .catch((err) => {
+            console.error("Failed to parse JSON response:", err)
+            throw new Error("Invalid response format")
+          })
+          .catch(() => ({}))
+        throw new Error(errorData.error || errorData.message || "Failed to fetch audit data")
       }
-      const data = await response.json()
+      const data = await response.json().catch((err) => {
+        console.error("Failed to parse JSON response:", err)
+        throw new Error("Invalid response format")
+      })
       setAuditData(data)
     } catch (_error) {
-      // Error fetching audit data
       toast.error("Failed to load audit trail")
     } finally {
       setLoading(false)
@@ -110,7 +123,7 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
     if (open && timeRecordId) {
       fetchAuditData()
     }
-  }, [open, timeRecordId, fetchAuditData])
+  }, [open, timeRecordId])
 
   const getActionIcon = (action: string) => {
     switch (action.toLowerCase()) {
@@ -129,7 +142,7 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
       case "edited":
         return <Edit className="h-4 w-4 text-orange-500" />
       case "correction_requested":
-        return <AlertCircle className="h-4 w-4 text-yellow-500" />
+        return <AlertCircle className="h-4 w-4 text-warning" />
       default:
         return <FileText className="h-4 w-4 text-gray-500" />
     }
@@ -150,13 +163,13 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
     }
   }
 
-  const formatChangeDetails = (details: Record<string, any>) => {
+  const formatChangeDetails = (details: Record<string, string | number | boolean | Date | null>) => {
     if (!details || typeof details !== "object") return "No details available"
 
     return Object.entries(details)
       .map(([key, value]) => {
         if (key === "clockInTime" || key === "clockOutTime") {
-          return `${key}: ${value ? format(new Date(value), "MMM dd, yyyy HH:mm") : "Not set"}`
+          return `${key}: ${value ? format(new Date(value as string | number), "MMM dd, yyyy HH:mm") : "Not set"}`
         }
         return `${key}: ${value || "Not set"}`
       })
@@ -166,7 +179,7 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-h-[80vh] max-w-4xl">
+      <DialogContent className="max-h-[80vh] max-w-4xl" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Timecard Audit Trail</DialogTitle>
           <DialogDescription>
@@ -183,7 +196,7 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
           </div>
         ) : auditData ? (
           <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-6">
+            <div className="gap-6">
               {/* Time Record Summary */}
               <div className="rounded-lg bg-muted/50 p-4">
                 <h3 className="mb-2 flex items-center gap-2 font-semibold">
@@ -211,8 +224,8 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
                   </div>
                   <div>
                     <span className="font-medium">Total Hours:</span>{" "}
-                    {auditData.timeRecord.totalHours
-                      ? `${auditData.timeRecord.totalHours.toFixed(1)}h`
+                    {auditData.timeRecord.totalHours != null
+                      ? `${Number(auditData.timeRecord.totalHours).toFixed(1)}h`
                       : "--"}
                   </div>
                   <div>
@@ -225,6 +238,7 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
                     </Badge>
                   </div>
                 </div>
+
                 {auditData.timeRecord.activities && (
                   <div className="mt-2">
                     <span className="font-medium">Activities:</span>
@@ -233,6 +247,7 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
                     </p>
                   </div>
                 )}
+
                 {auditData.timeRecord.notes && (
                   <div className="mt-2">
                     <span className="font-medium">Notes:</span>
@@ -250,7 +265,7 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
                     <FileText className="h-4 w-4" />
                     Correction Requests ({auditData.corrections.length})
                   </h3>
-                  <div className="space-y-3">
+                  <div className="gap-3">
                     {auditData.corrections.map((correction) => (
                       <div key={correction.id} className="rounded-lg border p-3">
                         <div className="mb-2 flex items-center justify-between">
@@ -264,7 +279,7 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
                             {format(correction.createdAt, "MMM dd, yyyy HH:mm")}
                           </span>
                         </div>
-                        <div className="space-y-1 text-sm">
+                        <div className="gap-1 text-sm">
                           <div>
                             <span className="font-medium">Requested by:</span>{" "}
                             {correction.student.name} ({correction.student.email})
@@ -311,7 +326,7 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
                   <User className="h-4 w-4" />
                   Activity Log ({auditData.auditLogs.length})
                 </h3>
-                <div className="space-y-2">
+                <div className="gap-2">
                   {auditData.auditLogs.map((log, index) => (
                     <div key={log.id}>
                       <div className="flex items-start gap-3 rounded-lg bg-muted/30 p-3">

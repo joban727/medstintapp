@@ -1,15 +1,25 @@
 import { and, eq, isNull } from "drizzle-orm"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { db } from "../../../../database/connection-pool"
-import { rotations, timeRecords } from "../../../../database/schema"
-import { getSchoolContext, type SchoolContext } from "../../../../lib/school-utils"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { db } from "@/database/connection-pool"
+import { rotations, timeRecords } from "@/database/schema"
+import { getSchoolContext, type SchoolContext } from "@/lib/school-utils"
+import { cacheIntegrationService } from "@/lib/cache-integration"
+import type { UserRole } from "@/types"
 import { clockOperationLimiter } from "@/lib/rate-limiter"
-
-import { createHighPrecisionTimestamp, toDbTimestamp, TimingPerformanceMonitor } from "@/lib/high-precision-timing"
+import { logger } from "@/lib/logger"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  createValidationErrorResponse,
+  withErrorHandling,
+  withErrorHandlingAsync,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+} from "@/lib/api-response"
+import { TimingPerformanceMonitor } from "@/lib/high-precision-timing"
 import crypto from "crypto"
-
+import { ClockService } from "@/lib/clock-service"
 
 // Helper function to extract client information
 function getClientInfo(request: NextRequest) {
@@ -25,25 +35,36 @@ function getClientInfo(request: NextRequest) {
 const clockInSchema = z.object({
   action: z.literal("clock-in"),
   rotationId: z.string().uuid("Invalid rotation ID format").min(1, "Rotation ID is required"),
-  activities: z.array(z.string().max(200, "Activity name too long").trim()).max(20, "Too many activities").optional(),
+  activities: z
+    .array(z.string().max(200, "Activity name too long").trim())
+    .max(20, "Too many activities")
+    .optional(),
   notes: z.string().max(1000, "Notes too long").trim().optional(),
   // Location data (optional but recommended)
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   accuracy: z.number().min(0).optional(),
-  locationSource: z.enum(["gps", "network", "passive"]).optional(),
+  locationSource: z.enum(["gps", "network", "manual"]).optional(),
+  timestamp: z.string().optional(), // Allow client timestamp
 })
 
 const clockOutSchema = z.object({
   action: z.literal("clock-out"),
-  timeRecordId: z.string().uuid("Invalid time record ID format").min(1, "Time record ID is required"),
-  activities: z.array(z.string().max(200, "Activity name too long").trim()).max(20, "Too many activities").optional(),
+  timeRecordId: z
+    .string()
+    .uuid("Invalid time record ID format")
+    .min(1, "Time record ID is required"),
+  activities: z
+    .array(z.string().max(200, "Activity name too long").trim())
+    .max(20, "Too many activities")
+    .optional(),
   notes: z.string().max(1000, "Notes too long").trim().optional(),
   // Location data (optional but recommended)
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   accuracy: z.number().min(0).optional(),
-  locationSource: z.enum(["gps", "network", "passive"]).optional(),
+  locationSource: z.enum(["gps", "network", "manual"]).optional(),
+  timestamp: z.string().optional(), // Allow client timestamp
 })
 
 const clockActionSchema = z.discriminatedUnion("action", [clockInSchema, clockOutSchema])
@@ -52,56 +73,49 @@ const clockActionSchema = z.discriminatedUnion("action", [clockInSchema, clockOu
 /**
  * Enhanced response helper with compression and optimized caching headers
  */
-function createOptimizedResponse(data: any, options: {
-  status?: number
-  cacheTTL?: number
-  enableCompression?: boolean
-  isClockOperation?: boolean
-} = {}) {
-  const {
-    status = 200,
-    cacheTTL = 0,
-    enableCompression = true,
-    isClockOperation = false
-  } = options
+function createOptimizedResponse(
+  data: unknown,
+  options: {
+    status?: number
+    cacheTTL?: number
+    enableCompression?: boolean
+    isClockOperation?: boolean
+  } = {}
+) {
+  const { status = 200, cacheTTL = 0, enableCompression = true, isClockOperation = false } = options
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  }
-
-  // Add compression headers for large responses
-  if (enableCompression && JSON.stringify(data).length > 1024) {
-    headers['Content-Encoding'] = 'gzip'
+    "Content-Type": "application/json",
   }
 
   // Optimize caching headers based on operation type
   if (isClockOperation) {
     // Clock operations should not be cached
-    headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    headers['Pragma'] = 'no-cache'
-    headers['Expires'] = '0'
+    headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    headers["Pragma"] = "no-cache"
+    headers["Expires"] = "0"
   } else if (cacheTTL > 0) {
     // Status checks can be cached briefly
-    headers['Cache-Control'] = `public, max-age=${cacheTTL}, s-maxage=${cacheTTL}`
-    headers['ETag'] = `"${crypto.createHash('md5').update(JSON.stringify(data)).digest('hex')}"`
+    headers["Cache-Control"] = `public, max-age=${cacheTTL}, s-maxage=${cacheTTL}`
+    headers["ETag"] = `"${crypto.createHash("md5").update(JSON.stringify(data)).digest("hex")}"`
   }
 
   // Add performance headers
-  headers['X-Response-Time'] = Date.now().toString()
-  headers['X-Content-Type-Options'] = 'nosniff'
+  headers["X-Response-Time"] = Date.now().toString()
+  headers["X-Content-Type-Options"] = "nosniff"
 
   return NextResponse.json(data, { status, headers })
 }
 
 export async function POST(request: NextRequest) {
-  return TimingPerformanceMonitor.measure('clock-operation-total', async () => {
-    try {
+  return withErrorHandlingAsync(async () => {
+    return TimingPerformanceMonitor.measure("clock-operation-total", async () => {
       // Enhanced rate limiting with connection pool awareness
-      const rateLimitResult = await clockOperationLimiter.check(request)
-      if (!rateLimitResult.success) {
-        return createOptimizedResponse(
-          { error: "Too many requests. Please try again later." },
-          { status: 429, isClockOperation: true }
+      const rateLimitResult = await clockOperationLimiter.checkLimit(request)
+      if (!rateLimitResult.allowed) {
+        return createErrorResponse(
+          "Too many requests. Please try again later.",
+          HTTP_STATUS.TOO_MANY_REQUESTS
         )
       }
 
@@ -109,36 +123,30 @@ export async function POST(request: NextRequest) {
       let body: unknown
       try {
         const text = await request.text()
-        if (text.length > 10240) { // 10KB limit
-          return createOptimizedResponse(
-            { error: "Request body too large" },
-            { status: 413, isClockOperation: true }
-          )
+        if (text.length > 10240) {
+          // 10KB limit
+          return createErrorResponse("Request body too large", HTTP_STATUS.PAYLOAD_TOO_LARGE)
         }
         body = JSON.parse(text)
       } catch (error) {
-        return createOptimizedResponse(
-          { error: "Invalid JSON in request body" },
-          { status: 400, isClockOperation: true }
-        )
+        return createErrorResponse("Invalid JSON in request body", HTTP_STATUS.BAD_REQUEST)
       }
 
       // Enhanced validation with performance monitoring
-      const validationResult = await TimingPerformanceMonitor.measure('request-validation', async () => {
-        return clockActionSchema.safeParse(body)
-      })
+      const validationResult = await TimingPerformanceMonitor.measure(
+        "request-validation",
+        async () => {
+          return clockActionSchema.safeParse(body)
+        }
+      )
 
       if (!validationResult.success) {
-        return createOptimizedResponse(
-          { 
-            error: "Invalid request data",
-            details: validationResult.error.errors.map(err => ({
-              field: err.path.join('.'),
-              message: err.message
-            }))
-          },
-          { status: 400, isClockOperation: true }
-        )
+        const details = validationResult.error.issues.map((issue) => ({
+          field: issue.path.join("."),
+          code: issue.code,
+          details: issue.message,
+        }))
+        return createValidationErrorResponse(ERROR_MESSAGES.VALIDATION_ERROR, details)
       }
 
       const validatedData = validationResult.data
@@ -147,42 +155,34 @@ export async function POST(request: NextRequest) {
       if (validatedData.action === "clock-in") {
         const result = await handleClockIn(request, validatedData)
         return result
-      }
+      } else {
         const result = await handleClockOut(request, validatedData)
         return result
-    } catch (error) {
-      console.error("Clock operation error:", error)
-      return createOptimizedResponse(
-        { error: "Internal server error" },
-        { status: 500, isClockOperation: true }
-      )
-    }
+      }
+    })
   })
 }
 
 export async function GET(request: NextRequest) {
-  return TimingPerformanceMonitor.measure('clock-status-check', async () => {
-    try {
+  return withErrorHandlingAsync(async () => {
+    return TimingPerformanceMonitor.measure("clock-status-check", async () => {
       const { searchParams } = new URL(request.url)
       const studentId = searchParams.get("studentId")
 
       // Enhanced context retrieval with caching
-      const context = await TimingPerformanceMonitor.measure('context-retrieval', async () => {
+      const context = await TimingPerformanceMonitor.measure("context-retrieval", async () => {
         return getSchoolContext()
       })
 
       // Optimized permission validation
-      if (context.userRole === "STUDENT") {
+      if (context.userRole === ("STUDENT" as UserRole)) {
         if (studentId && studentId !== context.userId) {
-          return createOptimizedResponse(
-            { error: "Access denied" },
-            { status: 403, cacheTTL: 60 }
-          )
+          return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
         }
       } else if (!studentId) {
-        return createOptimizedResponse(
-          { error: "Student ID is required for non-student users" },
-          { status: 400, cacheTTL: 60 }
+        return createErrorResponse(
+          "Student ID is required for non-student users",
+          HTTP_STATUS.BAD_REQUEST
         )
       }
 
@@ -191,383 +191,204 @@ export async function GET(request: NextRequest) {
       // Check cache first for status requests
       const cacheKey = `clock-status:${targetStudentId}`
       const cachedStatus = await cacheIntegrationService.get(cacheKey)
-      
+
       if (cachedStatus) {
         return createOptimizedResponse(cachedStatus, { cacheTTL: 30 })
       }
 
-      // Optimized database query with connection pool monitoring
-      const clockStatus = await TimingPerformanceMonitor.measure('database-query', async () => {
-        return db.transaction(async (tx) => {
-          const [activeRecord] = await tx
-            .select({
-              id: timeRecords.id,
-              rotationId: timeRecords.rotationId,
-              clockIn: timeRecords.clockIn,
-              activities: timeRecords.activities,
-              notes: timeRecords.notes,
-
-            })
-            .from(timeRecords)
-            .where(
-              and(
-                eq(timeRecords.studentId, targetStudentId),
-                isNull(timeRecords.clockOut)
-              )
-            )
-            .limit(1)
-
-          if (!activeRecord) {
-            return {
-              isClocked: false,
-              timeRecordId: null,
-              rotationId: null,
-              clockedInAt: null,
-              currentDuration: null,
-              activities: [],
-              notes: null,
-              location: null,
-            }
-          }
-
-          // Calculate duration with high precision
-          const clockInTime = new Date(activeRecord.clockIn)
-          const currentTime = new Date()
-          const durationMs = currentTime.getTime() - clockInTime.getTime()
-
-          return {
-            isClocked: true,
-            timeRecordId: activeRecord.id,
-            rotationId: activeRecord.rotationId,
-            clockedInAt: activeRecord.clockIn,
-            currentDuration: Math.floor(durationMs / 1000), // seconds
-            activities: activeRecord.activities ? JSON.parse(activeRecord.activities) : [],
-            notes: activeRecord.notes,
-            location: null,
-          }
-        })
-      })
+      // Use ClockService to get status
+      const clockStatus = await ClockService.getClockStatus(targetStudentId)
 
       // Cache the result for 30 seconds
-      await cacheIntegrationService.set(cacheKey, clockStatus, 30)
+      await cacheIntegrationService.set(cacheKey, clockStatus, { ttl: 30 })
 
       return createOptimizedResponse(clockStatus, { cacheTTL: 30 })
-    } catch (error) {
-      console.error("Clock status check error:", error)
-      
-      // Return default state on error to prevent UI blocking
-      const defaultStatus = {
-        isClocked: false,
-        timeRecordId: null,
-        rotationId: null,
-        clockedInAt: null,
-        currentDuration: null,
-        activities: [],
-        notes: null,
-        location: null,
-      }
-
-      return createOptimizedResponse(defaultStatus, { cacheTTL: 5 })
-    }
+    })
   })
 }
 
-async function handleClockIn(
-  request: NextRequest,
-  validatedData: z.infer<typeof clockInSchema>
-) {
-  return TimingPerformanceMonitor.measure('clock-in-operation', async () => {
+async function handleClockIn(request: NextRequest, validatedData: z.infer<typeof clockInSchema>) {
+  return TimingPerformanceMonitor.measure("clock-in-operation", async () => {
     const context = await getSchoolContext()
     const { ipAddress, userAgent } = getClientInfo(request)
-    const { rotationId, activities, notes, latitude, longitude, accuracy, locationSource } = validatedData
+    const { rotationId, notes, latitude, longitude, accuracy, timestamp } = validatedData
+
+    // Fetch rotation to identify student and validate access
+    const [rotation] = await db
+      .select({
+        id: rotations.id,
+        studentId: rotations.studentId,
+      })
+      .from(rotations)
+      .where(eq(rotations.id, rotationId))
+      .limit(1)
+
+    if (!rotation) {
+      return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
+    }
+
+    // Permission check
+    if (context.userRole === "STUDENT" && rotation.studentId !== context.userId) {
+      return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
+    }
 
     try {
-      // Use database transaction for optimized queries and data consistency
-      const result = await db.transaction(async (tx) => {
-        // Single optimized query to verify rotation exists, user has access, and check for existing records
-        const [rotationData] = await tx
-          .select({
-            id: rotations.id,
-            studentId: rotations.studentId,
-            startDate: rotations.startDate,
-            endDate: rotations.endDate,
-            existingRecordId: timeRecords.id,
-          })
-          .from(rotations)
-          .leftJoin(
-            timeRecords,
-            and(
-              eq(timeRecords.rotationId, rotations.id),
-              eq(timeRecords.studentId, rotations.studentId),
-              isNull(timeRecords.clockOut)
-            )
-          )
-          .where(eq(rotations.id, rotationId))
-          .limit(1)
-
-        if (!rotationData) {
-          throw new Error("Rotation not found")
-        }
-
-        // Students can only clock in for their own rotations
-        if (context.userRole === "STUDENT" && rotationData.studentId !== context.userId) {
-          throw new Error("Access denied")
-        }
-
-        // Check if rotation is active
-        const now = new Date()
-        if (now < rotationData.startDate || now > rotationData.endDate) {
-          throw new Error("Rotation is not currently active")
-        }
-
-        // Check if student is already clocked in
-        if (rotationData.existingRecordId) {
-          throw new Error("Student is already clocked in")
-        }
-
-        // Create high-precision timestamp for accurate clock-in time
-        const clockInTimestamp = createHighPrecisionTimestamp()
-
-        // Prepare location data for insertion
-        const locationData: any = {}
-        if (latitude !== undefined && longitude !== undefined) {
-          locationData.clockInLatitude = latitude.toString()
-          locationData.clockInLongitude = longitude.toString()
-          
-          if (accuracy !== undefined) {
-            locationData.clockInAccuracy = accuracy
-          }
-          
-          if (locationSource) {
-            locationData.clockInSource = locationSource
-          }
-        }
-
-        // Create new time record with location data within the same transaction
-        const [newRecord] = await tx
-          .insert(timeRecords)
-          .values({
-            id: crypto.randomUUID(),
-            studentId: rotationData.studentId,
-            rotationId: rotationId,
-            date: toDbTimestamp(clockInTimestamp),
-            clockIn: toDbTimestamp(clockInTimestamp),
-            activities: JSON.stringify(activities || []),
-            notes: notes,
-            clockInIpAddress: ipAddress,
-            clockInUserAgent: userAgent,
-            status: "PENDING",
-            totalHours: "0",
-            ...locationData, // Include location data if provided
-          })
-          .returning()
-
-        // Log clock-in event for monitoring with location data
-        console.log("Clock-in event:", {
-          type: "clock_in",
-          userId: rotationData.studentId,
-          timeRecordId: newRecord.id,
-          activityId: rotationId,
-          rotationId: rotationId,
-          clockInTime: clockInTimestamp,
-          location: latitude && longitude ? {
-            latitude,
-            longitude,
-            accuracy,
-            source: locationSource
-          } : null,
-          status: "ACTIVE"
-        })
-
-        return { newRecord, rotation: rotationData, clockInTimestamp }
+      // Delegate to ClockService
+      const result = await ClockService.clockIn({
+        studentId: rotation.studentId,
+        rotationId: rotationId,
+        notes: notes,
+        location:
+          latitude && longitude
+            ? {
+              latitude,
+              longitude,
+              accuracy: accuracy || 0,
+            }
+            : undefined,
+        clientTimestamp: timestamp,
+        ipAddress,
+        userAgent,
       })
 
-      // Invalidate specific cache tags for better performance
+      // Fetch the created record to return full details
+      // We use the recordId returned by ClockService
+      if (!result.recordId) {
+        throw new Error("Clock-in succeeded but no record ID returned")
+      }
+
+      const [newRecord] = await db
+        .select()
+        .from(timeRecords)
+        .where(eq(timeRecords.id, result.recordId))
+        .limit(1)
+
+      if (!newRecord) {
+        throw new Error("Failed to retrieve created time record")
+      }
+
+      // Invalidate caches
       await cacheIntegrationService.invalidateByTags([
         `user:${context.userId}:clock-status`,
         `user:${context.userId}:time-records`,
-        `rotation:${rotationId}:records`
+        `rotation:${rotationId}:records`,
       ])
 
       const responseData = {
         success: true,
         data: {
-          ...result.newRecord,
-          activities: activities || [],
-          highPrecisionClockIn: result.clockInTimestamp.isoString,
+          ...newRecord,
+          activities: [], // Clock-in usually doesn't have activities yet
+          highPrecisionClockIn: newRecord.clockIn?.toISOString(),
+          // Include validation warnings if any
+          validationWarnings: result.timeValidation?.warnings,
         },
         message: "Successfully clocked in",
       }
 
       return createOptimizedResponse(responseData, { isClockOperation: true })
     } catch (error) {
+      logger.error({ error: error instanceof Error ? error.message : String(error) }, "Clock-in failed")
       if (error instanceof Error) {
-        const statusCode = error.message === "Rotation not found" ? 404 :
-                          error.message === "Access denied" ? 403 : 400
-        return createOptimizedResponse(
-          { error: error.message },
-          { status: statusCode, isClockOperation: true }
-        )
+        // Map ClockService errors to API responses
+        if (error.message.includes("already clocked in")) {
+          return createErrorResponse("Student is already clocked in", HTTP_STATUS.CONFLICT)
+        }
+        return createErrorResponse(error.message, HTTP_STATUS.BAD_REQUEST)
       }
-      throw error
+      return createErrorResponse("Clock-in failed", HTTP_STATUS.INTERNAL_SERVER_ERROR)
     }
   })
 }
 
-async function handleClockOut(
-  request: NextRequest,
-  validatedData: z.infer<typeof clockOutSchema>
-) {
-  return TimingPerformanceMonitor.measure('clock-out-operation', async () => {
+async function handleClockOut(request: NextRequest, validatedData: z.infer<typeof clockOutSchema>) {
+  return TimingPerformanceMonitor.measure("clock-out-operation", async () => {
     const context = await getSchoolContext()
     const { ipAddress, userAgent } = getClientInfo(request)
-    const { timeRecordId, activities, notes, latitude, longitude, accuracy, locationSource } = validatedData
+    const { timeRecordId, activities, notes, latitude, longitude, accuracy, timestamp } =
+      validatedData
+
+    // Fetch time record to identify student and rotation
+    const [record] = await db
+      .select({
+        id: timeRecords.id,
+        studentId: timeRecords.studentId,
+        rotationId: timeRecords.rotationId,
+      })
+      .from(timeRecords)
+      .where(eq(timeRecords.id, timeRecordId))
+      .limit(1)
+
+    if (!record) {
+      return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
+    }
+
+    // Permission check
+    if (context.userRole === "STUDENT" && record.studentId !== context.userId) {
+      return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
+    }
 
     try {
-      // Use database transaction for optimized queries and data consistency
-      const result = await db.transaction(async (tx) => {
-        // Single query to get time record and rotation data
-        const [recordData] = await tx
-          .select({
-            id: timeRecords.id,
-            studentId: timeRecords.studentId,
-            rotationId: timeRecords.rotationId,
-            clockIn: timeRecords.clockIn,
-            clockOut: timeRecords.clockOut,
-            activities: timeRecords.activities,
-            notes: timeRecords.notes,
-            rotationStartDate: rotations.startDate,
-            rotationEndDate: rotations.endDate,
-          })
-          .from(timeRecords)
-          .leftJoin(rotations, eq(timeRecords.rotationId, rotations.id))
-          .where(eq(timeRecords.id, timeRecordId))
-          .limit(1)
-
-        if (!recordData) {
-          throw new Error("Time record not found")
-        }
-
-        // Students can only clock out their own records
-        if (context.userRole === "STUDENT" && recordData.studentId !== context.userId) {
-          throw new Error("Access denied")
-        }
-
-        // Check if already clocked out
-        if (recordData.clockOut) {
-          throw new Error("Already clocked out")
-        }
-
-        // Create high-precision timestamp for accurate clock-out time
-        const clockOutTimestamp = createHighPrecisionTimestamp()
-        
-        // Calculate high-precision total hours
-        const clockInTime = recordData.clockIn.getTime()
-        const clockOutTime = clockOutTimestamp.highPrecisionTimestamp
-        const totalHoursHighPrecision = ((clockOutTime - clockInTime) / (1000 * 60 * 60))
-        const totalHours = totalHoursHighPrecision.toFixed(4) // 4 decimal places for high precision
-
-        // Merge activities
-        const existingActivities = recordData.activities ? JSON.parse(recordData.activities) : []
-        const newActivities = activities || []
-        const mergedActivities = [...existingActivities, ...newActivities]
-
-        // Merge notes
-        const existingNotes = recordData.notes || ""
-        const newNotes = notes || ""
-        const mergedNotes = [existingNotes, newNotes].filter(Boolean).join(" | ")
-
-        // Prepare location data for update
-        const locationData: any = {}
-        if (latitude !== undefined && longitude !== undefined) {
-          locationData.clockOutLatitude = latitude.toString()
-          locationData.clockOutLongitude = longitude.toString()
-          
-          if (accuracy !== undefined) {
-            locationData.clockOutAccuracy = accuracy
-          }
-          
-          if (locationSource) {
-            locationData.clockOutSource = locationSource
-          }
-        }
-
-        // Update the time record with clock-out data within the same transaction
-        const [updatedRecord] = await tx
-          .update(timeRecords)
-          .set({
-            clockOut: toDbTimestamp(clockOutTimestamp),
-            totalHours: totalHours,
-            activities: JSON.stringify(mergedActivities),
-            notes: mergedNotes,
-            clockOutIpAddress: ipAddress,
-            clockOutUserAgent: userAgent,
-            status: "COMPLETED",
-            ...locationData, // Include location data if provided
-          })
-          .where(eq(timeRecords.id, timeRecordId))
-          .returning()
-
-        // Calculate duration components for broadcast
-        const durationMs = clockOutTimestamp.highPrecisionTimestamp - clockInTime
-        const duration = {
-          hours: Math.floor(durationMs / (1000 * 60 * 60)),
-          minutes: Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60)),
-          seconds: Math.floor((durationMs % (1000 * 60)) / 1000),
-          milliseconds: durationMs % 1000
-        }
-
-        // Log clock-out event for monitoring with location data
-        console.log("Clock-out event:", {
-          type: "clock_out",
-          userId: recordData.studentId,
-          timeRecordId: updatedRecord.id,
-          clockOutTime: clockOutTimestamp,
-          totalHours: totalHoursHighPrecision,
-          duration: duration,
-          location: latitude && longitude ? {
-            latitude,
-            longitude,
-            accuracy,
-            source: locationSource
-          } : null,
-          status: "COMPLETED"
-        })
-
-        return { 
-          updatedRecord, 
-          mergedActivities, 
-          totalHours, 
-          clockOutTimestamp,
-          totalHoursHighPrecision 
-        }
+      // Delegate to ClockService
+      const result = await ClockService.clockOut({
+        studentId: record.studentId,
+        rotationId: record.rotationId,
+        notes: notes,
+        activities: activities,
+        location:
+          latitude && longitude
+            ? {
+              latitude,
+              longitude,
+              accuracy: accuracy || 0,
+            }
+            : undefined,
+        clientTimestamp: timestamp,
+        ipAddress,
+        userAgent,
       })
 
-      // Invalidate specific cache tags for better performance
+      // Fetch the updated record
+      const [updatedRecord] = await db
+        .select()
+        .from(timeRecords)
+        .where(eq(timeRecords.id, record.id))
+        .limit(1)
+
+      if (!updatedRecord) {
+        throw new Error("Failed to retrieve updated time record")
+      }
+
+      // Invalidate caches
       await cacheIntegrationService.invalidateByTags([
         `user:${context.userId}:clock-status`,
         `user:${context.userId}:time-records`,
-        `record:${timeRecordId}:details`
+        `record:${timeRecordId}:details`,
       ])
 
-      return NextResponse.json({
+      const responseData = {
         success: true,
         data: {
-          ...result.updatedRecord,
-          activities: result.mergedActivities,
-          totalHours: result.totalHours,
-          highPrecisionClockOut: result.clockOutTimestamp.isoString,
-          highPrecisionTotalHours: result.totalHoursHighPrecision,
+          ...updatedRecord,
+          activities: updatedRecord.activities ? JSON.parse(updatedRecord.activities) : [],
+          highPrecisionClockOut: updatedRecord.clockOut?.toISOString(),
+          // Include validation warnings
+          validationWarnings: result.timeValidation?.warnings,
         },
         message: "Successfully clocked out",
-      })
-    } catch (error) {
-      if (error instanceof Error) {
-        const statusCode = error.message === "Time record not found" ? 404 :
-                          error.message === "Access denied" ? 403 : 400
-        return NextResponse.json({ error: error.message }, { status: statusCode })
       }
-      throw error
+
+      return createOptimizedResponse(responseData, { isClockOperation: true })
+    } catch (error) {
+      logger.error({ error: error instanceof Error ? error.message : String(error) }, "Clock-out failed")
+      if (error instanceof Error) {
+        if (error.message.includes("not currently clocked in")) {
+          return createErrorResponse("Student is not clocked in", HTTP_STATUS.CONFLICT)
+        }
+        return createErrorResponse(error.message, HTTP_STATUS.BAD_REQUEST)
+      }
+      return createErrorResponse("Clock-out failed", HTTP_STATUS.INTERNAL_SERVER_ERROR)
     }
   })
 }
+

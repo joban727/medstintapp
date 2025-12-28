@@ -48,7 +48,7 @@ import {
   TableRow,
 } from "../../../../components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs"
-import { db } from "../../../../database/db"
+import { db } from "@/database/connection-pool"
 import { evaluations, rotations, users } from "../../../../database/schema"
 import { requireAnyRole } from "../../../../lib/auth-clerk"
 
@@ -88,42 +88,46 @@ export default async function SupervisorEvaluationsPage() {
           .then((rows) => rows[0])
 
         // Get preceptor details
-        const preceptor = rotation
+        const preceptor = rotation?.preceptorId
           ? await db
-              .select({
-                name: users.name,
-                department: users.department,
-              })
-              .from(users)
-              .where(eq(users.id, rotation.preceptorId))
-              .limit(1)
-              .then((rows) => rows[0])
+            .select({
+              name: users.name,
+              department: users.department,
+            })
+            .from(users)
+            .where(eq(users.id, rotation.preceptorId))
+            .limit(1)
+            .then((rows) => rows[0])
           : null
 
         // Get site details from rotation
         const site = "Clinical Site" // TODO: Join with clinical sites table
 
-        // Calculate quality score based on evaluation data
+        // Calculate quality score based on evaluation data (use real score or default)
         const qualityScore = evaluation.score
           ? Math.round(Number(evaluation.score) * 20)
-          : Math.floor(Math.random() * 30) + 70
+          : 75 // Default quality score when no rating exists
 
-        // Determine review status
+        // Determine review status based on actual data
         const reviewStatus = evaluation.createdAt
-          ? Math.random() > 0.7
-            ? "REVIEWED"
-            : "PENDING_REVIEW"
+          ? "REVIEWED" // If created, consider it reviewed
           : "PENDING_REVIEW"
 
         // Check if flagged (low scores or missing data)
         const criticalIssues = qualityScore < 70 || !evaluation.score
+
+        // Calculate due date based on rotation end date or default to 30 days from created
+        const rotationEndDate = rotation?.endDate
+        const dueDate = rotationEndDate
+          ? new Date(rotationEndDate)
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
 
         return {
           ...evaluation,
           preceptorName: preceptor?.name || "Unknown Preceptor",
           site: site,
           specialty: rotation?.specialty || preceptor?.department || "General",
-          dueDate: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000),
+          dueDate,
           submittedDate: evaluation.createdAt || null,
           reviewStatus: reviewStatus as
             | "PENDING_REVIEW"
@@ -131,13 +135,13 @@ export default async function SupervisorEvaluationsPage() {
             | "APPROVED"
             | "NEEDS_REVISION",
           qualityScore,
-          completeness: Math.floor(Math.random() * 20) + 80,
-          timeliness: Math.random() > 0.3 ? "ON_TIME" : "LATE",
-          feedback: Math.random() > 0.5,
-          studentYear: Math.floor(Math.random() * 4) + 1,
-          competencyAreas: Math.floor(Math.random() * 5) + 3,
+          completeness: evaluation.score ? 100 : 80, // Complete if has score
+          timeliness: evaluation.createdAt && rotationEndDate && evaluation.createdAt <= rotationEndDate ? "ON_TIME" : "ON_TIME",
+          feedback: !!evaluation.score, // Has feedback if has score
+          studentYear: 1, // Default year (TODO: get from students table)
+          competencyAreas: 3, // Default competency areas
           criticalIssues,
-          followUpRequired: criticalIssues || Math.random() > 0.7,
+          followUpRequired: criticalIssues,
         }
       } catch (error) {
         console.error("Error fetching evaluation details:", error)
@@ -146,7 +150,7 @@ export default async function SupervisorEvaluationsPage() {
           preceptorName: "Unknown Preceptor",
           site: "Unknown Site",
           specialty: "General",
-          dueDate: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000),
+          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           submittedDate: evaluation.createdAt || null,
           reviewStatus: "PENDING_REVIEW" as const,
           qualityScore: 75,
@@ -348,10 +352,19 @@ export default async function SupervisorEvaluationsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Specialties</SelectItem>
-                    <SelectItem value="internal">Internal Medicine</SelectItem>
-                    <SelectItem value="pediatrics">Pediatrics</SelectItem>
-                    <SelectItem value="surgery">Surgery</SelectItem>
-                    <SelectItem value="family">Family Medicine</SelectItem>
+                    <SelectItem value="General Radiology">General Radiology</SelectItem>
+                    <SelectItem value="MRI">MRI</SelectItem>
+                    <SelectItem value="Ultrasound / Sonography">Ultrasound / Sonography</SelectItem>
+                    <SelectItem value="CT Scan">CT Scan</SelectItem>
+                    <SelectItem value="Nuclear Medicine">Nuclear Medicine</SelectItem>
+                    <SelectItem value="Mammography">Mammography</SelectItem>
+                    <SelectItem value="Interventional Radiology">Interventional Radiology</SelectItem>
+                    <SelectItem value="Fluoroscopy">Fluoroscopy</SelectItem>
+                    <SelectItem value="Mobile Radiography">Mobile Radiography</SelectItem>
+                    <SelectItem value="Surgical Radiography">Surgical Radiography</SelectItem>
+                    <SelectItem value="Trauma Radiography">Trauma Radiography</SelectItem>
+                    <SelectItem value="Pediatric Radiology">Pediatric Radiology</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -422,7 +435,7 @@ export default async function SupervisorEvaluationsPage() {
                         <Badge
                           className={
                             reviewStatusColors[
-                              evaluation.reviewStatus as keyof typeof reviewStatusColors
+                            evaluation.reviewStatus as keyof typeof reviewStatusColors
                             ]
                           }
                         >

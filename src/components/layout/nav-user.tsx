@@ -28,6 +28,10 @@ import {
 } from "@/components/ui/sidebar"
 import type { UserRole } from "@/types"
 
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 interface User {
   id: string
   email: string
@@ -64,7 +68,7 @@ export function NavUser({ user }: NavUserProps) {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:active:bg-transparent group-data-[collapsible=icon]:hover:bg-transparent"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:active:bg-transparent group-data-[collapsible=icon]:hover:bg-transparent transition-color duration-200s duration-200"
             >
               <div className="flex w-full items-center">
                 <Avatar className="in-data-[state=expanded]:size-6 transition-[width,height] duration-200 ease-in-out group-data-[collapsible=icon]:size-8">
@@ -124,7 +128,6 @@ export function NavUser({ user }: NavUserProps) {
                 <span>Homepage</span>
               </DropdownMenuItem>
             </Link>
-
             <SignOutButton signOutOptions={{ redirectUrl: "/" }}>
               <DropdownMenuItem className="cursor-pointer gap-3 px-1">
                 <RiLogoutCircleLine

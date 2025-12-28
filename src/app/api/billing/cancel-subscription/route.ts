@@ -3,8 +3,7 @@ import { eq } from "drizzle-orm"
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "../../../../database/connection-pool"
 import { subscriptions } from "../../../../database/schema"
-import { cacheIntegrationService } from '@/lib/cache-integration'
-
+import { cacheIntegrationService } from "@/lib/cache-integration"
 
 // POST /api/billing/cancel-subscription - Cancel user's subscription
 export async function POST(_request: NextRequest) {
@@ -50,14 +49,15 @@ export async function POST(_request: NextRequest) {
     })
   } catch (error) {
     console.error("Error cancelling subscription:", error)
-    
+
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateAllCache()
+      await cacheIntegrationService.clear()
     } catch (cacheError) {
-      console.warn('Cache invalidation error in billing/cancel-subscription/route.ts:', cacheError)
+      console.warn("Cache invalidation error in billing/cancel-subscription/route.ts:", cacheError)
     }
-    
+
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+

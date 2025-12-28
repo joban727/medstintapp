@@ -24,7 +24,7 @@ class CacheIntegrationService {
    */
   async get<T>(key: string): Promise<T | null> {
     const entry = this.cache.get(key)
-    
+
     if (!entry) {
       return null
     }
@@ -50,7 +50,7 @@ class CacheIntegrationService {
       data,
       timestamp: Date.now(),
       ttl,
-      tags
+      tags,
     }
 
     this.cache.set(key, entry)
@@ -75,7 +75,7 @@ class CacheIntegrationService {
    */
   async invalidateByTags(tags: string[]): Promise<void> {
     for (const [key, entry] of this.cache.entries()) {
-      if (entry.tags.some(tag => tags.includes(tag))) {
+      if (entry.tags.some((tag) => tags.includes(tag))) {
         this.cache.delete(key)
       }
     }
@@ -87,18 +87,14 @@ class CacheIntegrationService {
   getStats() {
     return {
       size: this.cache.size,
-      keys: Array.from(this.cache.keys())
+      keys: Array.from(this.cache.keys()),
     }
   }
 
   /**
    * Wrap a function with caching
    */
-  async cached<T>(
-    key: string,
-    fn: () => Promise<T>,
-    options: CacheOptions = {}
-  ): Promise<T> {
+  async cached<T>(key: string, fn: () => Promise<T>, options: CacheOptions = {}): Promise<T> {
     // Try to get from cache first
     const cached = await this.get<T>(key)
     if (cached !== null) {
@@ -114,11 +110,7 @@ class CacheIntegrationService {
   /**
    * Cache API responses with NextResponse handling
    */
-  async cachedApiResponse<T>(
-    key: string,
-    fn: () => Promise<T>,
-    ttl = 300
-  ): Promise<T> {
+  async cachedApiResponse<T>(key: string, fn: () => Promise<T>, ttl = 300): Promise<T> {
     return this.cached(key, fn, { ttl })
   }
 }

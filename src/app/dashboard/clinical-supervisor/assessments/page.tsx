@@ -5,8 +5,8 @@ import { AssessmentCenter } from "../../../../components/competency/assessment-c
 import { PageHeader } from "../../../../components/layout/page-header"
 
 export const metadata: Metadata = {
-  title: "Assessment Center - MedStint",
-  description: "Review and assess student competency submissions",
+  title: "Assessments | MedStint",
+  description: "View and manage student assessments",
 }
 
 export default async function AssessmentCenterPage() {

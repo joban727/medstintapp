@@ -1,10 +1,11 @@
 "use client"
+
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Building2, Clock, Mail, Phone } from "lucide-react"
 import { useId } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { site } from "../../../config/site"
+import { site } from "@/config/site"
 import { Button } from "../../ui/button"
 import { Card, CardContent, CardFooter } from "../../ui/card"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "../../ui/form"
@@ -35,10 +36,7 @@ export const ContactSection = () => {
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     const { firstName, lastName, email, subject, message } = values
-    // Form submitted successfully
-
     const mailToLink = `mailto:${site.mailSupport}?subject=${subject}&body=Hello I am ${firstName} ${lastName}, my Email is ${email}. %0D%0A${message}`
-
     if (typeof window !== "undefined") {
       window.location.href = mailToLink
     }
@@ -50,48 +48,39 @@ export const ContactSection = () => {
         <div>
           <div className="mb-4">
             <h2 className="mb-2 text-lg text-primary tracking-wider">Contact</h2>
-
             <h2 className="font-bold text-3xl md:text-4xl">Connect with us</h2>
           </div>
           <p className="mb-8 text-muted-foreground lg:w-5/6">
             We'd love to hear from you! Get in touch with us for any questions, inquiries, or
             collaboration opportunities. We're here to help.
           </p>
-
           <div className="flex flex-col gap-4">
             <div>
               <div className="mb-1 flex gap-2">
                 <Building2 />
                 <div className="font-bold">Find us</div>
               </div>
-
               <div>742 Evergreen Terrace, Springfield, IL 62704</div>
             </div>
-
             <div>
               <div className="mb-1 flex gap-2">
                 <Phone />
                 <div className="font-bold">Call us</div>
               </div>
-
               <div>+1 (619) 123-4567</div>
             </div>
-
             <div>
               <div className="mb-1 flex gap-2">
                 <Mail />
                 <div className="font-bold">Mail us</div>
               </div>
-
               <div>{site.mailSupport}</div>
             </div>
-
             <div>
               <div className="flex gap-2">
                 <Clock />
                 <div className="font-bold">Visit us</div>
               </div>
-
               <div>
                 <div>Monday - Friday</div>
                 <div>8AM - 4PM</div>
@@ -99,11 +88,14 @@ export const ContactSection = () => {
             </div>
           </div>
         </div>
-
         <Card className="bg-muted/60">
           <CardContent className="p-4">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="grid w-full gap-4">
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="grid w-full gap-4"
+                noValidate
+              >
                 <div className="md:!flex-row flex flex-col gap-8">
                   <FormField
                     control={form.control}
@@ -112,7 +104,7 @@ export const ContactSection = () => {
                       <FormItem className="w-full">
                         <FormLabel>First Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="Indie" {...field} />
+                          <Input placeholder="Indie" aria-label="Indie" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -125,14 +117,13 @@ export const ContactSection = () => {
                       <FormItem className="w-full">
                         <FormLabel>Last Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="CEO" {...field} />
+                          <Input placeholder="CEO" aria-label="CEO" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
-
                 <div className="flex flex-col gap-1.5">
                   <FormField
                     control={form.control}
@@ -141,14 +132,18 @@ export const ContactSection = () => {
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
-                          <Input type="email" placeholder="me@domain.com" {...field} />
+                          <Input
+                            type="email"
+                            placeholder="me@domain.com"
+                            aria-label="me@domain.com"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
-
                 <div className="flex flex-col gap-1.5">
                   <FormField
                     control={form.control}
@@ -156,7 +151,11 @@ export const ContactSection = () => {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Subject</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select
+                          aria-label="Select a subject"
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select a subject" />
@@ -175,7 +174,6 @@ export const ContactSection = () => {
                     )}
                   />
                 </div>
-
                 <div className="flex flex-col gap-1.5">
                   <FormField
                     control={form.control}
@@ -187,22 +185,20 @@ export const ContactSection = () => {
                           <Textarea
                             rows={5}
                             placeholder="Your message..."
+                            aria-label="Your message..."
                             className="resize-none"
                             {...field}
                           />
                         </FormControl>
-
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
-
                 <Button className="mt-4 w-fit">Send message</Button>
               </form>
             </Form>
           </CardContent>
-
           <CardFooter />
         </Card>
       </section>

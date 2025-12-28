@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion"
 import { ChevronLeft, ChevronRight, RotateCcw, SkipForward, X } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react"
 import { cn } from "../../lib/utils"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
@@ -120,14 +120,17 @@ export function TutorialOverlay({
     element.scrollIntoView({ behavior: "smooth", block: "center" })
   }, [currentStepData])
 
+  // Stable event handler for resize (React 19.2+)
+  const onResize = useEffectEvent(() => updateHighlight())
+
   // Update highlight when step changes
   useEffect(() => {
     if (isActive) {
       updateHighlight()
-      // Re-calculate on window resize
-      const handleResize = () => updateHighlight()
-      window.addEventListener("resize", handleResize)
-      return () => window.removeEventListener("resize", handleResize)
+
+      // Re-calculate on window resize - no dependency needed for onResize
+      window.addEventListener("resize", onResize)
+      return () => window.removeEventListener("resize", onResize)
     }
   }, [isActive, updateHighlight])
 
@@ -151,34 +154,35 @@ export function TutorialOverlay({
     }
   }
 
+  // Stable event handler for keyboard navigation (React 19.2+)
+  const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
+    switch (e.key) {
+      case "Escape":
+        onClose()
+        break
+      case "ArrowRight":
+      case "Enter":
+        if (!isLastStep) {
+          handleNext()
+        } else {
+          onComplete()
+        }
+        break
+      case "ArrowLeft":
+        if (currentStep > 0) {
+          handlePrevious()
+        }
+        break
+    }
+  })
+
   // Handle keyboard navigation
   useEffect(() => {
     if (!isActive) return
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      switch (e.key) {
-        case "Escape":
-          onClose()
-          break
-        case "ArrowRight":
-        case "Enter":
-          if (!isLastStep) {
-            handleNext()
-          } else {
-            onComplete()
-          }
-          break
-        case "ArrowLeft":
-          if (currentStep > 0) {
-            handlePrevious()
-          }
-          break
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [isActive, currentStep, isLastStep, onClose, onComplete, handleNext, handlePrevious])
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [isActive]) // Only depends on isActive - onKeyDown always has fresh state
 
   const handleSkip = () => {
     onSkip()
@@ -258,16 +262,15 @@ export function TutorialOverlay({
                   variant="ghost"
                   size="sm"
                   onClick={onClose}
-                  className="h-6 w-6 p-0 hover:bg-gray-100"
+                  className="h-6 w-6 p-0 hover:bg-gray-100 transition-colors duration-200"
                 >
                   <X className="h-4 w-4" />
                 </Button>
               </div>
               {showProgress && <Progress value={progress} className="mt-2 h-2" />}
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="gap-4">
               <p className="text-gray-700 text-sm leading-relaxed">{currentStepData.content}</p>
-
               {currentStepData.videoUrl && (
                 <div className="overflow-hidden rounded-lg">
                   <video
@@ -277,21 +280,22 @@ export function TutorialOverlay({
                   />
                 </div>
               )}
-
               {currentStepData.tips && currentStepData.tips.length > 0 && (
                 <div className="rounded-lg bg-blue-50 p-3">
                   <h4 className="mb-2 font-medium text-blue-900 text-sm">💡 Tips:</h4>
-                  <ul className="space-y-1 text-blue-800 text-xs">
+                  <ul className="gap-1 text-blue-800 text-xs">
                     {currentStepData.tips.map((tip, index) => (
-                      <li key={`tip-${tip.slice(0, 20)}-${index}`} className="flex items-start gap-1">
-                        <span className="mt-0.5 text-blue-600">•</span>
+                      <li
+                        key={`tip-${tip.slice(0, 20)}-${index}`}
+                        className="flex items-start gap-1"
+                      >
+                        <span className="mt-0.5 text-medical-primary">•</span>
                         <span>{tip}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
-
               <div className="flex items-center justify-between pt-2">
                 <div className="flex gap-2">
                   {allowReplay && currentStep > 0 && (
@@ -307,7 +311,6 @@ export function TutorialOverlay({
                     </Button>
                   )}
                 </div>
-
                 <div className="flex gap-2">
                   {currentStep > 0 && (
                     <Button variant="outline" size="sm" onClick={handlePrevious}>
@@ -315,7 +318,11 @@ export function TutorialOverlay({
                       Previous
                     </Button>
                   )}
-                  <Button size="sm" onClick={handleNext} className="bg-blue-600 hover:bg-blue-700">
+                  <Button
+                    size="sm"
+                    onClick={handleNext}
+                    className="bg-medical-primary hover:bg-blue-700 transition-colors duration-200"
+                  >
                     {isLastStep ? "Complete" : "Next"}
                     {!isLastStep && <ChevronRight className="ml-1 h-4 w-4" />}
                   </Button>

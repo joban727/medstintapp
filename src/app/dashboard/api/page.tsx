@@ -25,10 +25,8 @@ export default function APIKeysSettingsPage() {
 
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>API Keys</CardTitle>
-          <CardDescription>
-            Create and manage API keys to access the MedStint API programmatically.
-          </CardDescription>
+          <CardTitle>API Access</CardTitle>
+          <CardDescription>Generate keys to access the MedStint API programmatically.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
@@ -57,12 +55,9 @@ export default function APIKeysSettingsPage() {
             Generate New API Key
           </Button>
 
-          <div className="text-muted-foreground text-sm">
-            <p>
-              <strong>Note:</strong> API keys provide access to your account data. Keep them secure
-              and never share them publicly.
-            </p>
-          </div>
+          <p className="text-muted-foreground">
+            Manage your API keys and access tokens for external integrations with MedStint.
+          </p>
         </CardContent>
       </Card>
     </div>

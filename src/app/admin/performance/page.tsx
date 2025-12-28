@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export const metadata: Metadata = {
   title: "Performance Monitoring | Admin Dashboard",
-  description: "Real-time database and query performance monitoring for MedstintClerk",
+  description: "Real-time database and query performance monitoring for MedStintClerk",
 }
 
 function PerformanceDashboardSkeleton() {

@@ -7,8 +7,9 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../ui/c
 
 export const CommunitySection = () => {
   const sectionId = useId()
+
   return (
-    <section id={`community-${sectionId}`} className="container mx-auto py-12 ">
+    <section id={`community-${sectionId}`} className="container mx-auto py-12">
       <hr className="border-secondary" />
       <div className="container py-20 sm:py-20">
         <div className="mx-auto lg:w-[60%]">
@@ -26,14 +27,9 @@ export const CommunitySection = () => {
               Join our open-source community on GitHub! Star the repo, report issues, contribute
               code, and help make this starter even better.
             </CardContent>
-
             <CardFooter>
               <Button asChild variant="outline">
-                <a
-                  href="https://github.com/indieceo/Indiesaas"
-                  target="_blank"
-                  rel="noopener"
-                >
+                <a href="https://github.com/indieceo/Indiesaas" target="_blank" rel="noopener">
                   <div className="flex items-center gap-2">
                     <Star className="h-5 w-5" />
                     Star on GitHub

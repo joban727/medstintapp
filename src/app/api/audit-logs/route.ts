@@ -6,9 +6,10 @@ import { z } from "zod"
 import { db } from "../../../database/connection-pool"
 import { auditLogs, users } from "../../../database/schema"
 import { getSchoolContext, type SchoolContext } from "../../../lib/school-utils"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { cacheIntegrationService } from "@/lib/cache-integration"
+import { withErrorHandling } from "@/lib/api-response"
 
-
+import type { UserRole } from "@/types"
 /**
  * Enhanced validation schemas for audit logs API
  */
@@ -153,13 +154,17 @@ const buildAccessControlConditions = async (
   const conditions: SQL[] = []
 
   // Super admins can see all logs
-  if (userRole === "SUPER_ADMIN") {
+  if (userRole === ("SUPER_ADMIN" as UserRole)) {
     return conditions
   }
 
   // School-based roles can only see logs from their school
   if (
-    ["SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR"].includes(userRole) &&
+    [
+      "SCHOOL_ADMIN" as UserRole,
+      "CLINICAL_PRECEPTOR" as UserRole,
+      "CLINICAL_SUPERVISOR" as UserRole,
+    ].includes(userRole as UserRole) &&
     schoolId
   ) {
     // Get all users from the same school
@@ -178,7 +183,7 @@ const buildAccessControlConditions = async (
   }
 
   // Students cannot access audit logs (handled in checkAuditLogAccess)
-  if (userRole === "STUDENT") {
+  if (userRole === ("STUDENT" as UserRole)) {
     conditions.push(eq(auditLogs.id, "impossible-id"))
   }
 
@@ -345,352 +350,334 @@ const _retentionPolicySchema = z.object({
  * - Audit statistics and analytics
  * - Enhanced error handling and logging
  */
-export async function GET(request: NextRequest) {
-  try {
-    // Try to get cached response
-    const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:audit-logs/route.ts',
-      async () => {
-        // Original function logic will be wrapped here
-        return await executeOriginalLogic()
-      },
-      300 // 5 minutes TTL
-    )
-    
-    if (cached) {
-      return cached
-    }
-  } catch (cacheError) {
-    console.warn('Cache error in audit-logs/route.ts:', cacheError)
-    // Continue with original logic if cache fails
-  }
-  
-  async function executeOriginalLogic() {
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  async function executeOriginalLogic(): Promise<NextResponse> {
+    const startTime = Date.now()
+    let context: SchoolContext | null = null
 
-  const startTime = Date.now()
-  let context: SchoolContext | null = null
-
-  try {
-    // Get client IP for rate limiting
-    const headersList = await headers()
-    const clientIP = headersList.get("x-forwarded-for") || headersList.get("x-real-ip") || "unknown"
-    const userAgent = headersList.get("user-agent") || "unknown"
-
-    // Apply rate limiting
-    if (!checkRateLimit(clientIP, 100, 60000)) {
-      logError(new Error("Rate limit exceeded"), "GET_RATE_LIMIT", clientIP)
-      const response = NextResponse.json(
-        { error: "Rate limit exceeded. Please try again later." },
-        { status: 429 }
-      )
-      return addSecurityHeaders(response)
-    }
-
-    // Get user context
-    context = await getSchoolContext()
-    if (!context?.userId) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 })
-      return addSecurityHeaders(response)
-    }
-
-    // Type assertion after null check
-    const userContext = context as { userId: string; userRole: string; schoolId: string | null }
-
-    // Check permissions
-    const accessCheck = await checkAuditLogAccess(
-      userContext.userRole,
-      userContext.userId,
-      userContext.schoolId,
-      "read"
-    )
-
-    if (!accessCheck.allowed) {
-      logError(
-        new Error(`Access denied: ${accessCheck.reason}`),
-        "GET_ACCESS_DENIED",
-        userContext.userId
-      )
-      const response = NextResponse.json(
-        { error: "Insufficient permissions", reason: accessCheck.reason },
-        { status: 403 }
-      )
-      return addSecurityHeaders(response)
-    }
-
-    // Validate and parse query parameters
-    const { searchParams } = new URL(request.url)
-    const rawParams = Object.fromEntries(searchParams.entries())
-
-    let validatedParams: z.infer<typeof queryParamsSchema>
     try {
-      validatedParams = queryParamsSchema.parse(rawParams)
-    } catch (validationError) {
-      logError(validationError, "GET_VALIDATION_ERROR", userContext.userId)
-      const response = NextResponse.json(
-        {
-          error: "Invalid query parameters",
-          details:
-            validationError instanceof z.ZodError ? validationError.issues : "Validation failed",
-        },
-        { status: 400 }
-      )
-      return addSecurityHeaders(response)
-    }
+      // Get client IP for rate limiting
+      const headersList = await headers()
+      const clientIP =
+        headersList.get("x-forwarded-for") || headersList.get("x-real-ip") || "unknown"
+      const userAgent = headersList.get("user-agent") || "unknown"
 
-    // Check export permissions
-    if (validatedParams.export) {
-      const exportCheck = await checkAuditLogAccess(
+      // Apply rate limiting
+      if (!checkRateLimit(clientIP, 100, 60000)) {
+        logError(new Error("Rate limit exceeded"), "GET_RATE_LIMIT", clientIP)
+        const response = NextResponse.json(
+          { error: "Rate limit exceeded. Please try again later." },
+          { status: 429 }
+        )
+        return addSecurityHeaders(response)
+      }
+
+      // Get user context
+      context = await getSchoolContext()
+      if (!context?.userId) {
+        const response = NextResponse.json({ error: "Authentication required" }, { status: 401 })
+        return addSecurityHeaders(response)
+      }
+
+      // Type assertion after null check
+      const userContext = context as { userId: string; userRole: string; schoolId: string | null }
+
+      // Check permissions
+      const accessCheck = await checkAuditLogAccess(
         userContext.userRole,
         userContext.userId,
         userContext.schoolId,
-        "export"
+        "read"
       )
 
-      if (!exportCheck.allowed) {
+      if (!accessCheck.allowed) {
+        logError(
+          new Error(`Access denied: ${accessCheck.reason}`),
+          "GET_ACCESS_DENIED",
+          userContext.userId
+        )
         const response = NextResponse.json(
-          { error: "Export not permitted for your role" },
+          { error: "Insufficient permissions", reason: accessCheck.reason },
           { status: 403 }
         )
         return addSecurityHeaders(response)
       }
-    }
 
-    // Build base query conditions
-    const conditions: SQL[] = []
+      // Validate and parse query parameters
+      const { searchParams } = new URL(request.url)
+      const rawParams = Object.fromEntries(searchParams.entries())
 
-    // Add access control conditions based on user role
-    const accessConditions = await buildAccessControlConditions(
-      userContext.userRole,
-      userContext.userId,
-      userContext.schoolId,
-      validatedParams
-    )
-    conditions.push(...accessConditions)
-
-    // Add filter conditions
-    if (validatedParams.userId) {
-      conditions.push(eq(auditLogs.userId, validatedParams.userId))
-    }
-
-    if (validatedParams.action) {
-      conditions.push(like(auditLogs.action, `%${validatedParams.action}%`))
-    }
-
-    if (validatedParams.resource) {
-      conditions.push(eq(auditLogs.resource, validatedParams.resource))
-    }
-
-    if (validatedParams.resourceId) {
-      conditions.push(eq(auditLogs.resourceId, validatedParams.resourceId))
-    }
-
-    if (validatedParams.severity) {
-      conditions.push(eq(auditLogs.severity, validatedParams.severity))
-    }
-
-    if (validatedParams.status) {
-      conditions.push(eq(auditLogs.status, validatedParams.status))
-    }
-
-    if (validatedParams.startDate) {
-      conditions.push(gte(auditLogs.createdAt, new Date(validatedParams.startDate)))
-    }
-
-    if (validatedParams.endDate) {
-      conditions.push(lte(auditLogs.createdAt, new Date(validatedParams.endDate)))
-    }
-
-    // Cursor-based pagination
-    if (validatedParams.cursor) {
+      let validatedParams: z.infer<typeof queryParamsSchema>
       try {
-        const cursorData = JSON.parse(Buffer.from(validatedParams.cursor, "base64").toString())
-        conditions.push(lte(auditLogs.createdAt, new Date(cursorData.createdAt)))
-        conditions.push(sql`${auditLogs.id} != ${cursorData.id}`)
-      } catch (cursorError) {
-        logError(cursorError, "GET_CURSOR_ERROR", userContext.userId)
-        const response = NextResponse.json({ error: "Invalid cursor format" }, { status: 400 })
-        return addSecurityHeaders(response)
-      }
-    }
-
-    // Execute main query
-    const logs = await db
-      .select({
-        id: auditLogs.id,
-        userId: auditLogs.userId,
-        action: auditLogs.action,
-        resource: auditLogs.resource,
-        resourceId: auditLogs.resourceId,
-        details: auditLogs.details,
-        ipAddress: auditLogs.ipAddress,
-        userAgent: auditLogs.userAgent,
-        sessionId: auditLogs.sessionId,
-        severity: auditLogs.severity,
-        status: auditLogs.status,
-        createdAt: auditLogs.createdAt,
-        userName: users.name,
-        userEmail: users.email,
-      })
-      .from(auditLogs)
-      .leftJoin(users, eq(auditLogs.userId, users.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
-      .limit(validatedParams.limit + 1) // +1 to check if there are more records
-
-    // Determine if there are more records
-    const hasMore = logs.length > validatedParams.limit
-    const resultLogs = hasMore ? logs.slice(0, validatedParams.limit) : logs
-
-    // Generate next cursor
-    let nextCursor = null
-    if (hasMore && resultLogs.length > 0) {
-      const lastLog = resultLogs[resultLogs.length - 1]
-      const cursorData = {
-        createdAt: lastLog.createdAt.toISOString(),
-        id: lastLog.id,
-      }
-      nextCursor = Buffer.from(JSON.stringify(cursorData)).toString("base64")
-    }
-
-    // Get statistics if requested
-    let stats = null
-    if (validatedParams.includeStats) {
-      try {
-        const [totalCount, severityStats, statusStats, recentActivity] = await Promise.all([
-          // Total count
-          db
-            .select({ total: count() })
-            .from(auditLogs)
-            .leftJoin(users, eq(auditLogs.userId, users.id))
-            .where(conditions.length > 0 ? and(...conditions) : undefined)
-            .then((result) => result[0]?.total || 0),
-
-          // Severity distribution
-          db
-            .select({
-              severity: auditLogs.severity,
-              count: count(),
-            })
-            .from(auditLogs)
-            .leftJoin(users, eq(auditLogs.userId, users.id))
-            .where(conditions.length > 0 ? and(...conditions) : undefined)
-            .groupBy(auditLogs.severity),
-
-          // Status distribution
-          db
-            .select({
-              status: auditLogs.status,
-              count: count(),
-            })
-            .from(auditLogs)
-            .leftJoin(users, eq(auditLogs.userId, users.id))
-            .where(conditions.length > 0 ? and(...conditions) : undefined)
-            .groupBy(auditLogs.status),
-
-          // Recent activity (last 24 hours)
-          db
-            .select({ count: count() })
-            .from(auditLogs)
-            .leftJoin(users, eq(auditLogs.userId, users.id))
-            .where(
-              and(
-                gte(auditLogs.createdAt, new Date(Date.now() - 24 * 60 * 60 * 1000)),
-                conditions.length > 0 ? and(...conditions) : undefined
-              )
-            )
-            .then((result) => result[0]?.count || 0),
-        ])
-
-        stats = {
-          total: totalCount,
-          severityDistribution: severityStats,
-          statusDistribution: statusStats,
-          recentActivity24h: recentActivity,
-          queryTime: Date.now() - startTime,
-        }
-      } catch (statsError) {
-        logError(statsError, "GET_STATS_ERROR", userContext.userId)
-        // Continue without stats if there's an error
-      }
-    }
-
-    // Handle export requests
-    if (validatedParams.export) {
-      try {
-        const exportData = exportAuditLogs(resultLogs, validatedParams.export)
-        const filename = `audit-logs-${new Date().toISOString().split("T")[0]}.${validatedParams.export}`
-
-        const response = new NextResponse(exportData, {
-          status: 200,
-          headers: {
-            "Content-Type": validatedParams.export === "csv" ? "text/csv" : "application/json",
-            "Content-Disposition": `attachment; filename="${filename}"`,
+        validatedParams = queryParamsSchema.parse(rawParams)
+      } catch (validationError) {
+        logError(validationError, "GET_VALIDATION_ERROR", userContext.userId)
+        const response = NextResponse.json(
+          {
+            error: "Invalid query parameters",
+            details:
+              validationError instanceof z.ZodError ? validationError.issues : "Validation failed",
           },
-        })
-
-        // Log export activity
-        await db.insert(auditLogs).values({
-          id: crypto.randomUUID(),
-          userId: userContext.userId,
-          action: "EXPORT_AUDIT_LOGS",
-          resource: "audit_logs",
-          details: JSON.stringify({
-            format: validatedParams.export,
-            recordCount: resultLogs.length,
-            filters: validatedParams,
-          }),
-          ipAddress: clientIP,
-          userAgent: userAgent,
-          severity: "MEDIUM",
-          status: "SUCCESS",
-          createdAt: new Date(),
-        })
-
-        return addSecurityHeaders(response)
-      } catch (exportError) {
-        logError(exportError, "GET_EXPORT_ERROR", userContext.userId)
-        const response = NextResponse.json({ error: "Export failed" }, { status: 500 })
+          { status: 400 }
+        )
         return addSecurityHeaders(response)
       }
-    }
 
-    // Return standard JSON response
-    const responseData = {
-      success: true,
-      data: resultLogs,
-      pagination: {
-        limit: validatedParams.limit,
-        hasMore,
-        nextCursor,
-        total: stats?.total || null,
-      },
-      stats,
-      meta: {
-        queryTime: Date.now() - startTime,
-        userRole: userContext.userRole,
-        accessScope: accessCheck.scope,
-      },
-    }
+      // Check export permissions
+      if (validatedParams.export) {
+        const exportCheck = await checkAuditLogAccess(
+          userContext.userRole,
+          userContext.userId,
+          userContext.schoolId,
+          "export"
+        )
 
-    const response = NextResponse.json(responseData)
-    return addSecurityHeaders(response)
-  } catch (error) {
-    logError(error, "GET_UNEXPECTED_ERROR", context?.userId)
-    const response = NextResponse.json(
-      {
-        error: "Internal server error",
-        message:
-          process.env.NODE_ENV === "development"
-            ? (error as Error).message
-            : "An unexpected error occurred",
-      },
-      { status: 500 }
-    )
-    return addSecurityHeaders(response)
+        if (!exportCheck.allowed) {
+          const response = NextResponse.json(
+            { error: "Export not permitted for your role" },
+            { status: 403 }
+          )
+          return addSecurityHeaders(response)
+        }
+      }
+
+      // Build base query conditions
+      const conditions: SQL[] = []
+
+      // Add access control conditions based on user role
+      const accessConditions = await buildAccessControlConditions(
+        userContext.userRole,
+        userContext.userId,
+        userContext.schoolId,
+        validatedParams
+      )
+      conditions.push(...accessConditions)
+
+      // Add filter conditions
+      if (validatedParams.userId) {
+        conditions.push(eq(auditLogs.userId, validatedParams.userId))
+      }
+
+      if (validatedParams.action) {
+        conditions.push(like(auditLogs.action, `%${validatedParams.action}%`))
+      }
+
+      if (validatedParams.resource) {
+        conditions.push(eq(auditLogs.resource, validatedParams.resource))
+      }
+
+      if (validatedParams.resourceId) {
+        conditions.push(eq(auditLogs.resourceId, validatedParams.resourceId))
+      }
+
+      if (validatedParams.severity) {
+        conditions.push(eq(auditLogs.severity, validatedParams.severity))
+      }
+
+      if (validatedParams.status) {
+        conditions.push(eq(auditLogs.status, validatedParams.status))
+      }
+
+      if (validatedParams.startDate) {
+        conditions.push(gte(auditLogs.createdAt, new Date(validatedParams.startDate)))
+      }
+
+      if (validatedParams.endDate) {
+        conditions.push(lte(auditLogs.createdAt, new Date(validatedParams.endDate)))
+      }
+
+      // Cursor-based pagination
+      if (validatedParams.cursor) {
+        try {
+          const cursorData = JSON.parse(Buffer.from(validatedParams.cursor, "base64").toString())
+          conditions.push(lte(auditLogs.createdAt, new Date(cursorData.createdAt)))
+          conditions.push(sql`${auditLogs.id} != ${cursorData.id}`)
+        } catch (cursorError) {
+          logError(cursorError, "GET_CURSOR_ERROR", userContext.userId)
+          const response = NextResponse.json({ error: "Invalid cursor format" }, { status: 400 })
+          return addSecurityHeaders(response)
+        }
+      }
+
+      // Execute main query
+      const logs = await db
+        .select({
+          id: auditLogs.id,
+          userId: auditLogs.userId,
+          action: auditLogs.action,
+          resource: auditLogs.resource,
+          resourceId: auditLogs.resourceId,
+          details: auditLogs.details,
+          ipAddress: auditLogs.ipAddress,
+          userAgent: auditLogs.userAgent,
+          sessionId: auditLogs.sessionId,
+          severity: auditLogs.severity,
+          status: auditLogs.status,
+          createdAt: auditLogs.createdAt,
+          userName: users.name,
+          userEmail: users.email,
+        })
+        .from(auditLogs)
+        .leftJoin(users, eq(auditLogs.userId, users.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
+        .limit(validatedParams.limit + 1) // +1 to check if there are more records
+
+      // Determine if there are more records
+      const hasMore = logs.length > validatedParams.limit
+      const resultLogs = hasMore ? logs.slice(0, validatedParams.limit) : logs
+
+      // Generate next cursor
+      let nextCursor = null
+      if (hasMore && resultLogs.length > 0) {
+        const lastLog = resultLogs[resultLogs.length - 1]
+        const cursorData = {
+          createdAt: lastLog.createdAt.toISOString(),
+          id: lastLog.id,
+        }
+        nextCursor = Buffer.from(JSON.stringify(cursorData)).toString("base64")
+      }
+
+      // Get statistics if requested
+      let stats = null
+      if (validatedParams.includeStats) {
+        try {
+          const [totalCount, severityStats, statusStats, recentActivity] = await Promise.all([
+            // Total count
+            db
+              .select({ total: count() })
+              .from(auditLogs)
+              .leftJoin(users, eq(auditLogs.userId, users.id))
+              .where(conditions.length > 0 ? and(...conditions) : undefined)
+              .then((result) => result[0]?.total || 0),
+
+            // Severity distribution
+            db
+              .select({
+                severity: auditLogs.severity,
+                count: count(),
+              })
+              .from(auditLogs)
+              .leftJoin(users, eq(auditLogs.userId, users.id))
+              .where(conditions.length > 0 ? and(...conditions) : undefined)
+              .groupBy(auditLogs.severity),
+
+            // Status distribution
+            db
+              .select({
+                status: auditLogs.status,
+                count: count(),
+              })
+              .from(auditLogs)
+              .leftJoin(users, eq(auditLogs.userId, users.id))
+              .where(conditions.length > 0 ? and(...conditions) : undefined)
+              .groupBy(auditLogs.status),
+
+            // Recent activity (last 24 hours)
+            db
+              .select({ count: count() })
+              .from(auditLogs)
+              .leftJoin(users, eq(auditLogs.userId, users.id))
+              .where(
+                and(
+                  gte(auditLogs.createdAt, new Date(Date.now() - 24 * 60 * 60 * 1000)),
+                  conditions.length > 0 ? and(...conditions) : undefined
+                )
+              )
+              .then((result) => result[0]?.count || 0),
+          ])
+
+          stats = {
+            total: totalCount,
+            severityDistribution: severityStats,
+            statusDistribution: statusStats,
+            recentActivity24h: recentActivity,
+            queryTime: Date.now() - startTime,
+          }
+        } catch (statsError) {
+          logError(statsError, "GET_STATS_ERROR", userContext.userId)
+          // Continue without stats if there's an error
+        }
+      }
+
+      // Handle export requests
+      if (validatedParams.export) {
+        try {
+          const exportData = exportAuditLogs(resultLogs, validatedParams.export)
+          const filename = `audit-logs-${new Date().toISOString().split("T")[0]}.${validatedParams.export}`
+
+          const response = new NextResponse(exportData, {
+            status: 200,
+            headers: {
+              "Content-Type": validatedParams.export === "csv" ? "text/csv" : "application/json",
+              "Content-Disposition": `attachment; filename="${filename}"`,
+            },
+          })
+
+          // Log export activity
+          await db.insert(auditLogs).values({
+            id: crypto.randomUUID(),
+            userId: userContext.userId,
+            action: "EXPORT_AUDIT_LOGS",
+            resource: "audit_logs",
+            details: JSON.stringify({
+              format: validatedParams.export,
+              recordCount: resultLogs.length,
+              filters: validatedParams,
+            }),
+            ipAddress: clientIP,
+            userAgent: userAgent,
+            severity: "MEDIUM",
+            status: "SUCCESS",
+            createdAt: new Date(),
+          })
+
+          return addSecurityHeaders(response)
+        } catch (exportError) {
+          logError(exportError, "GET_EXPORT_ERROR", userContext.userId)
+          const response = NextResponse.json({ error: "Export failed" }, { status: 500 })
+          return addSecurityHeaders(response)
+        }
+      }
+
+      // Return standard JSON response
+      const responseData = {
+        success: true,
+        data: resultLogs,
+        pagination: {
+          limit: validatedParams.limit,
+          hasMore,
+          nextCursor,
+          total: stats?.total || null,
+        },
+        stats,
+        meta: {
+          queryTime: Date.now() - startTime,
+          userRole: userContext.userRole,
+          accessScope: accessCheck.scope,
+        },
+      }
+
+      const response = NextResponse.json(responseData)
+      return addSecurityHeaders(response)
+    } catch (error) {
+      logError(error, "GET_UNEXPECTED_ERROR", context?.userId)
+      const response = NextResponse.json(
+        {
+          error: "Internal server error",
+          message:
+            process.env.NODE_ENV === "development"
+              ? (error as Error).message
+              : "An unexpected error occurred",
+        },
+        { status: 500 }
+      )
+      return addSecurityHeaders(response)
+    }
   }
 
-  }
-}
+  return executeOriginalLogic()
+})
 
 /**
  * POST /api/audit-logs - Enhanced audit log creation with comprehensive validation
@@ -704,7 +691,7 @@ export async function GET(request: NextRequest) {
  * - Integrity hash generation
  * - Transaction support for bulk operations
  */
-export async function POST(request: NextRequest) {
+export const POST = withErrorHandling(async (request: NextRequest) => {
   const startTime = Date.now()
   let context: { userId?: string; userRole?: string; schoolId?: string | null } | null = null
 
@@ -888,16 +875,16 @@ export async function POST(request: NextRequest) {
 
       // Define interface for inserted audit log data
       interface InsertedAuditLog {
-        id: string;
-        userId: string;
-        action: string;
-        resource: string;
-        details: Record<string, unknown>;
-        ipAddress: string;
-        userAgent: string;
-        severity: string;
-        status: string;
-        createdAt: Date;
+        id: string
+        userId: string
+        action: string
+        resource: string
+        details: Record<string, unknown>
+        ipAddress: string
+        userAgent: string
+        severity: string
+        status: string
+        createdAt: Date
       }
 
       const responseData = {
@@ -940,7 +927,7 @@ export async function POST(request: NextRequest) {
     )
     return addSecurityHeaders(response)
   }
-}
+})
 
 // Enhanced deletion parameters validation
 const deleteParamsSchema = z.object({
@@ -1286,3 +1273,4 @@ export async function DELETE(request: NextRequest) {
     return addSecurityHeaders(response)
   }
 }
+

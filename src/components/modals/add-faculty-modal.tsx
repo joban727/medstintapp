@@ -23,14 +23,19 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 interface AddFacultyModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess: () => void
+  onSuccess?: () => void
 }
 
 export function AddFacultyModal({ open, onOpenChange, onSuccess }: AddFacultyModalProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -42,6 +47,7 @@ export function AddFacultyModal({ open, onOpenChange, onSuccess }: AddFacultyMod
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setIsSubmitting(true)
 
     try {
       // Validate form data
@@ -57,8 +63,7 @@ export function AddFacultyModal({ open, onOpenChange, onSuccess }: AddFacultyMod
       }
 
       // Email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      if (!emailRegex.test(formData.email)) {
+      if (!validateEmail(formData.email)) {
         toast.error("Please enter a valid email address")
         return
       }
@@ -81,12 +86,15 @@ export function AddFacultyModal({ open, onOpenChange, onSuccess }: AddFacultyMod
       })
 
       if (!response.ok) {
-        const error = await response.json()
+        const error = await response.json().catch((err) => {
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
+        })
         throw new Error(error.message || "Failed to create faculty member")
       }
 
       toast.success("Faculty member added successfully")
-      onSuccess()
+      onSuccess?.()
       onOpenChange(false)
 
       // Reset form
@@ -98,15 +106,20 @@ export function AddFacultyModal({ open, onOpenChange, onSuccess }: AddFacultyMod
         password: "",
       })
     } catch (error) {
-      console.error("Error adding faculty:", error)
-      toast.error(error instanceof Error ? error.message : "Failed to add faculty member")
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+      console.error("[AddFacultyModal] Operation failed:", error)
+      toast.error(errorMessage)
     } finally {
       setIsLoading(false)
+      setIsSubmitting(false)
     }
   }
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
   }
 
   return (
@@ -118,7 +131,7 @@ export function AddFacultyModal({ open, onOpenChange, onSuccess }: AddFacultyMod
             Create a new faculty account. They will receive login credentials via email.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="gap-4" noValidate>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="name" className="text-right">
@@ -176,11 +189,12 @@ export function AddFacultyModal({ open, onOpenChange, onSuccess }: AddFacultyMod
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Medicine">Medicine</SelectItem>
-                  <SelectItem value="Surgery">Surgery</SelectItem>
-                  <SelectItem value="Pediatrics">Pediatrics</SelectItem>
-                  <SelectItem value="Emergency Medicine">Emergency Medicine</SelectItem>
-                  <SelectItem value="Family Medicine">Family Medicine</SelectItem>
+                  <SelectItem value="General Radiology">General Radiology</SelectItem>
+                  <SelectItem value="MRI">MRI</SelectItem>
+                  <SelectItem value="CT Scan">CT Scan</SelectItem>
+                  <SelectItem value="Ultrasound">Ultrasound</SelectItem>
+                  <SelectItem value="Nuclear Medicine">Nuclear Medicine</SelectItem>
+                  <SelectItem value="Radiation Therapy">Radiation Therapy</SelectItem>
                   <SelectItem value="Administration">Administration</SelectItem>
                   <SelectItem value="Academic Affairs">Academic Affairs</SelectItem>
                   <SelectItem value="Student Services">Student Services</SelectItem>

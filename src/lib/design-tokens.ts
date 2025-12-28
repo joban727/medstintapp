@@ -19,10 +19,10 @@ class MemoryCache {
       },
       5 * 60 * 1000
     )
-    
+
     // Only use unref in Node.js environment to prevent process hanging
-    if (typeof process !== 'undefined' && process.versions?.node) {
-      (this.cleanupInterval as any).unref?.()
+    if (typeof process !== "undefined" && process.versions?.node) {
+      ;(this.cleanupInterval as any).unref?.()
     }
   }
 

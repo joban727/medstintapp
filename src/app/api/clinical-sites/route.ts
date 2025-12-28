@@ -1,256 +1,351 @@
-import { and, eq } from "drizzle-orm"
-import { type NextRequest, NextResponse } from "next/server"
+import { auth } from "@clerk/nextjs/server"
+import { and, count, desc, eq, ilike, or, sql, inArray } from "drizzle-orm"
+import { type NextRequest } from "next/server"
 import { z } from "zod"
-import { db } from "../../../database/connection-pool"
-import { accreditationOptions } from "../../../database/schema"
-import { getCurrentUser } from "../../../lib/auth-clerk"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { db } from "@/database/connection-pool"
+import { clinicalSites, rotations, siteAssignments, facilityManagement } from "@/database/schema"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  withErrorHandling,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+} from "@/lib/api-response"
+import { getSchoolContext } from "@/lib/school-utils"
+// Ensure this route is always dynamic (no framework-level static caching)
+export const dynamic = "force-dynamic"
 
-
-const createAccreditationOptionSchema = z.object({
-  id: z.string().min(1, "ID is required"),
+const createClinicalSiteSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  abbreviation: z.string().min(1, "Abbreviation is required"),
-  description: z.string().optional(),
-  isActive: z.boolean().default(true),
-  isDefault: z.boolean().default(false),
-  sortOrder: z.number().int().min(0).default(0),
+  address: z.string().min(1, "Address is required"),
+  phone: z.string().min(1, "Phone is required"),
+  email: z.string().email("Invalid email format"),
+  type: z.enum(["HOSPITAL", "CLINIC", "NURSING_HOME", "OUTPATIENT", "OTHER"]),
+  capacity: z.number().min(1, "Capacity must be at least 1"),
+  specialties: z.array(z.string()).optional(),
+  contactPersonName: z.string().optional(),
+  contactPersonTitle: z.string().optional(),
+  contactPersonPhone: z.string().optional(),
+  contactPersonEmail: z.string().email().optional(),
+  requirements: z.array(z.string()).optional(),
 })
 
-const updateAccreditationOptionSchema = z.object({
-  name: z.string().min(1, "Name is required").optional(),
-  abbreviation: z.string().min(1, "Abbreviation is required").optional(),
-  description: z.string().optional(),
+const updateClinicalSiteSchema = z.object({
+  name: z.string().min(1).optional(),
+  address: z.string().min(1).optional(),
+  phone: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  type: z.enum(["HOSPITAL", "CLINIC", "NURSING_HOME", "OUTPATIENT", "OTHER"]).optional(),
+  capacity: z.number().min(1).optional(),
+  specialties: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
-  isDefault: z.boolean().optional(),
-  sortOrder: z.number().int().min(0).optional(),
+  contactPersonName: z.string().optional(),
+  contactPersonTitle: z.string().optional(),
+  contactPersonPhone: z.string().optional(),
+  contactPersonEmail: z.string().email().optional(),
+  requirements: z.array(z.string()).optional(),
 })
 
-// GET /api/accreditation-options - Get all accreditation options
-export async function GET(request: NextRequest) {
+// GET /api/clinical-sites - Get clinical sites with filtering
+export const GET = withErrorHandling(async (request: NextRequest) => {
   try {
-    // Try to get cached response
-    const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:clinical-sites/route.ts',
-      async () => {
-        // Original function logic will be wrapped here
-        return await executeOriginalLogic()
-      },
-      300 // 5 minutes TTL
-    )
-    
-    if (cached) {
-      return cached
-    }
-  } catch (cacheError) {
-    console.warn('Cache error in clinical-sites/route.ts:', cacheError)
-    // Continue with original logic if cache fails
-  }
-  
-  async function executeOriginalLogic() {
-
-  try {
+    const context = await getSchoolContext()
     const { searchParams } = new URL(request.url)
-    const activeOnly = searchParams.get("activeOnly") !== "false" // Default to true
-    const includeInactive = searchParams.get("includeInactive") === "true"
 
-    // Build query conditions
-    const conditions = []
-    if (activeOnly && !includeInactive) {
-      conditions.push(eq(accreditationOptions.isActive, true))
+    const search = searchParams.get("search")
+    const type = searchParams.get("type")
+    const specialty = searchParams.get("specialty")
+    const isActive = searchParams.get("isActive")
+    const limit = Number.parseInt(searchParams.get("limit") || "50")
+    const offset = Number.parseInt(searchParams.get("offset") || "0")
+    const includeStats = searchParams.get("includeStats") === "true"
+    const debug = searchParams.get("debug") === "true" || searchParams.get("debug") === "1"
+
+    const conditions: any[] = []
+    if (search) conditions.push(ilike(clinicalSites.name, `%${search}%`))
+    if (type) conditions.push(eq(clinicalSites.type, type as any))
+    if (isActive !== null) conditions.push(eq(clinicalSites.isActive, isActive === "true"))
+    if (specialty) conditions.push(ilike(clinicalSites.specialties, `%${specialty}%`))
+
+    let sites: any[]
+    let total = 0
+    if (context.userRole !== "SUPER_ADMIN" && context.schoolId) {
+      // For SCHOOL_ADMIN: Show only clinical sites belonging to their school
+      sites = await db
+        .select()
+        .from(clinicalSites)
+        .where(
+          and(
+            eq(clinicalSites.schoolId, context.schoolId),
+            conditions.length > 0 ? and(...conditions) : undefined
+          )
+        )
+        .orderBy(desc(clinicalSites.createdAt))
+        .limit(limit)
+        .offset(offset)
+
+      // Get total count for pagination
+      const [countResult] = await db
+        .select({ count: count(clinicalSites.id) })
+        .from(clinicalSites)
+        .where(
+          and(
+            eq(clinicalSites.schoolId, context.schoolId),
+            conditions.length > 0 ? and(...conditions) : undefined
+          )
+        )
+      total = countResult?.count || sites.length
+    } else {
+      sites = await db
+        .select()
+        .from(clinicalSites)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(clinicalSites.createdAt))
+        .limit(limit)
+        .offset(offset)
+      total = sites.length
     }
 
-    const options = await db
-      .select()
-      .from(accreditationOptions)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(accreditationOptions.sortOrder, accreditationOptions.name)
+    if (includeStats) {
+      const siteIds = sites.map((s) => s.id)
+      if (siteIds.length > 0) {
+        const rotationCounts = await db
+          .select({
+            clinicalSiteId: rotations.clinicalSiteId,
+            totalRotations: count(rotations.id),
+            activeRotations: sql<number>`SUM(CASE WHEN ${rotations.status} = 'ACTIVE' THEN 1 ELSE 0 END)`,
+          })
+          .from(rotations)
+          .where(inArray(rotations.clinicalSiteId, siteIds))
+          .groupBy(rotations.clinicalSiteId)
 
-    return NextResponse.json({ accreditationOptions: options })
-  } catch (error) {
-    console.error("Error fetching accreditation options:", error)
-    return NextResponse.json({ error: "Failed to fetch accreditation options" }, { status: 500 })
-  }
-
-  }
-}
-
-// POST /api/accreditation-options - Create new accreditation option
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser()
-
-    // Only super admins can create accreditation options
-    if (!user || user.role !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+        const rotationMap = new Map(rotationCounts.map((rc) => [rc.clinicalSiteId, rc]))
+        sites = sites.map((site) => {
+          const stats = rotationMap.get(site.id) || { totalRotations: 0, activeRotations: 0 }
+          const availableCapacity = site.capacity - (stats.activeRotations || 0)
+          return {
+            ...site,
+            totalRotations: stats.totalRotations || 0,
+            activeRotations: stats.activeRotations || 0,
+            availableCapacity,
+          }
+        })
+      }
     }
 
-    const body = await request.json()
-    const validatedData = createAccreditationOptionSchema.parse(body)
-
-    // Check if option with same ID already exists
-    const [existingOption] = await db
-      .select()
-      .from(accreditationOptions)
-      .where(eq(accreditationOptions.id, validatedData.id))
-      .limit(1)
-
-    if (existingOption) {
-      return NextResponse.json(
-        { error: "Accreditation option with this ID already exists" },
-        { status: 409 }
+    if (debug) {
+      console.info(
+        "[LOG-2 ClinicalSitesAPI] role=%s schoolId=%s filters={search:%s,type:%s,specialty:%s,isActive:%s} total=%d",
+        context.userRole,
+        context.schoolId || null,
+        search || null,
+        type || null,
+        specialty || null,
+        isActive || null,
+        Array.isArray(sites) ? sites.length : 0
       )
     }
 
-    // If this is set as default, remove default from others
-    if (validatedData.isDefault) {
-      await db
-        .update(accreditationOptions)
-        .set({ isDefault: false, updatedAt: new Date() })
-        .where(eq(accreditationOptions.isDefault, true))
+    const parsedSites = sites.map((site) => ({
+      ...site,
+      specialties: (() => {
+        try {
+          return JSON.parse(site.specialties || "[]")
+        } catch {
+          return []
+        }
+      })(),
+      requirements: (() => {
+        try {
+          return JSON.parse(site.requirements || "[]")
+        } catch {
+          return []
+        }
+      })(),
+    }))
+
+    return createSuccessResponse(
+      {
+        clinicalSites: parsedSites,
+        pagination: { limit, offset, total },
+      },
+      "Clinical sites retrieved successfully"
+    )
+  } catch (error) {
+    console.error("Clinical sites GET error:", error)
+    // Surface a non-sensitive database error hint for integration tests
+    return createErrorResponse("Database error occurred", HTTP_STATUS.INTERNAL_SERVER_ERROR)
+  }
+})
+
+// POST /api/clinical-sites - Create new clinical site
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  const context = await getSchoolContext()
+  if (!["SUPER_ADMIN" as any, "SCHOOL_ADMIN" as any].includes(context.userRole)) {
+    return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
+  }
+
+  const body = await request.json()
+  try {
+    const validatedData = createClinicalSiteSchema.parse(body)
+
+    // Check for existing site with same name within the same school
+    const [existingSite] = await db
+      .select()
+      .from(clinicalSites)
+      .where(
+        and(
+          eq(clinicalSites.name, validatedData.name),
+          context.schoolId ? eq(clinicalSites.schoolId, context.schoolId) : undefined
+        )
+      )
+      .limit(1)
+
+    if (existingSite) {
+      return createErrorResponse(
+        "Clinical site with this name already exists",
+        HTTP_STATUS.BAD_REQUEST
+      )
     }
 
-    const [newOption] = await db
-      .insert(accreditationOptions)
+    const siteId = crypto.randomUUID()
+    const [newSite] = await db
+      .insert(clinicalSites)
       .values({
-        ...validatedData,
+        id: siteId,
+        schoolId: context.schoolId, // Link to school
+        name: validatedData.name,
+        address: validatedData.address,
+        phone: validatedData.phone,
+        email: validatedData.email,
+        type: validatedData.type,
+        capacity: validatedData.capacity,
+        specialties: JSON.stringify(validatedData.specialties || []),
+        contactPersonName: validatedData.contactPersonName,
+        contactPersonTitle: validatedData.contactPersonTitle,
+        contactPersonPhone: validatedData.contactPersonPhone,
+        contactPersonEmail: validatedData.contactPersonEmail,
+        requirements: JSON.stringify(validatedData.requirements || []),
         createdAt: new Date(),
         updatedAt: new Date(),
       })
       .returning()
 
-    return NextResponse.json({ accreditationOption: newOption }, { status: 201 })
+    return createSuccessResponse(
+      { clinicalSite: newSite },
+      "Clinical site created successfully",
+      HTTP_STATUS.CREATED
+    )
   } catch (error) {
-    console.error("Error creating accreditation option:", error)
-
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid data", details: error.issues }, { status: 400 })
+      return createErrorResponse(error.message, HTTP_STATUS.BAD_REQUEST)
     }
-
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateAllCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in clinical-sites/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to create accreditation option" }, { status: 500 })
+    throw error
   }
-}
+})
 
-// PUT /api/accreditation-options - Update accreditation option
-export async function PUT(request: NextRequest) {
+// PUT /api/clinical-sites - Update clinical site
+export const PUT = withErrorHandling(async (request: NextRequest) => {
+  const context = await getSchoolContext()
+  if (!["SUPER_ADMIN" as any, "SCHOOL_ADMIN" as any].includes(context.userRole)) {
+    return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
+  }
+
+  const body = await request.json()
+  const { id, ...updateData } = body
+  if (!id) {
+    return createErrorResponse("Clinical site ID is required", HTTP_STATUS.BAD_REQUEST)
+  }
+
   try {
-    const user = await getCurrentUser()
+    const validatedData = updateClinicalSiteSchema.parse(updateData)
 
-    // Only super admins can update accreditation options
-    if (!user || user.role !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    const body = await request.json()
-    const { id, ...updateData } = body
-
-    if (!id) {
-      return NextResponse.json({ error: "Accreditation option ID is required" }, { status: 400 })
-    }
-
-    const validatedData = updateAccreditationOptionSchema.parse(updateData)
-
-    // Check if option exists
-    const [existingOption] = await db
+    const [existingSite] = await db
       .select()
-      .from(accreditationOptions)
-      .where(eq(accreditationOptions.id, id))
+      .from(clinicalSites)
+      .where(eq(clinicalSites.id, id))
       .limit(1)
 
-    if (!existingOption) {
-      return NextResponse.json({ error: "Accreditation option not found" }, { status: 404 })
+    if (!existingSite) {
+      return createErrorResponse("Clinical site not found", HTTP_STATUS.NOT_FOUND)
     }
 
-    // If this is being set as default, remove default from others
-    if (validatedData.isDefault) {
-      await db
-        .update(accreditationOptions)
-        .set({ isDefault: false, updatedAt: new Date() })
-        .where(eq(accreditationOptions.isDefault, true))
+    if (validatedData.name && validatedData.name !== existingSite.name) {
+      const [conflictSite] = await db
+        .select()
+        .from(clinicalSites)
+        .where(eq(clinicalSites.name, validatedData.name))
+        .limit(1)
+      if (conflictSite) {
+        return createErrorResponse(
+          "Another site with this name already exists",
+          HTTP_STATUS.CONFLICT
+        )
+      }
     }
 
-    const [updatedOption] = await db
-      .update(accreditationOptions)
+    const [updatedSite] = await db
+      .update(clinicalSites)
       .set({
         ...validatedData,
+        specialties: validatedData.specialties
+          ? JSON.stringify(validatedData.specialties)
+          : existingSite.specialties,
+        requirements: validatedData.requirements
+          ? JSON.stringify(validatedData.requirements)
+          : existingSite.requirements,
         updatedAt: new Date(),
       })
-      .where(eq(accreditationOptions.id, id))
+      .where(eq(clinicalSites.id, id))
       .returning()
 
-    return NextResponse.json({ accreditationOption: updatedOption })
+    return createSuccessResponse(
+      { clinicalSite: updatedSite },
+      "Clinical site updated successfully"
+    )
   } catch (error) {
-    console.error("Error updating accreditation option:", error)
-
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid data", details: error.issues }, { status: 400 })
+      return createErrorResponse(error.message, HTTP_STATUS.BAD_REQUEST)
     }
-
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateAllCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in clinical-sites/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to update accreditation option" }, { status: 500 })
+    throw error
   }
-}
+})
 
-// DELETE /api/accreditation-options - Delete accreditation option
-export async function DELETE(request: NextRequest) {
-  try {
-    const user = await getCurrentUser()
-
-    // Only super admins can delete accreditation options
-    if (!user || user.role !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get("id")
-
-    if (!id) {
-      return NextResponse.json({ error: "Accreditation option ID is required" }, { status: 400 })
-    }
-
-    // Check if option exists
-    const [existingOption] = await db
-      .select()
-      .from(accreditationOptions)
-      .where(eq(accreditationOptions.id, id))
-      .limit(1)
-
-    if (!existingOption) {
-      return NextResponse.json({ error: "Accreditation option not found" }, { status: 404 })
-    }
-
-    // Check if this option is being used by any schools
-    // Note: You might want to add this check based on your business logic
-    // For now, we'll allow deletion but you could add a soft delete instead
-
-    await db.delete(accreditationOptions).where(eq(accreditationOptions.id, id))
-
-    return NextResponse.json({ message: "Accreditation option deleted successfully" })
-  } catch (error) {
-    console.error("Error deleting accreditation option:", error)
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateAllCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in clinical-sites/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to delete accreditation option" }, { status: 500 })
+// DELETE /api/clinical-sites - Delete clinical site
+export const DELETE = withErrorHandling(async (request: NextRequest) => {
+  const context = await getSchoolContext()
+  const { searchParams } = new URL(request.url)
+  const id = searchParams.get("id")
+  if (!id) {
+    return createErrorResponse("Clinical site ID is required", HTTP_STATUS.BAD_REQUEST)
   }
-}
+
+  if (context.userRole !== ("SUPER_ADMIN" as any)) {
+    return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
+  }
+
+  const [activeRotations] = await db
+    .select({ count: count(rotations.id) })
+    .from(rotations)
+    .where(and(eq(rotations.clinicalSiteId, id), eq(rotations.status, "ACTIVE")))
+
+  if ((activeRotations?.count || 0) > 0) {
+    return createErrorResponse(
+      "Cannot delete clinical site with active rotations",
+      HTTP_STATUS.BAD_REQUEST
+    )
+  }
+
+  const [existingSite] = await db
+    .select()
+    .from(clinicalSites)
+    .where(eq(clinicalSites.id, id))
+    .limit(1)
+  if (!existingSite) {
+    return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
+  }
+
+  await db.delete(clinicalSites).where(eq(clinicalSites.id, id))
+  return createSuccessResponse(null, "Clinical site deleted successfully")
+})
+

@@ -1,14 +1,22 @@
+import type { UserRole } from "@/types"
 import { auth } from "@clerk/nextjs/server"
-import { and, desc, eq, gte, lte } from "drizzle-orm"
+import { and, count, desc, eq, gte, lte } from "drizzle-orm"
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "../../../../../database/connection-pool"
 import {
+  competencies,
   competencyAssignments,
   evaluations,
   rotations,
   timeRecords,
   users,
 } from "../../../../../database/schema"
+import {
+  createErrorResponse,
+  createSuccessResponse,
+  withErrorHandling,
+  HTTP_STATUS,
+} from "../../../../../lib/api-response"
 
 type ReportData = {
   type: string
@@ -22,16 +30,13 @@ type ReportData = {
 )
 
 // GET /api/students/[userId]/reports - Get comprehensive reports for a student
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
-) {
-  try {
+export const GET = withErrorHandling(
+  async (request: NextRequest, { params }: { params: Promise<{ userId: string }> }) => {
     const { userId: currentUserId } = await auth()
     const { userId: studentId } = await params
 
     if (!currentUserId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse("Unauthorized", HTTP_STATUS.UNAUTHORIZED)
     }
 
     const { searchParams } = new URL(request.url)
@@ -43,12 +48,12 @@ export async function GET(
     const [currentUser] = await db.select().from(users).where(eq(users.id, currentUserId)).limit(1)
 
     if (!currentUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+      return createErrorResponse("User not found", HTTP_STATUS.NOT_FOUND)
     }
 
     // Students can only access their own data, others need appropriate permissions
-    if (currentUser.role === "STUDENT" && currentUser.id !== studentId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (currentUser.role === ("STUDENT" as UserRole as UserRole) && currentUser.id !== studentId) {
+      return createErrorResponse("Forbidden", HTTP_STATUS.FORBIDDEN)
     }
 
     // Set default date range if not provided (last 90 days)
@@ -245,13 +250,9 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       report: reportData,
       generatedAt: new Date().toISOString(),
     })
-  } catch (error) {
-    console.error("Error generating student report:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
+)

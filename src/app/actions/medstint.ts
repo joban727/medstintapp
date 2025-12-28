@@ -1,9 +1,9 @@
 "use server"
 
-import { and, count, desc, eq, gte, isNull, sum, sql } from "drizzle-orm"
+import { and, count, desc, eq, gte, isNull, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { db } from "../../database/db"
+import { db } from "@/database/connection-pool"
 import {
   assessments,
   clinicalSites,
@@ -57,7 +57,7 @@ export async function getStudentDashboardData(studentId: string) {
 
     // Add timeout wrapper to prevent hanging queries
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Dashboard data fetch timeout')), 10000) // 10 second timeout
+      setTimeout(() => reject(new Error("Dashboard data fetch timeout")), 10000) // 10 second timeout
     })
 
     const dataFetchPromise = (async () => {
@@ -147,7 +147,8 @@ export async function getStudentDashboardData(studentId: string) {
           .filter((record) => record?.id && record.date)
           .map((record) => ({
             id: record.id,
-            date: record.date instanceof Date ? record.date.toISOString().split("T")[0] : record.date,
+            date:
+              record.date instanceof Date ? record.date.toISOString().split("T")[0] : record.date,
             clockIn: record.clockIn?.toISOString() || null,
             clockOut: record.clockOut?.toISOString() || null,
             totalHours: record.totalHours ? Number.parseFloat(record.totalHours) : null,
@@ -163,8 +164,8 @@ export async function getStudentDashboardData(studentId: string) {
       let totalClinicalHours = "0"
       try {
         const totalHoursResult = await db
-          .select({ 
-            total: sql<number>`COALESCE(SUM(CAST(${timeRecords.totalHours} AS NUMERIC)), 0)` 
+          .select({
+            total: sql<number>`COALESCE(SUM(CAST(${timeRecords.totalHours} AS NUMERIC)), 0)`,
           })
           .from(timeRecords)
           .where(and(eq(timeRecords.studentId, studentId), eq(timeRecords.status, "APPROVED")))
@@ -182,8 +183,8 @@ export async function getStudentDashboardData(studentId: string) {
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
 
         const weeklyHoursResult = await db
-          .select({ 
-            total: sql<number>`COALESCE(SUM(CAST(${timeRecords.totalHours} AS NUMERIC)), 0)` 
+          .select({
+            total: sql<number>`COALESCE(SUM(CAST(${timeRecords.totalHours} AS NUMERIC)), 0)`,
           })
           .from(timeRecords)
           .where(
@@ -259,14 +260,14 @@ export async function getStudentDashboardData(studentId: string) {
             .select({ count: count() })
             .from(evaluations)
             .where(eq(evaluations.studentId, studentId)),
-      
+
           // Pending evaluations (not completed)
           db
             .select({ count: count() })
             .from(evaluations)
             .where(and(eq(evaluations.studentId, studentId), isNull(evaluations.overallRating))),
         ])
-      
+
         evaluationsData = {
           total: totalEvaluations[0]?.count || 0,
           pending: pendingEvaluations[0]?.count || 0,
@@ -290,7 +291,6 @@ export async function getStudentDashboardData(studentId: string) {
 
     // Race between data fetch and timeout
     return await Promise.race([dataFetchPromise, timeoutPromise])
-    
   } catch (error) {
     console.error("Critical error in getStudentDashboardData:", error)
     // Return completely safe fallback data
@@ -307,10 +307,7 @@ export async function getStudentDashboardData(studentId: string) {
 }
 
 // Time Record Actions
-export async function clockIn(
-  rotationId: string,
-  activities: string[]
-) {
+export async function clockIn(rotationId: string, activities: string[]) {
   try {
     const response = await fetch("/api/time-records/clock", {
       method: "POST",
@@ -338,10 +335,7 @@ export async function clockIn(
   }
 }
 
-export async function clockOut(
-  timeRecordId: string,
-  notes?: string
-) {
+export async function clockOut(timeRecordId: string, notes?: string) {
   try {
     const response = await fetch("/api/time-records/clock", {
       method: "POST",

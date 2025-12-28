@@ -3,23 +3,29 @@ import { eq } from "drizzle-orm"
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "../../../../database/connection-pool"
 import { schools } from "../../../../database/schema"
-import { cacheIntegrationService } from '@/lib/cache-integration'
-
+import { cacheIntegrationService } from "@/lib/cache-integration"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  withErrorHandlingAsync,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+} from "@/lib/api-response"
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  try {
+  return withErrorHandlingAsync(async () => {
     const clerkUser = await currentUser()
 
     if (!clerkUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     const body = await request.json()
-    const { name, address, phone, email, website, accreditation } = body
+    const { name, address, phone, email, website } = body
 
     if (!name || !email) {
-      return NextResponse.json({ error: "School name and email are required" }, { status: 400 })
+      return createErrorResponse("School name and email are required", HTTP_STATUS.BAD_REQUEST)
     }
 
     const [updatedSchool] = await db
@@ -30,33 +36,27 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         phone: phone || "",
         email,
         website: website || null,
-        accreditation: accreditation || "LCME",
         updatedAt: new Date(),
       })
       .where(eq(schools.id, id))
       .returning()
 
     if (!updatedSchool) {
-      return NextResponse.json({ error: "School not found" }, { status: 404 })
+      return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
     }
 
-    return NextResponse.json({
-      success: true,
+    // Invalidate related caches
+    try {
+      await cacheIntegrationService.clear()
+    } catch (cacheError) {
+      console.warn("Cache invalidation error in schools/[id]/route.ts:", cacheError)
+    }
+
+    return createSuccessResponse({
       message: "School updated successfully",
       data: updatedSchool,
     })
-  } catch (error) {
-    console.error("Error updating school:", error)
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateAllCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in schools/[id]/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to update school" }, { status: 500 })
-  }
+  })
 }
 
 export async function DELETE(
@@ -64,11 +64,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  try {
+  return withErrorHandlingAsync(async () => {
     const clerkUser = await currentUser()
 
     if (!clerkUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
     }
 
     // Soft delete by setting isActive to false
@@ -82,66 +82,61 @@ export async function DELETE(
       .returning()
 
     if (!deactivatedSchool) {
-      return NextResponse.json({ error: "School not found" }, { status: 404 })
+      return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
     }
 
-    return NextResponse.json({
-      success: true,
+    // Invalidate related caches
+    try {
+      await cacheIntegrationService.clear()
+    } catch (cacheError) {
+      console.warn("Cache invalidation error in schools/[id]/route.ts:", cacheError)
+    }
+
+    return createSuccessResponse({
       message: "School deactivated successfully",
       data: deactivatedSchool,
     })
-  } catch (error) {
-    console.error("Error deactivating school:", error)
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateAllCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in schools/[id]/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to deactivate school" }, { status: 500 })
-  }
+  })
 }
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    // Try to get cached response
-    const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:schools/[id]/route.ts',
-      async () => {
-        // Original function logic will be wrapped here
-        return await executeOriginalLogic()
-      },
-      300 // 5 minutes TTL
-    )
-    
-    if (cached) {
-      return cached
-    }
-  } catch (cacheError) {
-    console.warn('Cache error in schools/[id]/route.ts:', cacheError)
-    // Continue with original logic if cache fails
-  }
-  
-  async function executeOriginalLogic() {
-
   const { id } = await params
-  try {
-    const school = await db.select().from(schools).where(eq(schools.id, id)).limit(1)
 
-    if (school.length === 0) {
-      return NextResponse.json({ error: "School not found" }, { status: 404 })
+  return withErrorHandlingAsync(async () => {
+    // Try to get cached response
+    try {
+      const cached = await cacheIntegrationService.cachedApiResponse(
+        `api:schools:${id}`,
+        async () => {
+          const school = await db.select().from(schools).where(eq(schools.id, id)).limit(1)
+
+          if (school.length === 0) {
+            return null
+          }
+          return school[0]
+        },
+        300 // 5 minutes TTL
+      )
+
+      if (cached === null) {
+        return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
+      }
+
+      return createSuccessResponse({
+        data: cached,
+      })
+    } catch (cacheError) {
+      console.warn("Cache error in schools/[id]/route.ts:", cacheError)
+      // Fallback to direct query if cache fails
+      const school = await db.select().from(schools).where(eq(schools.id, id)).limit(1)
+
+      if (school.length === 0) {
+        return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
+      }
+
+      return createSuccessResponse({
+        data: school[0],
+      })
     }
-
-    return NextResponse.json({
-      success: true,
-      data: school[0],
-    })
-  } catch (error) {
-    console.error("Error fetching school:", error)
-    return NextResponse.json({ error: "Failed to fetch school" }, { status: 500 })
-  }
-
-  }
+  })
 }

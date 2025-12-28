@@ -74,7 +74,10 @@ export function CreateProgramModal({
       })
 
       if (!response.ok) {
-        const error = await response.json()
+        const error = await response.json().catch((err) => {
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
+        })
         throw new Error(error.error || "Failed to create program")
       }
 
@@ -92,7 +95,7 @@ export function CreateProgramModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Create New Program</DialogTitle>
           <DialogDescription>
@@ -100,9 +103,8 @@ export function CreateProgramModal({
             with a class year based on the current year plus the program duration.
           </DialogDescription>
         </DialogHeader>
-
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="gap-6" noValidate>
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -111,13 +113,16 @@ export function CreateProgramModal({
                   <FormItem>
                     <FormLabel>Program Name *</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Nursing Program" {...field} />
+                      <Input
+                        placeholder="e.g., Nursing Program"
+                        aria-label="e.g., Nursing Program"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="duration"
@@ -138,7 +143,6 @@ export function CreateProgramModal({
                 )}
               />
             </div>
-
             <FormField
               control={form.control}
               name="description"
@@ -148,6 +152,7 @@ export function CreateProgramModal({
                   <FormControl>
                     <Textarea
                       placeholder="Describe the program objectives, curriculum, and outcomes..."
+                      aria-label="Describe the program objectives, curriculum, and outcomes..."
                       rows={3}
                       {...field}
                     />
@@ -156,7 +161,6 @@ export function CreateProgramModal({
                 </FormItem>
               )}
             />
-
             <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-950/20">
               <p className="text-blue-700 text-sm dark:text-blue-300">
                 <strong>Note:</strong> Programs will automatically be formatted as "Program Name -
@@ -164,7 +168,6 @@ export function CreateProgramModal({
                 year is calculated based on the current year plus the program duration.
               </p>
             </div>
-
             <DialogFooter>
               <Button
                 type="button"

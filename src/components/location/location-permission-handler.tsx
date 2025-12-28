@@ -1,12 +1,12 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
-import { AlertTriangle, MapPin, Shield, Settings, RefreshCw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
-import { useLocation, type LocationError } from '@/hooks/use-location'
+import React, { useState, useEffect } from "react"
+import { AlertTriangle, MapPin, Shield, Settings, RefreshCw } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { useLocation, type LocationError } from "@/hooks/use-location"
 
 interface LocationPermissionHandlerProps {
   onLocationGranted?: (hasPermission: boolean) => void
@@ -21,11 +21,11 @@ export function LocationPermissionHandler({
   onLocationData,
   requiredAccuracy = 50,
   showPermissionUI = true,
-  className = ""
+  className = "",
 }: LocationPermissionHandlerProps) {
   const [isRequestingPermission, setIsRequestingPermission] = useState(false)
   const [showManualInstructions, setShowManualInstructions] = useState(false)
-  
+
   const {
     isSupported,
     isLoading,
@@ -35,11 +35,11 @@ export function LocationPermissionHandler({
     accuracy,
     getCurrentPosition,
     requestPermission,
-    checkPermission
+    checkPermission,
   } = useLocation({
     enableHighAccuracy: true,
     timeout: 15000,
-    requiredAccuracy
+    requiredAccuracy,
   })
 
   // Notify parent component of permission status changes
@@ -59,14 +59,14 @@ export function LocationPermissionHandler({
   const handleRequestPermission = async () => {
     setIsRequestingPermission(true)
     setShowManualInstructions(false)
-    
+
     try {
       const granted = await requestPermission()
       if (!granted) {
         setShowManualInstructions(true)
       }
     } catch (error) {
-      console.error('Permission request failed:', error)
+      console.error("Permission request failed:", error)
       setShowManualInstructions(true)
     } finally {
       setIsRequestingPermission(false)
@@ -77,7 +77,7 @@ export function LocationPermissionHandler({
     try {
       await getCurrentPosition()
     } catch (error) {
-      console.error('Location retry failed:', error)
+      console.error("Location retry failed:", error)
     }
   }
 
@@ -90,31 +90,32 @@ export function LocationPermissionHandler({
       return <Badge variant="secondary">Checking...</Badge>
     }
     if (hasPermission) {
-      return <Badge variant="default" className="bg-green-500">Granted</Badge>
+      return (
+        <Badge variant="default" className="bg-green-500">
+          Granted
+        </Badge>
+      )
     }
     return <Badge variant="destructive">Denied</Badge>
   }
 
   const getAccuracyBadge = () => {
     if (!accuracy) return null
-    
+
     const variants = {
-      high: 'default',
-      medium: 'secondary',
-      low: 'destructive'
+      high: "default",
+      medium: "secondary",
+      low: "destructive",
     } as const
-    
+
     const colors = {
-      high: 'bg-green-500',
-      medium: 'bg-yellow-500',
-      low: 'bg-red-500'
+      high: "bg-green-500",
+      medium: "bg-warning",
+      low: "bg-red-500",
     }
-    
+
     return (
-      <Badge 
-        variant={variants[accuracy]} 
-        className={accuracy === 'high' ? colors[accuracy] : ''}
-      >
+      <Badge variant={variants[accuracy]} className={accuracy === "high" ? colors[accuracy] : ""}>
         {accuracy.charAt(0).toUpperCase() + accuracy.slice(1)} Accuracy
       </Badge>
     )
@@ -124,35 +125,39 @@ export function LocationPermissionHandler({
     const errorMessages = {
       permission_denied: {
         title: "Location Access Denied",
-        description: "Location permission is required for accurate time tracking. Please enable location access in your browser settings.",
-        action: "Enable Location"
+        description:
+          "Location permission is required for accurate time tracking. Please enable location access in your browser settings.",
+        action: "Enable Location",
       },
       position_unavailable: {
         title: "Location Unavailable",
-        description: "Unable to determine your current location. Please check your device's location settings and try again.",
-        action: "Retry Location"
+        description:
+          "Unable to determine your current location. Please check your device's location settings and try again.",
+        action: "Retry Location",
       },
       timeout: {
         title: "Location Timeout",
-        description: "Location request timed out. This may be due to poor GPS signal or network connectivity.",
-        action: "Try Again"
+        description:
+          "Location request timed out. This may be due to poor GPS signal or network connectivity.",
+        action: "Try Again",
       },
       not_supported: {
         title: "Location Not Supported",
-        description: "Your browser or device doesn't support location services. Please use a modern browser with location capabilities.",
-        action: null
-      }
+        description:
+          "Your browser or device doesn't support location services. Please use a modern browser with location capabilities.",
+        action: null,
+      },
     }
 
     const errorInfo = errorMessages[error.type] || {
       title: "Location Error",
       description: error.message,
-      action: "Retry"
+      action: "Retry",
     }
 
     return (
       <Alert className="border-red-200 bg-red-50">
-        <AlertTriangle className="h-4 w-4 text-red-600" />
+        <AlertTriangle className="h-4 w-4 text-error" />
         <AlertDescription className="text-red-800">
           <div className="font-medium mb-1">{errorInfo.title}</div>
           <div className="text-sm">{errorInfo.description}</div>
@@ -160,8 +165,10 @@ export function LocationPermissionHandler({
             <Button
               variant="outline"
               size="sm"
-              className="mt-2 border-red-300 text-red-700 hover:bg-red-100"
-              onClick={error.type === 'permission_denied' ? handleRequestPermission : handleRetryLocation}
+              className="mt-2 border-red-300 text-red-700 hover:bg-red-100 transition-colors duration-200"
+              onClick={
+                error.type === "permission_denied" ? handleRequestPermission : handleRetryLocation
+              }
               disabled={isRequestingPermission || isLoading}
             >
               {isRequestingPermission || isLoading ? (
@@ -200,7 +207,7 @@ export function LocationPermissionHandler({
             variant="outline"
             size="sm"
             onClick={handleRefreshPermission}
-            className="border-amber-300 text-amber-700 hover:bg-amber-100"
+            className="border-amber-300 text-amber-700 hover:bg-amber-100 transition-colors duration-200"
           >
             <RefreshCw className="h-3 w-3 mr-1" />
             Check Again
@@ -209,7 +216,7 @@ export function LocationPermissionHandler({
             variant="outline"
             size="sm"
             onClick={() => setShowManualInstructions(false)}
-            className="border-amber-300 text-amber-700 hover:bg-amber-100"
+            className="border-amber-300 text-amber-700 hover:bg-amber-100 transition-colors duration-200"
           >
             Dismiss
           </Button>
@@ -225,12 +232,12 @@ export function LocationPermissionHandler({
   if (!isSupported) {
     return (
       <Alert className="border-red-200 bg-red-50">
-        <AlertTriangle className="h-4 w-4 text-red-600" />
+        <AlertTriangle className="h-4 w-4 text-error" />
         <AlertDescription className="text-red-800">
           <div className="font-medium mb-1">Location Not Supported</div>
           <div className="text-sm">
-            Your browser doesn't support location services. Please use a modern browser 
-            like Chrome, Firefox, Safari, or Edge for location-based features.
+            Your browser doesn't support location services. Please use a modern browser like Chrome,
+            Firefox, Safari, or Edge for location-based features.
           </div>
         </AlertDescription>
       </Alert>
@@ -264,7 +271,6 @@ export function LocationPermissionHandler({
               </span>
               {getAccuracyBadge()}
             </div>
-            
             {hasPermission === false && (
               <Button
                 variant="outline"
@@ -280,7 +286,6 @@ export function LocationPermissionHandler({
                 Request Access
               </Button>
             )}
-            
             {hasPermission === true && (
               <Button
                 variant="outline"

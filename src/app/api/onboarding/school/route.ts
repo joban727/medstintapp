@@ -4,8 +4,14 @@ import { z } from "zod"
 import { db } from "../../../../database/connection-pool"
 import { clinicalSites, evaluations, rotations, users } from "../../../../database/schema"
 import { getSchoolContext } from "../../../../lib/school-utils"
-import { cacheIntegrationService } from '@/lib/cache-integration'
-
+import { cacheIntegrationService } from "@/lib/cache-integration"
+import type { UserRole } from "@/types"
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  withErrorHandling,
+  HTTP_STATUS,
+} from "@/lib/api-response"
 
 // Validation schemas
 const createEvaluationSchema = z.object({
@@ -27,6 +33,7 @@ const createEvaluationSchema = z.object({
 })
 
 const updateEvaluationSchema = z.object({
+  id: z.string().min(1, "Evaluation ID is required"),
   type: z.enum(["MIDTERM", "FINAL", "WEEKLY", "INCIDENT"]).optional(),
   date: z.string().datetime().optional(),
   overallRating: z.number().min(1).max(5).optional(),
@@ -43,29 +50,27 @@ const updateEvaluationSchema = z.object({
 })
 
 // GET /api/evaluations - Get evaluations with filtering
-export async function GET(request: NextRequest) {
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  // Try to get cached response
   try {
-    // Try to get cached response
     const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:onboarding/school/route.ts',
+      "api:onboarding/school/route.ts",
       async () => {
         // Original function logic will be wrapped here
         return await executeOriginalLogic()
       },
       300 // 5 minutes TTL
     )
-    
+
     if (cached) {
       return cached
     }
   } catch (cacheError) {
-    console.warn('Cache error in onboarding/school/route.ts:', cacheError)
+    console.warn("Cache error in onboarding/school/route.ts:", cacheError)
     // Continue with original logic if cache fails
   }
-  
-  async function executeOriginalLogic() {
 
-  try {
+  async function executeOriginalLogic() {
     const context = await getSchoolContext()
     const { searchParams } = new URL(request.url)
 
@@ -83,11 +88,11 @@ export async function GET(request: NextRequest) {
     const conditions = []
 
     // Role-based filtering
-    if (context.userRole === "STUDENT") {
+    if (context.userRole === ("STUDENT" as UserRole)) {
       conditions.push(eq(evaluations.studentId, context.userId))
     } else if (
-      context.userRole === "CLINICAL_PRECEPTOR" ||
-      context.userRole === "CLINICAL_SUPERVISOR"
+      context.userRole === ("CLINICAL_PRECEPTOR" as UserRole) ||
+      context.userRole === ("CLINICAL_SUPERVISOR" as UserRole)
     ) {
       conditions.push(eq(evaluations.evaluatorId, context.userId))
     }
@@ -167,8 +172,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       data: evaluationsWithAverages,
       pagination: {
         limit,
@@ -176,295 +180,253 @@ export async function GET(request: NextRequest) {
         total: evaluationList.length,
       },
     })
-  } catch (error) {
-    console.error("Error fetching evaluations:", error)
-    return NextResponse.json({ error: "Failed to fetch evaluations" }, { status: 500 })
   }
 
-  }
-}
+  return await executeOriginalLogic()
+})
 
 // POST /api/evaluations - Create new evaluation
-export async function POST(request: NextRequest) {
-  try {
-    const context = await getSchoolContext()
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  const context = await getSchoolContext()
 
-    // Only preceptors, supervisors, and admins can create evaluations
-    if (
-      !["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR"].includes(
-        context.userRole
-      )
-    ) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    const body = await request.json()
-    const validatedData = createEvaluationSchema.parse(body)
-
-    // Verify student exists
-    const [student] = await db
-      .select()
-      .from(users)
-      .where(and(eq(users.id, validatedData.studentId), eq(users.role, "STUDENT")))
-      .limit(1)
-
-    if (!student) {
-      return NextResponse.json({ error: "Student not found" }, { status: 404 })
-    }
-
-    // Verify rotation exists and student is assigned
-    const [rotation] = await db
-      .select()
-      .from(rotations)
-      .where(eq(rotations.id, validatedData.rotationId))
-      .limit(1)
-
-    if (!rotation) {
-      return NextResponse.json({ error: "Rotation not found" }, { status: 404 })
-    }
-
-    if (rotation.studentId !== validatedData.studentId) {
-      return NextResponse.json(
-        { error: "Student is not assigned to this rotation" },
-        { status: 400 }
-      )
-    }
-
-    // Check if evaluation already exists for this type and rotation
-    const [existingEvaluation] = await db
-      .select()
-      .from(evaluations)
-      .where(
-        and(
-          eq(evaluations.studentId, validatedData.studentId),
-          eq(evaluations.rotationId, validatedData.rotationId),
-          eq(evaluations.type, validatedData.type)
-        )
-      )
-      .limit(1)
-
-    if (existingEvaluation && ["MIDTERM", "FINAL"].includes(validatedData.type)) {
-      return NextResponse.json(
-        { error: `${validatedData.type} evaluation already exists for this rotation` },
-        { status: 400 }
-      )
-    }
-
-    // Create evaluation
-    const [newEvaluation] = await db
-      .insert(evaluations)
-      .values({
-        id: crypto.randomUUID(),
-        assignmentId: crypto.randomUUID(), // Generate a default assignment ID
-        studentId: validatedData.studentId,
-        rotationId: validatedData.rotationId,
-        evaluatorId: context.userId,
-        type: validatedData.type,
-        period: "Week 1", // Default period since schema expects this field
-        observationDate: new Date(), // Required field
-        overallRating: validatedData.overallRating.toString(),
-        clinicalSkills: validatedData.clinicalSkills.toString(),
-        professionalism: validatedData.professionalism.toString(),
-        communication: validatedData.communication.toString(),
-        criticalThinking: validatedData.criticalThinking.toString(),
-        strengths: validatedData.strengths,
-        areasForImprovement: validatedData.areasForImprovement,
-        goals: validatedData.goals,
-        comments: validatedData.additionalComments,
-      })
-      .returning()
-
-    // Calculate average rating
-    const ratings = [
-      validatedData.clinicalSkills,
-      validatedData.professionalism,
-      validatedData.communication,
-      validatedData.criticalThinking,
-    ]
-    const averageRating = ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...newEvaluation,
-        averageRating: Math.round(averageRating * 100) / 100,
-      },
-      message: "Evaluation created successfully",
-    })
-  } catch (error) {
-    console.error("Error creating evaluation:", error)
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation failed", details: error.issues },
-        { status: 400 }
-      )
-    }
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateAllCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in onboarding/school/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to create evaluation" }, { status: 500 })
+  // Only preceptors, supervisors, and admins can create evaluations
+  if (
+    ![
+      "SUPER_ADMIN" as UserRole,
+      "SCHOOL_ADMIN" as UserRole,
+      "CLINICAL_PRECEPTOR" as UserRole,
+      "CLINICAL_SUPERVISOR" as UserRole,
+    ].includes(context.userRole)
+  ) {
+    return createErrorResponse("Insufficient permissions", HTTP_STATUS.FORBIDDEN)
   }
-}
+
+  const body = await request.json()
+  const validatedData = createEvaluationSchema.parse(body)
+
+  // Verify student exists
+  const [student] = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.id, validatedData.studentId), eq(users.role, "STUDENT")))
+    .limit(1)
+
+  if (!student) {
+    return createErrorResponse("Student not found", HTTP_STATUS.NOT_FOUND)
+  }
+
+  // Verify rotation exists and student is assigned
+  const [rotation] = await db
+    .select()
+    .from(rotations)
+    .where(eq(rotations.id, validatedData.rotationId))
+    .limit(1)
+
+  if (!rotation) {
+    return createErrorResponse("Rotation not found", HTTP_STATUS.NOT_FOUND)
+  }
+
+  if (rotation.studentId !== validatedData.studentId) {
+    return createErrorResponse("Student is not assigned to this rotation", HTTP_STATUS.BAD_REQUEST)
+  }
+
+  // Check if evaluation already exists for this type and rotation
+  const [existingEvaluation] = await db
+    .select()
+    .from(evaluations)
+    .where(
+      and(
+        eq(evaluations.studentId, validatedData.studentId),
+        eq(evaluations.rotationId, validatedData.rotationId),
+        eq(evaluations.type, validatedData.type)
+      )
+    )
+    .limit(1)
+
+  if (existingEvaluation && ["MIDTERM", "FINAL"].includes(validatedData.type)) {
+    return createErrorResponse(
+      `${validatedData.type} evaluation already exists for this rotation`,
+      HTTP_STATUS.BAD_REQUEST
+    )
+  }
+
+  // Create evaluation
+  const [newEvaluation] = await db
+    .insert(evaluations)
+    .values({
+      id: crypto.randomUUID(),
+      assignmentId: crypto.randomUUID(), // Generate a default assignment ID
+      studentId: validatedData.studentId,
+      rotationId: validatedData.rotationId,
+      evaluatorId: context.userId,
+      type: validatedData.type,
+      period: "Week 1", // Default period since schema expects this field
+      observationDate: new Date(), // Required field
+      overallRating: validatedData.overallRating.toString(),
+      clinicalSkills: validatedData.clinicalSkills.toString(),
+      professionalism: validatedData.professionalism.toString(),
+      communication: validatedData.communication.toString(),
+      criticalThinking: validatedData.criticalThinking.toString(),
+      strengths: validatedData.strengths,
+      areasForImprovement: validatedData.areasForImprovement,
+      goals: validatedData.goals,
+      comments: validatedData.additionalComments,
+    })
+    .returning()
+
+  // Calculate average rating
+  const ratings = [
+    validatedData.clinicalSkills,
+    validatedData.professionalism,
+    validatedData.communication,
+    validatedData.criticalThinking,
+  ]
+  const averageRating = ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length
+
+  // Invalidate related caches
+  try {
+    await cacheIntegrationService.clear()
+  } catch (cacheError) {
+    console.warn("Cache invalidation error in onboarding/school/route.ts:", cacheError)
+  }
+
+  return createSuccessResponse({
+    data: {
+      ...newEvaluation,
+      averageRating: Math.round(averageRating * 100) / 100,
+    },
+    message: "Evaluation created successfully",
+  })
+})
 
 // PUT /api/evaluations - Update evaluation
-export async function PUT(request: NextRequest) {
-  try {
-    const context = await getSchoolContext()
-    const body = await request.json()
-    const { id, ...updateData } = body
+export const PUT = withErrorHandling(async (request: NextRequest) => {
+  const context = await getSchoolContext()
 
-    if (!id) {
-      return NextResponse.json({ error: "Evaluation ID is required" }, { status: 400 })
-    }
-
-    // Only evaluators and admins can update evaluations
-    if (
-      !["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_PRECEPTOR", "CLINICAL_SUPERVISOR"].includes(
-        context.userRole
-      )
-    ) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    const validatedData = updateEvaluationSchema.parse(updateData)
-
-    // Get existing evaluation
-    const [existingEvaluation] = await db
-      .select()
-      .from(evaluations)
-      .where(eq(evaluations.id, id))
-      .limit(1)
-
-    if (!existingEvaluation) {
-      return NextResponse.json({ error: "Evaluation not found" }, { status: 404 })
-    }
-
-    // Only the original evaluator or admins can update
-    if (context.userRole !== "SUPER_ADMIN" && context.userRole !== "SCHOOL_ADMIN") {
-      if (existingEvaluation.evaluatorId !== context.userId) {
-        return NextResponse.json(
-          { error: "Only the original evaluator can update this evaluation" },
-          { status: 403 }
-        )
-      }
-    }
-
-    // Prepare update values
-    const updateValues: Record<string, unknown> = {
-      updatedAt: new Date(),
-    }
-
-    // Set fields that are provided
-    if (validatedData.type) updateValues.type = validatedData.type
-    // Period is set to default value, not updated via API
-    if (validatedData.overallRating !== undefined)
-      updateValues.overallRating = validatedData.overallRating.toString()
-    if (validatedData.clinicalSkills !== undefined)
-      updateValues.clinicalSkills = validatedData.clinicalSkills.toString()
-    if (validatedData.professionalism !== undefined)
-      updateValues.professionalism = validatedData.professionalism.toString()
-    if (validatedData.communication !== undefined)
-      updateValues.communication = validatedData.communication.toString()
-    if (validatedData.criticalThinking !== undefined)
-      updateValues.criticalThinking = validatedData.criticalThinking.toString()
-    if (validatedData.strengths) updateValues.strengths = validatedData.strengths
-    if (validatedData.areasForImprovement)
-      updateValues.areasForImprovement = validatedData.areasForImprovement
-    if (validatedData.goals !== undefined) updateValues.goals = validatedData.goals
-    if (validatedData.additionalComments !== undefined)
-      updateValues.comments = validatedData.additionalComments
-
-    const [updatedEvaluation] = await db
-      .update(evaluations)
-      .set(updateValues)
-      .where(eq(evaluations.id, id))
-      .returning()
-
-    // Calculate average rating
-    const ratings = [
-      Number.parseFloat(updatedEvaluation.clinicalSkills),
-      Number.parseFloat(updatedEvaluation.professionalism),
-      Number.parseFloat(updatedEvaluation.communication),
-      Number.parseFloat(updatedEvaluation.criticalThinking),
-    ]
-    const averageRating = ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...updatedEvaluation,
-        averageRating: Math.round(averageRating * 100) / 100,
-      },
-      message: "Evaluation updated successfully",
-    })
-  } catch (error) {
-    console.error("Error updating evaluation:", error)
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation failed", details: error.issues },
-        { status: 400 }
-      )
-    }
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateAllCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in onboarding/school/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to update evaluation" }, { status: 500 })
+  // Only preceptors, supervisors, and admins can update evaluations
+  if (
+    ![
+      "SUPER_ADMIN" as UserRole,
+      "SCHOOL_ADMIN" as UserRole,
+      "CLINICAL_PRECEPTOR" as UserRole,
+      "CLINICAL_SUPERVISOR" as UserRole,
+    ].includes(context.userRole)
+  ) {
+    return createErrorResponse("Insufficient permissions", HTTP_STATUS.FORBIDDEN)
   }
-}
+
+  const body = await request.json()
+  const validatedData = updateEvaluationSchema.parse(body)
+
+  // Verify evaluation exists
+  const [existingEvaluation] = await db
+    .select()
+    .from(evaluations)
+    .where(eq(evaluations.id, validatedData.id))
+    .limit(1)
+
+  if (!existingEvaluation) {
+    return createErrorResponse("Evaluation not found", HTTP_STATUS.NOT_FOUND)
+  }
+
+  // Only the original evaluator or admins can update
+  if (
+    existingEvaluation.evaluatorId !== context.userId &&
+    !["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(context.userRole)
+  ) {
+    return createErrorResponse("Can only update your own evaluations", HTTP_STATUS.FORBIDDEN)
+  }
+
+  // Prepare update values
+  const updateValues: any = {}
+  if (validatedData.overallRating !== undefined)
+    updateValues.overallRating = validatedData.overallRating.toString()
+  if (validatedData.clinicalSkills !== undefined)
+    updateValues.clinicalSkills = validatedData.clinicalSkills.toString()
+  if (validatedData.professionalism !== undefined)
+    updateValues.professionalism = validatedData.professionalism.toString()
+  if (validatedData.communication !== undefined)
+    updateValues.communication = validatedData.communication.toString()
+  if (validatedData.criticalThinking !== undefined)
+    updateValues.criticalThinking = validatedData.criticalThinking.toString()
+  if (validatedData.strengths !== undefined) updateValues.strengths = validatedData.strengths
+  if (validatedData.areasForImprovement !== undefined)
+    updateValues.areasForImprovement = validatedData.areasForImprovement
+  if (validatedData.goals !== undefined) updateValues.goals = validatedData.goals
+  if (validatedData.additionalComments !== undefined)
+    updateValues.comments = validatedData.additionalComments
+
+  // Update evaluation
+  const [updatedEvaluation] = await db
+    .update(evaluations)
+    .set(updateValues)
+    .where(eq(evaluations.id, validatedData.id))
+    .returning()
+
+  // Calculate average rating
+  const ratings = [
+    parseInt(updatedEvaluation.clinicalSkills),
+    parseInt(updatedEvaluation.professionalism),
+    parseInt(updatedEvaluation.communication),
+    parseInt(updatedEvaluation.criticalThinking),
+  ]
+  const averageRating = ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length
+
+  // Invalidate related caches
+  try {
+    await cacheIntegrationService.clear()
+  } catch (cacheError) {
+    console.warn("Cache invalidation error in onboarding/school/route.ts:", cacheError)
+  }
+
+  return createSuccessResponse({
+    data: {
+      ...updatedEvaluation,
+      averageRating: Math.round(averageRating * 100) / 100,
+    },
+    message: "Evaluation updated successfully",
+  })
+})
 
 // DELETE /api/evaluations - Delete evaluation
-export async function DELETE(request: NextRequest) {
-  try {
-    const context = await getSchoolContext()
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get("id")
+export const DELETE = withErrorHandling(async (request: NextRequest) => {
+  const { searchParams } = new URL(request.url)
+  const evaluationId = searchParams.get("id")
 
-    if (!id) {
-      return NextResponse.json({ error: "Evaluation ID is required" }, { status: 400 })
-    }
-
-    // Only super admins and school admins can delete evaluations
-    if (!["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(context.userRole)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    // Get existing evaluation
-    const [existingEvaluation] = await db
-      .select()
-      .from(evaluations)
-      .where(eq(evaluations.id, id))
-      .limit(1)
-
-    if (!existingEvaluation) {
-      return NextResponse.json({ error: "Evaluation not found" }, { status: 404 })
-    }
-
-    await db.delete(evaluations).where(eq(evaluations.id, id))
-
-    return NextResponse.json({
-      success: true,
-      message: "Evaluation deleted successfully",
-    })
-  } catch (error) {
-    console.error("Error deleting evaluation:", error)
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateAllCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in onboarding/school/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to delete evaluation" }, { status: 500 })
+  if (!evaluationId) {
+    return createErrorResponse("Evaluation ID is required", HTTP_STATUS.BAD_REQUEST)
   }
-}
+
+  const context = await getSchoolContext()
+
+  // Only admins can delete evaluations
+  if (!["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(context.userRole)) {
+    return createErrorResponse("Insufficient permissions", HTTP_STATUS.FORBIDDEN)
+  }
+
+  // Verify evaluation exists
+  const [existingEvaluation] = await db
+    .select()
+    .from(evaluations)
+    .where(eq(evaluations.id, evaluationId))
+    .limit(1)
+
+  if (!existingEvaluation) {
+    return createErrorResponse("Evaluation not found", HTTP_STATUS.NOT_FOUND)
+  }
+
+  // Delete evaluation
+  await db.delete(evaluations).where(eq(evaluations.id, evaluationId))
+
+  // Invalidate related caches
+  try {
+    await cacheIntegrationService.clear()
+  } catch (cacheError) {
+    console.warn("Cache invalidation error in onboarding/school/route.ts:", cacheError)
+  }
+
+  return createSuccessResponse({
+    message: "Evaluation deleted successfully",
+  })
+})
+

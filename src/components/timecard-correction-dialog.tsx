@@ -4,7 +4,7 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { format } from "date-fns"
 import { CalendarIcon, Clock, Edit, MapPin } from "lucide-react"
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
@@ -109,7 +109,8 @@ export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrec
   const parseActivities = (activities: string): string[] => {
     try {
       return JSON.parse(activities || "[]")
-    } catch {
+    } catch (error) {
+      console.error("Failed to parse activities:", error)
       return []
     }
   }
@@ -161,7 +162,10 @@ export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrec
       })
 
       if (!response.ok) {
-        const error = await response.json()
+        const error = await response.json().catch((err) => {
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
+        })
         throw new Error(error.message || "Failed to submit correction request")
       }
 
@@ -182,7 +186,10 @@ export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrec
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+      <DialogContent
+        className="max-h-[90vh] max-w-4xl overflow-y-auto"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Edit className="h-5 w-5" />
@@ -246,7 +253,11 @@ export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrec
                 <Label className="font-medium text-sm">Activities</Label>
                 <div className="flex flex-wrap gap-1">
                   {parseActivities(timeRecord.activities).map((activity, index) => (
-                    <Badge key={`activity-${activity}-${index}`} variant="outline" className="text-xs">
+                    <Badge
+                      key={`activity-${activity}-${index}`}
+                      variant="outline"
+                      className="text-xs"
+                    >
                       {activity}
                     </Badge>
                   ))}
@@ -281,7 +292,7 @@ export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrec
             </CardHeader>
             <CardContent>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
                   {/* Date Correction */}
                   <div className="space-y-2">
                     <Label className="font-medium text-sm">Correct Date</Label>
@@ -372,6 +383,7 @@ export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrec
                         <FormControl>
                           <Textarea
                             placeholder="Explain why this correction is needed..."
+                            aria-label="Explain why this correction is needed..."
                             {...field}
                             rows={3}
                           />
@@ -393,6 +405,7 @@ export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrec
                         <FormControl>
                           <Textarea
                             placeholder="Any additional information for your preceptor..."
+                            aria-label="Any additional information for your preceptor..."
                             {...field}
                             rows={2}
                           />
@@ -408,7 +421,11 @@ export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrec
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Priority</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select
+                          aria-label="Select priority"
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select priority" />

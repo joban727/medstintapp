@@ -4,8 +4,33 @@ import { z } from "zod"
 import { db } from "../../../../../database/connection-pool"
 import { rotations, timecardCorrections, timeRecords, users } from "../../../../../database/schema"
 import { apiAuthMiddleware, logAuditEvent } from "../../../../../lib/rbac-middleware"
-import { cacheIntegrationService } from '@/lib/cache-integration'
+import { cacheIntegrationService } from "@/lib/cache-integration"
+import type { UserRole } from "@/types"
 
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  createValidationErrorResponse,
+  withErrorHandling,
+  HTTP_STATUS,
+  ERROR_MESSAGES,
+} from "@/lib/api-response"
 
 // Validation schema for reviewing corrections
 const reviewCorrectionSchema = z.object({
@@ -15,23 +40,39 @@ const reviewCorrectionSchema = z.object({
 })
 
 // POST /api/timecard-corrections/[id]/review - Review (approve/reject) correction request
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  try {
+export const POST = withErrorHandling(
+  async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+    const { id } = await params
+
     const authResult = await apiAuthMiddleware(request, {
       requiredPermissions: ["approve_timesheets"],
     })
 
     if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: authResult.status })
+      return createErrorResponse(authResult.error || ERROR_MESSAGES.UNAUTHORIZED, authResult.status || HTTP_STATUS.UNAUTHORIZED)
     }
 
     const { user } = authResult
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 401 })
+      return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.UNAUTHORIZED)
     }
     const body = await request.json()
-    const validatedData = reviewCorrectionSchema.parse(body)
+    let validatedData
+    try {
+      validatedData = reviewCorrectionSchema.parse(body)
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return createValidationErrorResponse(
+          ERROR_MESSAGES.VALIDATION_ERROR,
+          error.issues.map((issue) => ({
+            field: issue.path.join("."),
+            code: issue.code,
+            details: issue.message,
+          }))
+        )
+      }
+      throw error
+    }
 
     // Get the correction with related data
     const correction = await db
@@ -51,21 +92,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .limit(1)
 
     if (correction.length === 0) {
-      return NextResponse.json({ error: "Timecard correction not found" }, { status: 404 })
+      return createErrorResponse("Timecard correction not found", HTTP_STATUS.NOT_FOUND)
     }
 
     const correctionData = correction[0]
 
     // Only allow review of pending corrections
     if (correctionData.status !== "PENDING") {
-      return NextResponse.json(
-        { error: "Only pending corrections can be reviewed" },
-        { status: 400 }
+      return createErrorResponse(
+        "Only pending corrections can be reviewed",
+        HTTP_STATUS.BAD_REQUEST
       )
     }
 
     // Check if the reviewer has permission to review this correction
-    if (user.role === "CLINICAL_PRECEPTOR") {
+    if (user.role === ("CLINICAL_PRECEPTOR" as UserRole as UserRole as UserRole)) {
       // Check if this correction is for a student under this preceptor
       const rotation = await db
         .select({ preceptorId: rotations.preceptorId })
@@ -74,12 +115,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         .limit(1)
 
       if (rotation.length === 0 || rotation[0].preceptorId !== user?.id) {
-        return NextResponse.json(
-          { error: "You can only review corrections for your students" },
-          { status: 403 }
+        return createErrorResponse(
+          "You can only review corrections for your students",
+          HTTP_STATUS.FORBIDDEN
         )
       }
-    } else if (user.role === "SCHOOL_ADMIN") {
+    } else if (user.role === ("SCHOOL_ADMIN" as UserRole as UserRole as UserRole)) {
       // Check if the student belongs to the same school
       const student = await db
         .select({ schoolId: users.schoolId })
@@ -88,15 +129,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         .limit(1)
 
       if (student.length === 0 || student[0].schoolId !== user?.schoolId) {
-        return NextResponse.json(
-          { error: "You can only review corrections for students in your school" },
-          { status: 403 }
+        return createErrorResponse(
+          "You can only review corrections for students in your school",
+          HTTP_STATUS.FORBIDDEN
         )
       }
     } else {
-      return NextResponse.json(
-        { error: "Insufficient permissions to review corrections" },
-        { status: 403 }
+      return createErrorResponse(
+        "Insufficient permissions to review corrections",
+        HTTP_STATUS.FORBIDDEN
       )
     }
 
@@ -235,146 +276,109 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           : "Timecard correction approved successfully"
         : "Timecard correction rejected"
 
-    return NextResponse.json({
+    return createSuccessResponse({
       message: responseMessage,
       correction: result.updatedCorrection,
       appliedTimeRecord: result.appliedTimeRecord,
     })
-  } catch (error) {
-    console.error("Error reviewing timecard correction:", error)
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation failed", details: error.issues },
-        { status: 400 }
-      )
-    }
-
-    
-    // Invalidate related caches
-    try {
-      await cacheIntegrationService.invalidateAllCache()
-    } catch (cacheError) {
-      console.warn('Cache invalidation error in timecard-corrections/[id]/review/route.ts:', cacheError)
-    }
-    
-    return NextResponse.json({ error: "Failed to review timecard correction" }, { status: 500 })
   }
-}
+)
 
 // GET /api/timecard-corrections/[id]/review - Get review history and details
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
+export const GET = withErrorHandling(
+  async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+    const { id } = await params
+
     // Try to get cached response
     const cached = await cacheIntegrationService.cachedApiResponse(
-      'api:timecard-corrections/[id]/review/route.ts',
+      "api:timecard-corrections/[id]/review/route.ts",
       async () => {
-        // Original function logic will be wrapped here
-        return await executeOriginalLogic()
+        const authResult = await apiAuthMiddleware(request, {
+          requiredRoles: ["CLINICAL_PRECEPTOR", "SCHOOL_ADMIN", "SUPER_ADMIN"],
+        })
+
+        if (!authResult.success) {
+          return createErrorResponse(authResult.error || ERROR_MESSAGES.UNAUTHORIZED, authResult.status || HTTP_STATUS.UNAUTHORIZED)
+        }
+
+        const { user } = authResult
+        if (!user) {
+          return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.UNAUTHORIZED)
+        }
+
+        // Get correction with reviewer information
+        const correction = await db
+          .select({
+            id: timecardCorrections.id,
+            originalTimeRecordId: timecardCorrections.originalTimeRecordId,
+            studentId: timecardCorrections.studentId,
+            rotationId: timecardCorrections.rotationId,
+            status: timecardCorrections.status,
+            reviewedBy: timecardCorrections.reviewedBy,
+            reviewedAt: timecardCorrections.reviewedAt,
+            reviewerNotes: timecardCorrections.reviewerNotes,
+            appliedBy: timecardCorrections.appliedBy,
+            appliedAt: timecardCorrections.appliedAt,
+            reviewerName: users.name,
+            reviewerEmail: users.email,
+          })
+          .from(timecardCorrections)
+          .leftJoin(users, eq(timecardCorrections.reviewedBy, users.id))
+          .where(eq(timecardCorrections.id, id))
+          .limit(1)
+
+        if (correction.length === 0) {
+          return createErrorResponse("Timecard correction not found", HTTP_STATUS.NOT_FOUND)
+        }
+
+        const correctionData = correction[0]
+
+        // Check access permissions (same logic as individual correction route)
+        if (user?.role === ("STUDENT" as UserRole) && correctionData.studentId !== user?.id) {
+          return createErrorResponse(
+            "You can only view your own correction requests",
+            HTTP_STATUS.FORBIDDEN
+          )
+        }
+
+        if (user.role === ("CLINICAL_PRECEPTOR" as UserRole as UserRole as UserRole)) {
+          const rotation = await db
+            .select({ preceptorId: rotations.preceptorId })
+            .from(rotations)
+            .where(eq(rotations.id, correctionData.rotationId))
+            .limit(1)
+
+          if (rotation.length === 0 || rotation[0].preceptorId !== user.id) {
+            return createErrorResponse(
+              "You can only view corrections for your students",
+              HTTP_STATUS.FORBIDDEN
+            )
+          }
+        }
+
+        if (user.role === ("SCHOOL_ADMIN" as UserRole as UserRole as UserRole)) {
+          const student = await db
+            .select({ schoolId: users.schoolId })
+            .from(users)
+            .where(eq(users.id, correctionData.studentId))
+            .limit(1)
+
+          if (student.length === 0 || student[0].schoolId !== user.schoolId) {
+            return createErrorResponse(
+              "You can only view corrections for students in your school",
+              HTTP_STATUS.FORBIDDEN
+            )
+          }
+        }
+
+        return createSuccessResponse({
+          reviewDetails: correctionData,
+        })
       },
       300 // 5 minutes TTL
     )
-    
-    if (cached) {
-      return cached
-    }
-  } catch (cacheError) {
-    console.warn('Cache error in timecard-corrections/[id]/review/route.ts:', cacheError)
-    // Continue with original logic if cache fails
+
+    // Return the cached or fresh response, fallback to error if null
+    return cached || createErrorResponse("Failed to fetch review details", HTTP_STATUS.INTERNAL_SERVER_ERROR)
   }
-  
-  async function executeOriginalLogic() {
-
-  const { id } = await params
-  try {
-    const authResult = await apiAuthMiddleware(request, {
-      requiredRoles: ["CLINICAL_PRECEPTOR", "SCHOOL_ADMIN", "SUPER_ADMIN"],
-    })
-
-    if (!authResult.success) {
-      return NextResponse.json({ error: authResult.error }, { status: authResult.status })
-    }
-
-    const { user } = authResult
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 401 })
-    }
-
-    // Get correction with reviewer information
-    const correction = await db
-      .select({
-        id: timecardCorrections.id,
-        originalTimeRecordId: timecardCorrections.originalTimeRecordId,
-        studentId: timecardCorrections.studentId,
-        rotationId: timecardCorrections.rotationId,
-        status: timecardCorrections.status,
-        reviewedBy: timecardCorrections.reviewedBy,
-        reviewedAt: timecardCorrections.reviewedAt,
-        reviewerNotes: timecardCorrections.reviewerNotes,
-        appliedBy: timecardCorrections.appliedBy,
-        appliedAt: timecardCorrections.appliedAt,
-        reviewerName: users.name,
-        reviewerEmail: users.email,
-      })
-      .from(timecardCorrections)
-      .leftJoin(users, eq(timecardCorrections.reviewedBy, users.id))
-      .where(eq(timecardCorrections.id, id))
-      .limit(1)
-
-    if (correction.length === 0) {
-      return NextResponse.json({ error: "Timecard correction not found" }, { status: 404 })
-    }
-
-    const correctionData = correction[0]
-
-    // Check access permissions (same logic as individual correction route)
-    if (user?.role === "STUDENT" && correctionData.studentId !== user?.id) {
-      return NextResponse.json(
-        { error: "You can only view your own correction requests" },
-        { status: 403 }
-      )
-    }
-
-    if (user.role === "CLINICAL_PRECEPTOR") {
-      const rotation = await db
-        .select({ preceptorId: rotations.preceptorId })
-        .from(rotations)
-        .where(eq(rotations.id, correctionData.rotationId))
-        .limit(1)
-
-      if (rotation.length === 0 || rotation[0].preceptorId !== user.id) {
-        return NextResponse.json(
-          { error: "You can only view corrections for your students" },
-          { status: 403 }
-        )
-      }
-    }
-
-    if (user.role === "SCHOOL_ADMIN") {
-      const student = await db
-        .select({ schoolId: users.schoolId })
-        .from(users)
-        .where(eq(users.id, correctionData.studentId))
-        .limit(1)
-
-      if (student.length === 0 || student[0].schoolId !== user.schoolId) {
-        return NextResponse.json(
-          { error: "You can only view corrections for students in your school" },
-          { status: 403 }
-        )
-      }
-    }
-
-    return NextResponse.json({
-      reviewDetails: correctionData,
-    })
-  } catch (error) {
-    console.error("Error fetching correction review details:", error)
-    return NextResponse.json(
-      { error: "Failed to fetch correction review details" },
-      { status: 500 }
-    )
-  }
-
-  }
-}
+)

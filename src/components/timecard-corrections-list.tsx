@@ -17,6 +17,7 @@ import {
 } from "./ui/dialog"
 import { Label } from "./ui/label"
 import { Separator } from "./ui/separator"
+import { safeFetchApi } from "@/lib/safe-fetch"
 
 interface TimecardCorrection {
   id: string
@@ -70,13 +71,16 @@ export function TimecardCorrectionsList({
       params.append("sortBy", "createdAt")
       params.append("sortOrder", "desc")
 
-      const response = await fetch(`/api/timecard-corrections?${params}`)
-      if (!response.ok) {
-        throw new Error("Failed to fetch corrections")
-      }
+      const result = await safeFetchApi<any>(`/api/timecard-corrections?${params}`)
 
-      const data = await response.json()
-      setCorrections(data.corrections || [])
+      if (result.success) {
+        // Handle standardized API response structure
+        // API returns: { success: true, data: { corrections: [], pagination: {} } }
+        const data = result.data.data || result.data
+        setCorrections(data.corrections || [])
+      } else {
+        throw new Error(result.error || "Failed to fetch corrections")
+      }
     } catch (_error) {
       // Error fetching corrections
       toast.error("Failed to load correction requests")
@@ -92,7 +96,7 @@ export function TimecardCorrectionsList({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "PENDING":
-        return <Clock className="h-4 w-4 text-yellow-500" />
+        return <Clock className="h-4 w-4 text-warning" />
       case "APPROVED":
         return <CheckCircle className="h-4 w-4 text-green-500" />
       case "REJECTED":
@@ -152,7 +156,12 @@ export function TimecardCorrectionsList({
 
   const parseActivities = (activities: string): string[] => {
     try {
-      return JSON.parse(activities || "[]")
+      try {
+        return JSON.parse(activities || "[]")
+      } catch (error) {
+        console.error("Failed to parse activities:", error)
+        return []
+      }
     } catch {
       return []
     }
@@ -161,7 +170,6 @@ export function TimecardCorrectionsList({
   const renderChangeComparison = (correction: TimecardCorrection) => {
     const { requestedChanges, originalTimeRecord } = correction
     const changes = []
-
     if (requestedChanges.date) {
       changes.push({
         field: "Date",
@@ -169,7 +177,6 @@ export function TimecardCorrectionsList({
         requested: formatDate(new Date(requestedChanges.date)),
       })
     }
-
     if (requestedChanges.clockIn) {
       changes.push({
         field: "Clock In",
@@ -177,7 +184,6 @@ export function TimecardCorrectionsList({
         requested: requestedChanges.clockIn,
       })
     }
-
     if (requestedChanges.clockOut) {
       changes.push({
         field: "Clock Out",
@@ -185,17 +191,21 @@ export function TimecardCorrectionsList({
         requested: requestedChanges.clockOut,
       })
     }
-
     if (requestedChanges.activities) {
       const originalActivities = parseActivities(originalTimeRecord.activities)
-      const requestedActivities = JSON.parse(requestedChanges.activities)
+      let requestedActivities = []
+      try {
+        requestedActivities = JSON.parse(requestedChanges.activities)
+      } catch (error) {
+        console.error("Failed to parse requested activities:", error)
+        requestedActivities = []
+      }
       changes.push({
         field: "Activities",
         original: originalActivities.join(", ") || "None",
         requested: requestedActivities.join(", ") || "None",
       })
     }
-
     if (requestedChanges.notes !== undefined) {
       changes.push({
         field: "Notes",
@@ -203,7 +213,6 @@ export function TimecardCorrectionsList({
         requested: requestedChanges.notes || "None",
       })
     }
-
     return changes
   }
 
@@ -219,14 +228,13 @@ export function TimecardCorrectionsList({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="gap-4">
       {showTitle && (
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-lg">Correction Requests</h3>
           <Badge variant="outline">{corrections.length} total</Badge>
         </div>
       )}
-
       {corrections.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
@@ -235,12 +243,12 @@ export function TimecardCorrectionsList({
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="gap-3">
           {corrections.map((correction) => (
-            <Card key={correction.id} className="transition-shadow hover:shadow-md">
+            <Card key={correction.id} className="transition-shadow duration-200 hover:shadow-md">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
-                  <div className="flex-1 space-y-2">
+                  <div className="flex-1 gap-2">
                     <div className="flex items-center gap-2">
                       {getStatusIcon(correction.status)}
                       <span className="font-medium">
@@ -253,7 +261,6 @@ export function TimecardCorrectionsList({
                         {correction.priority}
                       </Badge>
                     </div>
-
                     <div className="text-muted-foreground text-sm">
                       <div>Record Date: {formatDate(correction.originalTimeRecord.date)}</div>
                       <div>Rotation: {correction.originalTimeRecord.rotation.specialty}</div>
@@ -262,10 +269,8 @@ export function TimecardCorrectionsList({
                         <div>Reviewed: {format(new Date(correction.reviewedAt), "PPp")}</div>
                       )}
                     </div>
-
                     <p className="line-clamp-2 text-sm">{correction.reason}</p>
                   </div>
-
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button
@@ -273,54 +278,52 @@ export function TimecardCorrectionsList({
                         size="sm"
                         onClick={() => setSelectedCorrection(correction)}
                       >
-                        <Eye className="mr-1 h-4 w-4" />
-                        View
+                        <Eye className="mr-1 h-4 w-4" /> View
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+                    <DialogContent
+                      className="max-h-[90vh] max-w-4xl overflow-y-auto"
+                      onOpenAutoFocus={(e) => e.preventDefault()}
+                    >
                       <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                          {getStatusIcon(correction.status)}
-                          Correction Request Details
+                          {getStatusIcon(correction.status)} Correction Request Details
                         </DialogTitle>
                         <DialogDescription>
                           {formatCorrectionType(correction.correctionType)} request for{" "}
                           {correction.originalTimeRecord.rotation.specialty}
                         </DialogDescription>
                       </DialogHeader>
-
-                      <div className="space-y-6">
+                      <div className="gap-6">
                         {/* Status and Priority */}
                         <div className="flex gap-4">
-                          <div className="space-y-1">
+                          <div className="gap-1">
                             <Label className="font-medium text-sm">Status</Label>
                             <Badge className={getStatusColor(correction.status)}>
                               {correction.status}
                             </Badge>
                           </div>
-                          <div className="space-y-1">
+                          <div className="gap-1">
                             <Label className="font-medium text-sm">Priority</Label>
                             <Badge className={getPriorityColor(correction.priority)}>
                               {correction.priority}
                             </Badge>
                           </div>
                           {correction.dueDate && (
-                            <div className="space-y-1">
+                            <div className="gap-1">
                               <Label className="font-medium text-sm">Due Date</Label>
                               <div className="text-sm">{formatDate(correction.dueDate)}</div>
                             </div>
                           )}
                         </div>
-
                         <Separator />
-
                         {/* Changes Comparison */}
-                        <div className="space-y-4">
+                        <div className="gap-4">
                           <h4 className="font-semibold">Requested Changes</h4>
                           <div className="grid gap-4">
                             {renderChangeComparison(correction).map((change, index) => (
                               <div
-                                key={`change-${change.field.replace(/\s+/g, '-').toLowerCase()}-${index}`}
+                                key={`change-${change.field.replace(/\s+/g, "-").toLowerCase()}-${index}`}
                                 className="grid grid-cols-3 gap-4 rounded-lg bg-muted/50 p-3"
                               >
                                 <div>
@@ -332,7 +335,7 @@ export function TimecardCorrectionsList({
                                 </div>
                                 <div>
                                   <Label className="text-muted-foreground text-xs">Requested</Label>
-                                  <div className="font-medium text-blue-600 text-sm">
+                                  <div className="font-medium text-medical-primary text-sm">
                                     {change.requested}
                                   </div>
                                 </div>
@@ -340,11 +343,9 @@ export function TimecardCorrectionsList({
                             ))}
                           </div>
                         </div>
-
                         <Separator />
-
                         {/* Reason and Notes */}
-                        <div className="space-y-4">
+                        <div className="gap-4">
                           <div>
                             <Label className="font-medium text-sm">Reason for Correction</Label>
                             <p className="mt-1 rounded-lg bg-muted/50 p-3 text-sm">
@@ -360,12 +361,11 @@ export function TimecardCorrectionsList({
                             </div>
                           )}
                         </div>
-
                         {/* Review Information */}
                         {(correction.reviewedBy || correction.reviewerNotes) && (
                           <>
                             <Separator />
-                            <div className="space-y-4">
+                            <div className="gap-4">
                               <h4 className="font-semibold">Review Information</h4>
                               {correction.reviewedBy && (
                                 <div>
@@ -392,12 +392,11 @@ export function TimecardCorrectionsList({
                             </div>
                           </>
                         )}
-
                         {/* Timeline */}
                         <Separator />
-                        <div className="space-y-4">
+                        <div className="gap-4">
                           <h4 className="font-semibold">Timeline</h4>
-                          <div className="space-y-2 text-sm">
+                          <div className="gap-2 text-sm">
                             <div className="flex justify-between">
                               <span>Submitted:</span>
                               <span>{format(new Date(correction.createdAt), "PPp")}</span>

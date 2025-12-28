@@ -36,18 +36,16 @@ export function SwipeableRotationCard({ site, className }: SwipeableRotationCard
       className={cn("snap-start", className)}
     >
       <Card className="w-[300px] shrink-0 overflow-hidden rounded-xl border bg-card shadow-sm">
-        <CardHeader className="space-y-2 p-4">
+        <CardHeader className="gap-2 p-4">
           <CardTitle className="line-clamp-1 text-base font-semibold">
             {site.name || site.department || "Rotation"}
           </CardTitle>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Building2 className="h-4 w-4" aria-hidden="true" />
-            <span className="line-clamp-1">
-              {site.facilityName || "Facility TBD"}
-            </span>
+            <span className="line-clamp-1">{site.facilityName || "Facility TBD"}</span>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3 p-4 pt-0">
+        <CardContent className="gap-3 p-4 pt-0">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <MapPin className="h-4 w-4" aria-hidden="true" />
             <span className="line-clamp-1">

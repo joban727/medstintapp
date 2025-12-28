@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm"
+import { and, count, eq, inArray } from "drizzle-orm"
 import {
   Building2,
   Calendar,
@@ -42,241 +42,320 @@ import {
   TableHeader,
   TableRow,
 } from "../../../../components/ui/table"
-import { db } from "../../../../database/db"
-import { clinicalSites, rotations } from "../../../../database/schema"
+import { db } from "@/database/connection-pool"
+import { facilityManagement, rotations } from "../../../../database/schema"
 import { requireAnyRole } from "../../../../lib/auth-clerk"
+import { getSchoolContext } from "../../../../lib/school-utils"
+import ClinicalSitesActionBar from "./ClinicalSitesActionBar"
+import { ClinicalSiteRowActions } from "./ClinicalSiteRowActions"
+import { PageContainer, PageHeader } from "@/components/ui/page-container"
+import { StatCard, StatGrid } from "@/components/ui/stat-card"
+import { cn } from "@/lib/utils"
+import { DashboardCard } from "@/components/dashboard/shared/dashboard-card"
 
 export default async function ClinicalSitesPage() {
   const _user = await requireAnyRole(["SCHOOL_ADMIN"], "/dashboard")
+  const context = await getSchoolContext()
 
-  // Fetch clinical sites for this school
-  const sites = await db
-    .select({
-      id: clinicalSites.id,
-      name: clinicalSites.name,
-      address: clinicalSites.address,
-      contactPerson: clinicalSites.contactPersonName,
-      contactEmail: clinicalSites.contactPersonEmail,
-      contactPhone: clinicalSites.contactPersonPhone,
-      isActive: clinicalSites.isActive,
-      createdAt: clinicalSites.createdAt,
-      updatedAt: clinicalSites.updatedAt,
-      activeRotations: count(rotations.id),
-    })
-    .from(clinicalSites)
-    .leftJoin(rotations, eq(rotations.clinicalSiteId, clinicalSites.id))
-    .groupBy(clinicalSites.id)
+  // Ensure user is associated with a school
+  // If no school ID (e.g. skipped onboarding), return empty list instead of throwing error
+  let facilities: any[] = []
+
+  if (context.schoolId) {
+    // Fetch all facilities for this school (not just those created by current user)
+    facilities = await db
+      .select({
+        id: facilityManagement.id,
+        facilityName: facilityManagement.facilityName,
+        address: facilityManagement.address,
+        contactInfo: facilityManagement.contactInfo,
+        isActive: facilityManagement.isActive,
+        createdAt: facilityManagement.createdAt,
+        updatedAt: facilityManagement.updatedAt,
+        clinicalSiteId: facilityManagement.clinicalSiteId,
+        geofenceRadius: facilityManagement.geofenceRadius,
+        strictGeofence: facilityManagement.strictGeofence,
+        priority: facilityManagement.priority,
+        notes: facilityManagement.notes,
+        facilityType: facilityManagement.facilityType,
+      })
+      .from(facilityManagement)
+      .where(eq(facilityManagement.schoolId, context.schoolId))
+  } else {
+    console.log("No school ID found for user, returning empty facilities list")
+  }
+
+  // Diagnostics: summarize facility and rotation linkage for visibility comparisons
+  console.info(
+    "[LOG-3 AdminSitesPage] schoolId=%s facilities=%d",
+    context.schoolId,
+    facilities.length
+  )
+
+  // Compute active rotation counts per linked clinical site in a separate query
+  const clinicalSiteIds = Array.from(
+    new Set(facilities.map((f) => f.clinicalSiteId).filter((id): id is string => Boolean(id)))
+  )
+
+  let activeCountsBySiteId: Record<string, number> = {}
+  if (clinicalSiteIds.length > 0) {
+    const counts = await db
+      .select({
+        clinicalSiteId: rotations.clinicalSiteId,
+        activeRotations: count(rotations.id),
+      })
+      .from(rotations)
+      .where(
+        and(inArray(rotations.clinicalSiteId, clinicalSiteIds), eq(rotations.status, "ACTIVE"))
+      )
+      .groupBy(rotations.clinicalSiteId)
+
+    activeCountsBySiteId = Object.fromEntries(
+      counts.map((c) => [c.clinicalSiteId, Number(c.activeRotations)])
+    )
+    console.info(
+      "[LOG-3 AdminSitesPage] linkedClinicalSites=%d activeRotationSites=%d",
+      clinicalSiteIds.length,
+      counts.length
+    )
+  }
+
+  const sites = facilities.map((f) => {
+    const contactInfo = (f as any).contactInfo || {}
+    return {
+      id: f.id,
+      name: (f as any).facilityName,
+      address: f.address,
+      contactPerson: contactInfo.contactName || contactInfo.name || null,
+      contactEmail: contactInfo.email || null,
+      contactPhone: contactInfo.phone || null,
+      isActive: f.isActive,
+      createdAt: f.createdAt,
+      updatedAt: f.updatedAt,
+      activeRotations: activeCountsBySiteId[f.clinicalSiteId || ""] ?? 0,
+      geofenceRadius: f.geofenceRadius,
+      strictGeofence: f.strictGeofence,
+      priority: f.priority,
+      notes: f.notes,
+      facilityType: f.facilityType,
+    }
+  })
 
   const siteStats = {
     totalSites: sites.length,
     activeSites: sites.filter((s) => s.isActive).length,
     totalRotations: sites.reduce((sum, s) => sum + s.activeRotations, 0),
-    partneredSites: sites.filter((s) => s.contactPerson).length,
+    partneredSites: sites.filter((s) => s.contactPerson || s.contactEmail || s.contactPhone).length,
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-bold text-3xl text-gray-900">Clinical Sites</h1>
-          <p className="mt-1 text-gray-600">Manage clinical rotation sites and partnerships</p>
-        </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Clinical Site
-        </Button>
+    <PageContainer>
+      <PageHeader
+        title="Clinical Sites"
+        description="Manage clinical rotation sites and partnerships"
+      />
+
+      {/* Stats Cards - Inline since Server Component cannot pass icon functions to Client Components */}
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 stagger-children">
+        <DashboardCard
+          title="Total Sites"
+          icon={
+            <div className="icon-container icon-container-blue">
+              <Building2 className="h-4 w-4" />
+            </div>
+          }
+          variant="glass"
+          className="card-hover-lift spotlight-card border-l-4 border-l-blue-500"
+        >
+          <div className="font-bold text-2xl animate-stat-value">{siteStats.totalSites}</div>
+          <p className="text-muted-foreground text-xs">School-managed facilities</p>
+        </DashboardCard>
+        <DashboardCard
+          title="Active Sites"
+          icon={
+            <div className="icon-container icon-container-green">
+              <MapPin className="h-4 w-4" />
+            </div>
+          }
+          variant="glass"
+          className="card-hover-lift spotlight-card border-l-4 border-l-green-500"
+        >
+          <div className="font-bold text-2xl animate-stat-value">{siteStats.activeSites}</div>
+          <p className="text-muted-foreground text-xs">Currently active</p>
+        </DashboardCard>
+        <DashboardCard
+          title="Active Rotations"
+          icon={
+            <div className="icon-container icon-container-purple">
+              <Calendar className="h-4 w-4" />
+            </div>
+          }
+          variant="glass"
+          className="card-hover-lift spotlight-card border-l-4 border-l-purple-500"
+        >
+          <div className="font-bold text-2xl animate-stat-value">{siteStats.totalRotations}</div>
+          <p className="text-muted-foreground text-xs">Ongoing rotations</p>
+        </DashboardCard>
+        <DashboardCard
+          title="Partnership Sites"
+          icon={
+            <div className="icon-container icon-container-orange">
+              <Users className="h-4 w-4" />
+            </div>
+          }
+          variant="glass"
+          className="card-hover-lift spotlight-card border-l-4 border-l-orange-500"
+        >
+          <div className="font-bold text-2xl animate-stat-value">{siteStats.partneredSites}</div>
+          <p className="text-muted-foreground text-xs">With contacts</p>
+        </DashboardCard>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Total Sites</CardTitle>
-            <Building2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{siteStats.totalSites}</div>
-            <p className="text-muted-foreground text-xs">All clinical sites</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Active Sites</CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{siteStats.activeSites}</div>
-            <p className="text-muted-foreground text-xs">Currently active</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Active Rotations</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{siteStats.totalRotations}</div>
-            <p className="text-muted-foreground text-xs">Ongoing rotations</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Partnership Sites</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{siteStats.partneredSites}</div>
-            <p className="text-muted-foreground text-xs">With contacts</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Consolidated Action Bar */}
+      <ClinicalSitesActionBar
+        totalSites={siteStats.totalSites}
+        activeSites={siteStats.activeSites}
+      />
 
       {/* Sites Management */}
-      <Card>
+      <Card className="glass-card overflow-hidden">
         <CardHeader>
           <CardTitle>Clinical Sites Directory</CardTitle>
           <CardDescription>Manage your clinical rotation sites and partnerships</CardDescription>
         </CardHeader>
-        <CardContent>
-          {/* Search and Filter */}
-          <div className="mb-6 flex items-center space-x-4">
-            <div className="relative flex-1">
-              <Search className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 transform text-gray-400" />
-              <Input placeholder="Search clinical sites..." className="pl-10" />
-            </div>
-            <Select>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Sites</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by state" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All States</SelectItem>
-                <SelectItem value="CA">California</SelectItem>
-                <SelectItem value="NY">New York</SelectItem>
-                <SelectItem value="TX">Texas</SelectItem>
-                <SelectItem value="FL">Florida</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline">
-              <Filter className="mr-2 h-4 w-4" />
-              More Filters
-            </Button>
+        <CardContent className="p-0">
+          {/* Mobile Cards */}
+          <div className="md:hidden space-y-3 p-4">
+            {sites.map((site) => (
+              <div
+                key={site.id}
+                className="rounded-lg border bg-card/50 backdrop-blur-sm p-4 card-hover-lift"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-medium">{site.name}</div>
+                    <div className="text-muted-foreground text-sm">Clinical Site</div>
+                  </div>
+                  <ClinicalSiteRowActions site={site} />
+                </div>
+
+                <div className="mt-3 flex items-start text-sm">
+                  <MapPin className="mt-0.5 mr-2 h-4 w-4 text-muted-foreground" />
+                  <div className="text-muted-foreground">{site.address}</div>
+                </div>
+
+                <div className="mt-3 space-y-2 text-sm">
+                  <div className="flex items-center">
+                    <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span>{site.contactPerson || "Not assigned"}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <Mail className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span>{site.contactEmail || "No email"}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <Phone className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span>{site.contactPhone || "No phone"}</span>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center gap-2">
+                  <Badge variant="secondary" className="bg-secondary/50">
+                    Rotations: {site.activeRotations}
+                  </Badge>
+                  <Badge
+                    className={cn(
+                      site.isActive
+                        ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                        : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                    )}
+                  >
+                    {site.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Sites Table */}
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Site Name</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Contact Person</TableHead>
-                <TableHead>Contact Info</TableHead>
-                <TableHead>Active Rotations</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sites.map((site) => (
-                <TableRow key={site.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{site.name}</div>
-                      <div className="text-gray-500 text-sm">Clinical Site</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-start">
-                      <MapPin className="mt-0.5 mr-1 h-4 w-4 text-gray-400" />
-                      <div className="text-sm">
-                        <div className="text-gray-500">{site.address}</div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">{site.contactPerson || "Not assigned"}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      {site.contactEmail && (
-                        <div className="flex items-center text-sm">
-                          <Mail className="mr-1 h-3 w-3" />
-                          {site.contactEmail}
-                        </div>
-                      )}
-                      {site.contactPhone && (
-                        <div className="flex items-center text-sm">
-                          <Phone className="mr-1 h-3 w-3" />
-                          {site.contactPhone}
-                        </div>
-                      )}
-                      {!site.contactEmail && !site.contactPhone && (
-                        <span className="text-gray-500 text-sm">No contact info</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center">
-                      <Calendar className="mr-1 h-4 w-4 text-gray-400" />
-                      <span>{site.activeRotations} rotations</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={site.isActive ? "default" : "secondary"}>
-                      {site.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
-                        <DropdownMenuItem>Edit Site</DropdownMenuItem>
-                        <DropdownMenuItem>Manage Rotations</DropdownMenuItem>
-                        <DropdownMenuItem>View Students</DropdownMenuItem>
-                        <DropdownMenuItem>Contact Info</DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600">
-                          {site.isActive ? "Deactivate" : "Delete"}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent border-b border-border/50">
+                  <TableHead>Site Name</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Contact Person</TableHead>
+                  <TableHead>Contact Info</TableHead>
+                  <TableHead>Active Rotations</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-
-          {sites.length === 0 && (
-            <div className="py-12 text-center">
-              <Building2 className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 font-medium text-gray-900 text-sm">No clinical sites found</h3>
-              <p className="mt-1 text-gray-500 text-sm">
-                Get started by adding your first clinical site.
-              </p>
-              <div className="mt-6">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Clinical Site
-                </Button>
-              </div>
-            </div>
-          )}
+              </TableHeader>
+              <TableBody>
+                {sites.map((site) => (
+                  <TableRow
+                    key={site.id}
+                    className="group hover:bg-muted/30 transition-colors duration-200 border-b border-border/50"
+                  >
+                    <TableCell>
+                      <div>
+                        <div className="font-medium group-hover:text-primary transition-colors">
+                          {site.name}
+                        </div>
+                        <div className="text-muted-foreground text-sm">Clinical Site</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-start">
+                        <MapPin className="mt-0.5 mr-1 h-4 w-4 text-muted-foreground" />
+                        <div className="text-sm">
+                          <div className="text-muted-foreground">{site.address}</div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">{site.contactPerson || "Not assigned"}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm space-y-1">
+                        <div className="flex items-center">
+                          <Mail className="mr-2 h-4 w-4 text-muted-foreground" />
+                          <span>{site.contactEmail || "No email"}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <Phone className="mr-2 h-4 w-4 text-muted-foreground" />
+                          <span>{site.contactPhone || "No phone"}</span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="bg-secondary/50">
+                        {site.activeRotations}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={cn(
+                          "transition-all duration-300",
+                          site.isActive
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50"
+                            : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50"
+                        )}
+                      >
+                        {site.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <ClinicalSiteRowActions site={site} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   )
 }

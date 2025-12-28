@@ -7,6 +7,7 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
   CLINICAL_PRECEPTOR: 2,
   CLINICAL_SUPERVISOR: 1.5,
   STUDENT: 1,
+  SYSTEM: 5,
 }
 
 // Role display names
@@ -16,6 +17,7 @@ export const ROLE_DISPLAY_NAMES: Record<UserRole, string> = {
   CLINICAL_SUPERVISOR: "Clinical Supervisor",
   CLINICAL_PRECEPTOR: "Clinical Preceptor",
   STUDENT: "Student",
+  SYSTEM: "System",
 }
 
 // Role colors for UI
@@ -25,6 +27,7 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   CLINICAL_SUPERVISOR: "text-green-600 bg-green-100",
   CLINICAL_PRECEPTOR: "text-orange-600 bg-orange-100",
   STUDENT: "text-gray-600 bg-gray-100",
+  SYSTEM: "text-gray-600 bg-gray-100",
 }
 
 // Role-based route mapping
@@ -34,6 +37,7 @@ export const ROLE_ROUTES: Record<UserRole, string> = {
   CLINICAL_PRECEPTOR: "/dashboard/clinical-preceptor",
   CLINICAL_SUPERVISOR: "/dashboard/clinical-supervisor",
   STUDENT: "/dashboard/student",
+  SYSTEM: "/",
 }
 
 // Permission definitions
@@ -41,6 +45,7 @@ export type Permission =
   | "manage_users"
   | "manage_schools"
   | "manage_programs"
+  | "manage_competencies"
   | "manage_clinical_sites"
   | "view_all_students"
   | "manage_students"
@@ -63,6 +68,68 @@ export type Permission =
   | "review_timecard_corrections"
   | "view_timecard_corrections"
   | "manage_timecard_corrections"
+  | "view_dashboard"
+  | "manage_sites"
+  | "manage_locations"
+  | "view_audit_logs"
+  | "view_analytics"
+  | "manage_billing"
+  | "manage_onboarding"
+  | "manage_webhooks"
+  | "use_websocket"
+  | "view_health_status"
+  | "use_clock"
+  | "view_student_dashboard"
+  | "manage_user_profile"
+  | "manage_facilities"
+  | "manage_rotation_templates"
+  | "manage_site_assignments"
+  | "manage_notification_templates"
+  | "manage_competency_submissions"
+  | "view_competency_submissions"
+  | "manage_competency_assignments"
+  | "view_competency_assignments"
+  | "manage_competency_templates"
+  | "view_competency_analytics"
+  | "manage_competency_notifications"
+  | "view_competency_progress"
+  | "manage_competency_deployments"
+  | "manage_competency_assessments"
+  | "view_school_context"
+  | "manage_facility_cache"
+  | "lookup_facilities"
+  | "capture_location"
+  | "verify_location"
+  | "manage_location_permissions"
+  | "manage_time_sync"
+  | "poll_time_sync"
+  | "connect_time_sync"
+  | "view_time_sync_status"
+  | "view_student_dashboard_stats"
+  | "student_clock_in"
+  | "student_clock_out"
+  | "view_student_clock_status"
+  | "manage_onboarding_session"
+  | "view_onboarding_analytics"
+  | "view_system_readiness"
+  | "view_admin_performance"
+  | "cleanup_mock_data"
+  | "create_subscription"
+  | "cancel_subscription"
+  | "cancel_subscription"
+  | "webhook_clerk"
+  | "test_handler"
+  | "test_auth"
+  | "test_catchall"
+  | "upload_files"
+  | "view_schedule"
+  | "manage_scheduled_reports"
+  | "export_reports"
+  | "view_time_records"
+  | "manage_time_records"
+  | "view_rotations"
+  | "manage_preceptors"
+  | "manage_evaluations"
 
 // Role-based permissions
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -134,6 +201,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "submit_timecard_corrections",
     "view_timecard_corrections",
   ],
+
+  SYSTEM: ["webhook_clerk"],
 }
 
 // Utility functions
@@ -308,6 +377,12 @@ export function getNavigationItems(userRole: UserRole): NavigationItem[] {
         permissions: ["view_student_progress"],
       },
       {
+        name: "Competencies",
+        href: `${baseRoute}/competencies`,
+        icon: "Target",
+        permissions: ["validate_competencies"],
+      },
+      {
         name: "Timesheets",
         href: `${baseRoute}/timesheets`,
         icon: "Clock",
@@ -361,7 +436,9 @@ export function getNavigationItems(userRole: UserRole): NavigationItem[] {
         href: `${baseRoute}/resources`,
         icon: "BookOpen",
       },
+
     ],
+    SYSTEM: [],
   }
 
   return allItems[userRole].filter((item) => {
@@ -477,6 +554,7 @@ export function getQuickActions(userRole: UserRole): QuickAction[] {
         permissions: ["view_own_progress"],
       },
     ],
+    SYSTEM: [],
   }
 
   return allActions[userRole].filter((action) => {

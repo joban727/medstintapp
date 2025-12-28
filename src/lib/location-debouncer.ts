@@ -30,7 +30,7 @@ class LocationDebouncer {
     locationFunction: () => Promise<T>
   ): Promise<T> {
     const now = Date.now()
-    
+
     // Check if we're within the minimum interval
     if (now - this.lastRequestTime < this.minInterval) {
       // If there's already a pending request with the same ID, return that promise
@@ -54,7 +54,7 @@ class LocationDebouncer {
         id: requestId,
         timestamp: now,
         resolve,
-        reject
+        reject,
       })
 
       // Set up debounced execution
@@ -62,19 +62,19 @@ class LocationDebouncer {
         try {
           this.lastRequestTime = Date.now()
           const result = await locationFunction()
-          
+
           // Resolve all pending requests with the same result
           this.pendingRequests.forEach((request) => {
             request.resolve(result)
           })
-          
+
           this.pendingRequests.clear()
         } catch (error) {
           // Reject all pending requests with the same error
           this.pendingRequests.forEach((request) => {
             request.reject(error)
           })
-          
+
           this.pendingRequests.clear()
         }
       }, this.debounceDelay)
@@ -86,14 +86,12 @@ class LocationDebouncer {
    * @param locationFunction Function that returns a Promise with location data
    * @returns Promise that resolves with location data or null if throttled
    */
-  async throttledLocationRequest<T>(
-    locationFunction: () => Promise<T>
-  ): Promise<T | null> {
+  async throttledLocationRequest<T>(locationFunction: () => Promise<T>): Promise<T | null> {
     const now = Date.now()
-    
+
     // Check if we're within the minimum interval
     if (now - this.lastRequestTime < this.minInterval) {
-      console.log('Location request throttled - too frequent')
+      console.log("Location request throttled - too frequent")
       return null
     }
 
@@ -113,11 +111,11 @@ class LocationDebouncer {
       clearTimeout(this.debounceTimeout)
       this.debounceTimeout = null
     }
-    
+
     this.pendingRequests.forEach((request) => {
-      request.reject(new Error('Location request cancelled'))
+      request.reject(new Error("Location request cancelled"))
     })
-    
+
     this.pendingRequests.clear()
   }
 

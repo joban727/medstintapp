@@ -2,8 +2,28 @@ import { currentUser } from "@clerk/nextjs/server"
 import { eq } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { WelcomeOnboarding } from "../../../components/onboarding/welcome-onboarding"
-import { db } from "../../../database/db"
+import { db } from "@/database/connection-pool"
 import { users } from "../../../database/schema"
+import type { UserRole } from "@/types"
+
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
+
+export const dynamic = "force-dynamic"
 
 export default async function WelcomeOnboardingPage() {
   const clerkUser = await currentUser()
@@ -34,7 +54,7 @@ export default async function WelcomeOnboardingPage() {
   }
 
   // Verify user is school admin
-  if (user?.role !== "SCHOOL_ADMIN") {
+  if (user?.role !== ("SCHOOL_ADMIN" as UserRole)) {
     redirect("/onboarding")
   }
 
@@ -44,7 +64,7 @@ export default async function WelcomeOnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-[calc(100vh-80px)]">
       <div className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-4xl">
           <WelcomeOnboarding

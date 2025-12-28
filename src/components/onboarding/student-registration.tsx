@@ -23,6 +23,10 @@ import { Label } from "../ui/label"
 import { motion } from "../ui/motion"
 import { Progress } from "../ui/progress"
 
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 interface StudentRegistrationProps {
   onBack: () => void
   onComplete: (studentData: StudentFormData) => void
@@ -73,12 +77,24 @@ const fetchSchools = async (token: string, searchTerm = ""): Promise<School[]> =
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     })
+
     if (!response.ok) {
-      throw new Error("Failed to fetch schools")
+      const errorData = await response
+        .json()
+        .catch((err) => {
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
+        })
+        .catch(() => ({}))
+      throw new Error(errorData.error || errorData.message || "Failed to fetch schools")
     }
 
-    const result = await response.json()
-    return result.data || []
+    const result = await response.json().catch((err) => {
+      console.error("Failed to parse JSON response:", err)
+      throw new Error("Invalid response format")
+    })
+
+    return result.data?.schools || []
   } catch (_error) {
     // Error fetching schools
     return []
@@ -87,6 +103,7 @@ const fetchSchools = async (token: string, searchTerm = ""): Promise<School[]> =
 
 export function StudentRegistration({ onBack, onComplete }: StudentRegistrationProps) {
   const { getToken } = useAuth()
+
   // Generate unique IDs for form elements
   const firstNameId = useId()
   const lastNameId = useId()
@@ -145,7 +162,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
   // Load schools on component mount
   useEffect(() => {
     loadSchools()
-  }, [loadSchools])
+  }, [])
 
   // Debounced search effect
   useEffect(() => {
@@ -158,7 +175,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
     }, 300)
 
     return () => clearTimeout(timeoutId)
-  }, [searchTerm, loadSchools, schools])
+  }, [searchTerm, schools])
 
   // Update filtered schools when schools change
   useEffect(() => {
@@ -219,6 +236,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
     setIsLoading(true)
     try {
       const token = await getToken()
+
       // Submit to actual API endpoint
       const response = await fetch("/api/onboarding/student", {
         method: "POST",
@@ -230,18 +248,24 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch((err) => {
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
+        })
         throw new Error(errorData.error || "Registration failed")
       }
 
-      const _result = await response.json()
+      const _result = await response.json().catch((err) => {
+        console.error("Failed to parse JSON response:", err)
+        throw new Error("Invalid response format")
+      })
+
       toast.success("Student registration completed successfully!")
       onComplete(formData)
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Registration failed. Please try again."
       toast.error(errorMessage)
-      // Registration failed
     } finally {
       setIsLoading(false)
     }
@@ -249,6 +273,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
 
   const updateFormData = (field: keyof StudentFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: "" }))
@@ -261,6 +286,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
     setSelectedProgram(null)
     updateFormData("schoolId", schoolId)
     updateFormData("programId", "")
+
     // Clear any existing errors
     if (errors.schoolId) {
       setErrors((prev) => ({ ...prev, schoolId: "", programId: "" }))
@@ -269,13 +295,11 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
 
   const handleProgramSelect = (programId: string) => {
     if (!selectedSchool?.programs) {
-      // No programs available for selected school
       return
     }
 
     const program = selectedSchool.programs.find((p) => p.id === programId)
     if (!program) {
-      // Program not found
       return
     }
 
@@ -311,7 +335,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
             className="space-y-6"
           >
             <div className="mb-6 text-center">
-              <GraduationCap className="mx-auto mb-4 h-12 w-12 text-green-600" />
+              <GraduationCap className="mx-auto mb-4 h-12 w-12 text-healthcare-green" />
               <h2 className="font-bold text-2xl text-gray-900">Personal Information</h2>
               <p className="text-gray-600">Tell us about yourself</p>
             </div>
@@ -412,7 +436,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
             className="space-y-6"
           >
             <div className="mb-6 text-center">
-              <Search className="mx-auto mb-4 h-12 w-12 text-green-600" />
+              <Search className="mx-auto mb-4 h-12 w-12 text-healthcare-green" />
               <h2 className="font-bold text-2xl text-gray-900">School & Program Selection</h2>
               <p className="text-gray-600">Find and select your educational institution</p>
             </div>
@@ -436,7 +460,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
                 <Label>Select Your School *</Label>
                 {isLoadingSchools ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-green-600" />
+                    <Loader2 className="h-6 w-6 animate-spin text-healthcare-green" />
                     <span className="ml-2 text-gray-600">Loading schools...</span>
                   </div>
                 ) : filteredSchools.length === 0 ? (
@@ -453,7 +477,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
                         className={`cursor-pointer transition-all duration-200 ${
                           formData.schoolId === school.id
                             ? "bg-green-50 ring-2 ring-green-500"
-                            : "hover:border-green-300 hover:shadow-md"
+                            : "hover:border-green-300 hover:shadow-md transition-all duration-200"
                         }`}
                         onClick={() => handleSchoolSelect(school.id)}
                       >
@@ -475,7 +499,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
                               </p>
                             </div>
                             {formData.schoolId === school.id && (
-                              <CheckCircle className="h-5 w-5 text-green-600" />
+                              <CheckCircle className="h-5 w-5 text-healthcare-green" />
                             )}
                           </div>
                         </CardContent>
@@ -498,7 +522,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
                           className={`cursor-pointer transition-all duration-200 ${
                             formData.programId === program.id
                               ? "bg-green-50 ring-2 ring-green-500"
-                              : "hover:border-green-300 hover:shadow-md"
+                              : "hover:border-green-300 hover:shadow-md transition-all duration-200"
                           }`}
                           onClick={() => handleProgramSelect(program.id)}
                         >
@@ -515,7 +539,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
                                 <p className="mb-2 text-gray-600 text-sm">{program.description}</p>
                               </div>
                               {formData.programId === program.id && (
-                                <CheckCircle className="ml-2 h-5 w-5 text-green-600" />
+                                <CheckCircle className="ml-2 h-5 w-5 text-healthcare-green" />
                               )}
                             </div>
                           </CardContent>
@@ -540,7 +564,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
             className="space-y-6"
           >
             <div className="mb-6 text-center">
-              <Calendar className="mx-auto mb-4 h-12 w-12 text-green-600" />
+              <Calendar className="mx-auto mb-4 h-12 w-12 text-healthcare-green" />
               <h2 className="font-bold text-2xl text-gray-900">Enrollment Confirmation</h2>
               <p className="text-gray-600">Confirm your enrollment details</p>
             </div>
@@ -656,7 +680,7 @@ export function StudentRegistration({ onBack, onComplete }: StudentRegistrationP
               <Button
                 onClick={handleNext}
                 disabled={isLoading}
-                className="flex items-center gap-2 bg-green-600 text-white hover:bg-green-700"
+                className="flex items-center gap-2 bg-healthcare-green text-white hover:bg-green-700 transition-colors duration-200"
               >
                 {isLoading ? (
                   "Processing..."

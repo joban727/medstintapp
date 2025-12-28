@@ -57,7 +57,6 @@ function generateDynamicBreadcrumbs(pathname: string): BreadcrumbSegment[] {
 
   // Build breadcrumbs from URL segments
   let currentPath = ""
-
   segments.forEach((segment, _index) => {
     currentPath += `/${segment}`
 

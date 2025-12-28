@@ -18,25 +18,25 @@ export function Providers({ children }: { children: ReactNode }) {
     !publishableKey.includes("your-key-here")
 
   const content = (
-    <ThemeProvider 
-      attribute="class" 
-      defaultTheme="system" 
-      enableSystem 
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
       disableTransitionOnChange={false}
       storageKey="medstint-theme"
     >
       <EnhancedThemeProvider>
         <NextTopLoader color="var(--primary)" showSpinner={false} />
         {children}
-        <Toaster 
+        <Toaster
           position="top-right"
           toastOptions={{
             className: "theme-transition",
             style: {
-              background: "var(--card)",
-              color: "var(--card-foreground)",
-              border: "1px solid var(--border)",
-            }
+              background: "hsl(var(--card))",
+              color: "hsl(var(--card-foreground))",
+              border: "1px solid hsl(var(--border))",
+            },
           }}
         />
       </EnhancedThemeProvider>
@@ -53,8 +53,6 @@ export function Providers({ children }: { children: ReactNode }) {
       publishableKey={publishableKey}
       signInUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL || "/auth/sign-in"}
       signUpUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL || "/auth/sign-up"}
-      afterSignInUrl={process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL || "/onboarding/user-type"}
-      afterSignUpUrl={process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL || "/onboarding/user-type"}
       signInFallbackRedirectUrl="/onboarding/user-type"
       signUpFallbackRedirectUrl="/onboarding/user-type"
       afterSignOutUrl="/"

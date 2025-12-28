@@ -111,7 +111,7 @@ const getColorClasses = (color: string) => {
   const colorMap = {
     blue: {
       bg: "bg-blue-50 dark:bg-blue-950",
-      icon: "text-blue-600 dark:text-blue-400",
+      icon: "text-medical-primary dark:text-blue-400",
       badge: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
       border: "border-blue-200 dark:border-blue-800",
       gradient: "from-blue-600 to-blue-700",
@@ -119,7 +119,7 @@ const getColorClasses = (color: string) => {
     },
     green: {
       bg: "bg-green-50 dark:bg-green-950",
-      icon: "text-green-600 dark:text-green-400",
+      icon: "text-healthcare-green dark:text-green-400",
       badge: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
       border: "border-green-200 dark:border-green-800",
       gradient: "from-green-600 to-green-700",
@@ -179,11 +179,10 @@ export const MedStintUserRolesEnhanced = () => {
                   key={role.role}
                   onClick={() => setSelectedRole(index)}
                   variant={selectedRole === index ? "default" : "outline"}
-                  className={`flex items-center gap-2 px-6 py-3 ${
-                    selectedRole === index
-                      ? `bg-gradient-to-r ${colors.gradient} text-white`
-                      : "border-slate-300 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-700"
-                  }`}
+                  className={`flex items-center gap-2 px-6 py-3 ${selectedRole === index
+                    ? `bg-gradient-to-r ${colors.gradient} text-white`
+                    : "border-slate-300 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-700"
+                    }`}
                 >
                   <IconComponent
                     className={`h-4 w-4 ${selectedRole === index ? "text-white" : colors.icon}`}
@@ -200,7 +199,6 @@ export const MedStintUserRolesEnhanced = () => {
               if (index !== selectedRole) return null
               const colors = getColorClasses(role.color)
               const IconComponent = role.icon
-
               return (
                 <Card
                   key={role.role}
@@ -212,7 +210,7 @@ export const MedStintUserRolesEnhanced = () => {
                   <CardContent className="relative p-8">
                     <div className="grid gap-8 lg:grid-cols-2">
                       {/* Left Column - Role Info */}
-                      <div className="space-y-6">
+                      <div className="gap-6">
                         <div className="flex items-center gap-4">
                           <div
                             className={`flex h-16 w-16 items-center justify-center rounded-xl ${colors.bg}`}
@@ -228,18 +226,19 @@ export const MedStintUserRolesEnhanced = () => {
                             </h3>
                           </div>
                         </div>
-
                         <p className="text-lg text-slate-600 leading-relaxed dark:text-slate-300">
                           {role.description}
                         </p>
-
                         <div>
                           <h4 className="mb-3 font-semibold text-slate-700 dark:text-slate-300">
                             Key Responsibilities
                           </h4>
-                          <ul className="space-y-2">
+                          <ul className="gap-2">
                             {role.responsibilities.map((item, index) => (
-                              <li key={`responsibility-${item.slice(0, 20).replace(/\s+/g, '-').toLowerCase()}-${index}`} className="flex items-center gap-3">
+                              <li
+                                key={`responsibility-${item.slice(0, 20).replace(/\s+/g, "-").toLowerCase()}-${index}`}
+                                className="flex items-center gap-3"
+                              >
                                 <div className={`h-2 w-2 rounded-full ${colors.highlight}`} />
                                 <span className="text-slate-600 dark:text-slate-300">{item}</span>
                               </li>
@@ -249,7 +248,7 @@ export const MedStintUserRolesEnhanced = () => {
                       </div>
 
                       {/* Right Column - Features & Stats */}
-                      <div className="space-y-6">
+                      <div className="gap-6">
                         <div>
                           <h4 className="mb-4 font-semibold text-slate-700 dark:text-slate-300">
                             Platform Features
@@ -259,20 +258,18 @@ export const MedStintUserRolesEnhanced = () => {
                               const FeatureIcon = feature.icon
                               return (
                                 <div
-                                  key={`feature-${feature.text.slice(0, 20).replace(/\s+/g, '-').toLowerCase()}-${index}`}
-                                  className={`flex items-center gap-3 rounded-lg p-3 transition-all duration-300 ${
-                                    feature.highlight
-                                      ? `${colors.bg} border-l-4 ${colors.border}`
-                                      : "bg-slate-50 dark:bg-slate-800"
-                                  }`}
+                                  key={`feature-${feature.text.slice(0, 20).replace(/\s+/g, "-").toLowerCase()}-${index}`}
+                                  className={`flex items-center gap-3 rounded-lg p-3 transition-all duration-300 ${feature.highlight
+                                    ? `${colors.bg} border-l-4 ${colors.border}`
+                                    : "bg-slate-50 dark:bg-slate-800"
+                                    }`}
                                 >
                                   <FeatureIcon className={`h-5 w-5 ${colors.icon} flex-shrink-0`} />
                                   <span
-                                    className={`font-medium ${
-                                      feature.highlight
-                                        ? "text-slate-900 dark:text-white"
-                                        : "text-slate-600 dark:text-slate-300"
-                                    }`}
+                                    className={`font-medium ${feature.highlight
+                                      ? "text-slate-900 dark:text-white"
+                                      : "text-slate-600 dark:text-slate-300"
+                                      }`}
                                   >
                                     {feature.text}
                                   </span>
@@ -286,7 +283,6 @@ export const MedStintUserRolesEnhanced = () => {
                             })}
                           </div>
                         </div>
-
                         <div>
                           <h4 className="mb-4 font-semibold text-slate-700 dark:text-slate-300">
                             Performance Metrics
@@ -297,6 +293,7 @@ export const MedStintUserRolesEnhanced = () => {
                                 <div className="mb-1 font-bold text-2xl text-slate-900 dark:text-white">
                                   {value}
                                 </div>
+
                                 <div className="text-slate-600 text-xs capitalize dark:text-slate-400">
                                   {key.replace(/([A-Z])/g, " $1").trim()}
                                 </div>
@@ -323,7 +320,7 @@ export const MedStintUserRolesEnhanced = () => {
                   className="group relative overflow-hidden rounded-lg border bg-card p-6 transition-all duration-300 hover:shadow-lg"
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center gap-3">
                       <div className={`rounded-lg p-2 ${colors.bg}`}>
                         <IconComponent className={`h-5 w-5 ${colors.icon}`} />
                       </div>
@@ -336,7 +333,7 @@ export const MedStintUserRolesEnhanced = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => setSelectedRole(index)}
-                      className="opacity-0 transition-opacity group-hover:opacity-100"
+                      className="opacity-0 transition-opacity duration-200 group-hover:opacity-100"
                     >
                       View Details
                     </Button>

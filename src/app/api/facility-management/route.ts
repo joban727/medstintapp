@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/database/db"
-import { facilityManagement } from "@/database/schema"
+import { db } from "@/database/connection-pool"
+import { facilityManagement, schools, users, clinicalSites, clinicalSiteLocations } from "@/database/schema"
 import { getSchoolContext } from "@/lib/school-utils"
 import { eq, and, desc, sql } from "drizzle-orm"
 import { z } from "zod"
@@ -8,19 +8,30 @@ import { z } from "zod"
 // Request validation schemas
 const facilityManagementSchema = z.object({
   facilityName: z.string().min(1).max(200),
-  facilityType: z.enum(['hospital', 'clinic', 'nursing_home', 'outpatient', 'emergency', 'pharmacy', 'laboratory', 'other']),
+  facilityType: z.enum([
+    "hospital",
+    "clinic",
+    "nursing_home",
+    "outpatient",
+    "emergency",
+    "pharmacy",
+    "laboratory",
+    "other",
+  ]),
   address: z.string().min(1).max(500),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   geofenceRadius: z.number().min(10).max(1000).optional().default(100),
+  strictGeofence: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
   isCustom: z.boolean().optional().default(false),
   osmId: z.string().optional(),
   priority: z.number().min(0).max(100).optional().default(0),
-  contactInfo: z.record(z.any()).optional().default({}),
-  operatingHours: z.record(z.any()).optional().default({}),
+  contactInfo: z.record(z.string(), z.any()).optional().default({}),
+  operatingHours: z.record(z.string(), z.any()).optional().default({}),
   specialties: z.array(z.string()).optional().default([]),
   notes: z.string().optional(),
+  clinicalSiteId: z.string().optional(),
 })
 
 const updateFacilitySchema = facilityManagementSchema.partial()
@@ -30,39 +41,34 @@ export async function GET(request: NextRequest) {
   try {
     // Get school context
     const context = await getSchoolContext()
-    if (!context.success) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-
-    const { user, school } = context.data
+    const { userRole, schoolId } = context
 
     // Check if user has admin permissions
-    if (!['SUPER_ADMIN', 'SCHOOL_ADMIN', 'CLINICAL_SUPERVISOR'].includes(user.role)) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      )
+    if (!["SUPER_ADMIN", "SCHOOL_ADMIN", "CLINICAL_SUPERVISOR"].includes(userRole)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
     // Parse query parameters
     const url = new URL(request.url)
-    const isActive = url.searchParams.get('active')
-    const facilityType = url.searchParams.get('type')
-    const limit = Number.parseInt(url.searchParams.get('limit') || '50')
-    const offset = Number.parseInt(url.searchParams.get('offset') || '0')
+    const isActive = url.searchParams.get("active")
+    const facilityType = url.searchParams.get("type")
+    const limit = Number.parseInt(url.searchParams.get("limit") || "50")
+    const offset = Number.parseInt(url.searchParams.get("offset") || "0")
+
+    // Require a school association
+    if (!schoolId) {
+      return NextResponse.json({ error: "User must be associated with a school" }, { status: 400 })
+    }
 
     // Build query conditions
-    const conditions = [eq(facilityManagement.schoolId, school.id)]
-    
+    const conditions = [eq(facilityManagement.schoolId, schoolId)]
+
     if (isActive !== null) {
-      conditions.push(eq(facilityManagement.isActive, isActive === 'true'))
+      conditions.push(eq(facilityManagement.isActive, isActive === "true"))
     }
-    
+
     if (facilityType) {
-      conditions.push(eq(facilityManagement.facilityType, facilityType))
+      conditions.push(eq(facilityManagement.facilityType, facilityType as "hospital" | "clinic" | "nursing_home" | "outpatient" | "emergency" | "pharmacy" | "laboratory" | "other"))
     }
 
     // Get facilities
@@ -83,7 +89,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        facilities: facilities.map(facility => ({
+        facilities: facilities.map((facility) => ({
           id: facility.id,
           facilityName: facility.facilityName,
           facilityType: facility.facilityType,
@@ -91,6 +97,7 @@ export async function GET(request: NextRequest) {
           latitude: Number.parseFloat(facility.latitude),
           longitude: Number.parseFloat(facility.longitude),
           geofenceRadius: facility.geofenceRadius,
+          strictGeofence: facility.strictGeofence,
           isActive: facility.isActive,
           isCustom: facility.isCustom,
           osmId: facility.osmId,
@@ -99,6 +106,7 @@ export async function GET(request: NextRequest) {
           operatingHours: facility.operatingHours,
           specialties: facility.specialties,
           notes: facility.notes,
+          clinicalSiteId: facility.clinicalSiteId,
           createdAt: facility.createdAt,
           updatedAt: facility.updatedAt,
         })),
@@ -109,64 +117,146 @@ export async function GET(request: NextRequest) {
           hasMore: offset + limit < totalCount.count,
         },
         timestamp: new Date().toISOString(),
-      }
+      },
     })
-
   } catch (error) {
-    console.error('Facility management GET error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error("Facility management GET error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 // POST /api/facility-management - Create new managed facility
 export async function POST(request: NextRequest) {
   try {
-    // Get school context
-    const context = await getSchoolContext()
-    if (!context.success) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
+    // Try to get school context, but handle authentication errors gracefully
+    let context
+    try {
+      context = await getSchoolContext()
+    } catch (authError) {
+      console.error("Facility management POST error:", authError)
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    const { user, school } = context.data
+    const { userRole, userId, schoolId } = context
 
     // Check if user has admin permissions
-    if (!['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(user.role)) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      )
+    if (!["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(userRole)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
-    // Parse request body
-    const body = await request.json()
-    const validationResult = facilityManagementSchema.safeParse(body)
+    // Require a school context for facility creation
+    if (!schoolId) {
+      return NextResponse.json({ error: "User must be associated with a school" }, { status: 400 })
+    }
+
+    // Validate associated school exists
+    const [school] = await db
+      .select({ id: schools.id })
+      .from(schools)
+      .where(eq(schools.id, schoolId))
+      .limit(1)
+
+    if (!school) {
+      return NextResponse.json({ error: "Associated school not found" }, { status: 400 })
+    }
+
+    // Check creator exists; allow null if missing
+    const [creator] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+    // Parse request body with JSON safety
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch (parseErr) {
+      console.error("Invalid JSON in request body:", parseErr)
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+    }
+
+    // Normalize potential coordinate wrapper to latitude/longitude
+    const raw = body as any
+    const normalizedBody =
+      raw && raw.coordinates
+        ? { ...raw, latitude: raw.coordinates.latitude, longitude: raw.coordinates.longitude }
+        : raw
+
+    // Simple validation
+    const validationResult = facilityManagementSchema.safeParse(normalizedBody)
 
     if (!validationResult.success) {
       return NextResponse.json(
-        { error: 'Invalid request body', details: validationResult.error.errors },
+        { error: "Invalid request body", details: validationResult.error.issues },
         { status: 400 }
       )
     }
 
     const facilityData = validationResult.data
 
+    // Validate clinical site if provided
+    if (facilityData.clinicalSiteId) {
+      const [site] = await db
+        .select({ id: clinicalSites.id })
+        .from(clinicalSites)
+        .where(eq(clinicalSites.id, facilityData.clinicalSiteId))
+        .limit(1)
+
+      if (!site) {
+        return NextResponse.json({ error: "Selected clinical site not found" }, { status: 400 })
+      }
+    }
     // Create new facility
-    const [newFacility] = await db
-      .insert(facilityManagement)
-      .values({
-        schoolId: school.id,
-        createdBy: user.id,
-        ...facilityData,
-        latitude: facilityData.latitude.toString(),
-        longitude: facilityData.longitude.toString(),
-      })
-      .returning()
+    const sanitizedValues = {
+      schoolId: schoolId,
+      createdBy: creator ? userId : undefined,
+      facilityName: facilityData.facilityName,
+      facilityType: facilityData.facilityType,
+      address: facilityData.address,
+      latitude: facilityData.latitude.toFixed(8),
+      longitude: facilityData.longitude.toFixed(8),
+      geofenceRadius: facilityData.geofenceRadius,
+      strictGeofence: facilityData.strictGeofence,
+      isActive: facilityData.isActive ?? true,
+      isCustom: facilityData.isCustom ?? false,
+      osmId: facilityData.osmId,
+      priority: facilityData.priority,
+      contactInfo:
+        facilityData.contactInfo && Object.keys(facilityData.contactInfo).length > 0
+          ? facilityData.contactInfo
+          : undefined,
+      operatingHours:
+        facilityData.operatingHours && Object.keys(facilityData.operatingHours).length > 0
+          ? facilityData.operatingHours
+          : undefined,
+      specialties:
+        facilityData.specialties && facilityData.specialties.length > 0
+          ? facilityData.specialties
+          : undefined,
+      notes: facilityData.notes,
+      clinicalSiteId: facilityData.clinicalSiteId,
+    }
+
+    // Use a transaction to ensure atomic creation and allow clearer error handling
+    const newFacility = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(facilityManagement).values(sanitizedValues).returning()
+
+      // Sync to clinical site location if linked
+      if (sanitizedValues.clinicalSiteId) {
+        // Find primary location or just update all locations for this site?
+        // For now, let's update all locations for this site to match the facility settings
+        // This assumes 1:1 or 1:many where all share the same policy
+        await tx
+          .update(clinicalSiteLocations)
+          .set({
+            radius: sanitizedValues.geofenceRadius,
+            strictGeofence: sanitizedValues.strictGeofence,
+          })
+          .where(eq(clinicalSiteLocations.clinicalSiteId, sanitizedValues.clinicalSiteId))
+      }
+
+      return created
+    })
 
     return NextResponse.json({
       success: true,
@@ -179,6 +269,7 @@ export async function POST(request: NextRequest) {
           latitude: Number.parseFloat(newFacility.latitude),
           longitude: Number.parseFloat(newFacility.longitude),
           geofenceRadius: newFacility.geofenceRadius,
+          strictGeofence: newFacility.strictGeofence,
           isActive: newFacility.isActive,
           isCustom: newFacility.isCustom,
           osmId: newFacility.osmId,
@@ -187,18 +278,33 @@ export async function POST(request: NextRequest) {
           operatingHours: newFacility.operatingHours,
           specialties: newFacility.specialties,
           notes: newFacility.notes,
+          clinicalSiteId: newFacility.clinicalSiteId,
           createdAt: newFacility.createdAt,
           updatedAt: newFacility.updatedAt,
         },
-        message: 'Facility created successfully',
+        message: "Facility created successfully",
         timestamp: new Date().toISOString(),
-      }
+      },
     })
-
   } catch (error) {
-    console.error('Facility management POST error:', error)
+    console.error("Facility management POST error:", error)
+    console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace")
+    console.error("Error message:", error instanceof Error ? error.message : String(error))
+
+    const isDevelopment = process.env.NODE_ENV === "development"
+    const isTransactionError = error instanceof Error && /transaction/i.test(error.message)
+    const message = isTransactionError ? "Transaction error occurred" : "Internal server error"
+
     return NextResponse.json(
-      { error: 'Internal server error' },
+      {
+        error: message,
+        // Only include verbose details for non-transaction errors in development
+        ...(isDevelopment &&
+          !isTransactionError && {
+          details: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        }),
+      },
       { status: 500 }
     )
   }
@@ -209,32 +315,24 @@ export async function PUT(request: NextRequest) {
   try {
     // Get school context
     const context = await getSchoolContext()
-    if (!context.success) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-
-    const { user, school } = context.data
+    const { userRole, schoolId } = context
 
     // Check if user has admin permissions
-    if (!['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(user.role)) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      )
+    if (!["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(userRole)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
+
+    // Require a school association
+    if (!schoolId) {
+      return NextResponse.json({ error: "User must be associated with a school" }, { status: 400 })
     }
 
     // Extract facility ID from URL
     const url = new URL(request.url)
-    const facilityId = url.pathname.split('/').pop()
+    const facilityId = url.pathname.split("/").pop()
 
     if (!facilityId) {
-      return NextResponse.json(
-        { error: 'Facility ID required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Facility ID required" }, { status: 400 })
     }
 
     // Parse request body
@@ -243,7 +341,7 @@ export async function PUT(request: NextRequest) {
 
     if (!validationResult.success) {
       return NextResponse.json(
-        { error: 'Invalid request body', details: validationResult.error.errors },
+        { error: "Invalid request body", details: validationResult.error.issues },
         { status: 400 }
       )
     }
@@ -266,19 +364,29 @@ export async function PUT(request: NextRequest) {
         ...updateData,
         updatedAt: new Date(),
       })
-      .where(
-        and(
-          eq(facilityManagement.id, facilityId),
-          eq(facilityManagement.schoolId, school.id)
-        )
-      )
+      .where(and(eq(facilityManagement.id, facilityId), eq(facilityManagement.schoolId, schoolId)))
       .returning()
 
+    // Sync updates to clinical site locations if linked
+    if (updatedFacility && updatedFacility.clinicalSiteId) {
+      const shouldSync =
+        updates.geofenceRadius !== undefined || updates.strictGeofence !== undefined
+
+      if (shouldSync) {
+        const updatePayload: any = {}
+        if (updates.geofenceRadius !== undefined) updatePayload.radius = updates.geofenceRadius
+        if (updates.strictGeofence !== undefined)
+          updatePayload.strictGeofence = updates.strictGeofence
+
+        await db
+          .update(clinicalSiteLocations)
+          .set(updatePayload)
+          .where(eq(clinicalSiteLocations.clinicalSiteId, updatedFacility.clinicalSiteId))
+      }
+    }
+
     if (!updatedFacility) {
-      return NextResponse.json(
-        { error: 'Facility not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: "Facility not found" }, { status: 404 })
     }
 
     return NextResponse.json({
@@ -292,6 +400,7 @@ export async function PUT(request: NextRequest) {
           latitude: Number.parseFloat(updatedFacility.latitude),
           longitude: Number.parseFloat(updatedFacility.longitude),
           geofenceRadius: updatedFacility.geofenceRadius,
+          strictGeofence: updatedFacility.strictGeofence,
           isActive: updatedFacility.isActive,
           isCustom: updatedFacility.isCustom,
           osmId: updatedFacility.osmId,
@@ -300,20 +409,17 @@ export async function PUT(request: NextRequest) {
           operatingHours: updatedFacility.operatingHours,
           specialties: updatedFacility.specialties,
           notes: updatedFacility.notes,
+          clinicalSiteId: updatedFacility.clinicalSiteId,
           createdAt: updatedFacility.createdAt,
           updatedAt: updatedFacility.updatedAt,
         },
-        message: 'Facility updated successfully',
+        message: "Facility updated successfully",
         timestamp: new Date().toISOString(),
-      }
+      },
     })
-
   } catch (error) {
-    console.error('Facility management PUT error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error("Facility management PUT error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
@@ -322,64 +428,45 @@ export async function DELETE(request: NextRequest) {
   try {
     // Get school context
     const context = await getSchoolContext()
-    if (!context.success) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      )
-    }
-
-    const { user, school } = context.data
+    const { userRole, schoolId } = context
 
     // Check if user has admin permissions
-    if (!['SUPER_ADMIN', 'SCHOOL_ADMIN'].includes(user.role)) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      )
+    if (!["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(userRole)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
+
+    // Require a school association
+    if (!schoolId) {
+      return NextResponse.json({ error: "User must be associated with a school" }, { status: 400 })
     }
 
     // Extract facility ID from URL
     const url = new URL(request.url)
-    const facilityId = url.pathname.split('/').pop()
+    const facilityId = url.pathname.split("/").pop()
 
     if (!facilityId) {
-      return NextResponse.json(
-        { error: 'Facility ID required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Facility ID required" }, { status: 400 })
     }
 
     // Delete facility
     const deleted = await db
       .delete(facilityManagement)
-      .where(
-        and(
-          eq(facilityManagement.id, facilityId),
-          eq(facilityManagement.schoolId, school.id)
-        )
-      )
+      .where(and(eq(facilityManagement.id, facilityId), eq(facilityManagement.schoolId, schoolId)))
 
     if (deleted.rowCount === 0) {
-      return NextResponse.json(
-        { error: 'Facility not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: "Facility not found" }, { status: 404 })
     }
 
     return NextResponse.json({
       success: true,
       data: {
-        message: 'Facility deleted successfully',
+        message: "Facility deleted successfully",
         timestamp: new Date().toISOString(),
-      }
+      },
     })
-
   } catch (error) {
-    console.error('Facility management DELETE error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error("Facility management DELETE error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+

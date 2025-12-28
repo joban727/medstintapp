@@ -3,36 +3,40 @@ export async function retryWithBackoff<T>(
   maxRetries = 3,
   baseDelay = 1000
 ): Promise<T> {
-  let lastError: Error;
-  
+  let lastError: Error = new Error("No attempts made")
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await fn();
+      return await fn()
     } catch (error) {
-      lastError = error as Error;
-      
+      lastError = error as Error
+
       if (attempt === maxRetries) {
-        throw lastError;
+        throw lastError
       }
-      
+
       // Exponential backoff: 1000ms, 2000ms, 4000ms
-      const delay = baseDelay * 2 ** attempt;
-      await new Promise(resolve => setTimeout(resolve, delay));
+      const delay = baseDelay * 2 ** attempt
+      await new Promise((resolve) => setTimeout(resolve, delay))
     }
   }
-  
-  throw lastError!;
+
+  // If we exit the loop without returning or throwing, rethrow the last error if present
+  if (lastError) {
+    throw lastError
+  }
+  throw new Error("Retry failed without captured error")
 }
 
 export function withRetry<T>(
   fn: () => Promise<T>,
   options?: {
-    maxRetries?: number;
-    delay?: number;
-    onRetry?: (error: Error, attempt: number) => void;
+    maxRetries?: number
+    delay?: number
+    onRetry?: (error: Error, attempt: number) => void
   }
 ): Promise<T> {
-  const { maxRetries = 3, delay = 1000, onRetry } = options || {};
-  
-  return retryWithBackoff(fn, maxRetries, delay);
+  const { maxRetries = 3, delay = 1000, onRetry } = options || {}
+
+  return retryWithBackoff(fn, maxRetries, delay)
 }

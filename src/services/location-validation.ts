@@ -1,12 +1,14 @@
-import { db } from '@/database/db'
-import { 
-  clinicalSites, 
-  clinicalSiteLocations, 
+import { db } from "@/database/connection-pool"
+import {
+  clinicalSites,
+  clinicalSiteLocations,
   locationVerifications,
   locationPermissions,
-  timeRecords 
+  timeRecords,
+  rotations
 } from '@/database/schema'
-import { eq, and, sql } from 'drizzle-orm'
+import { sql, desc, and, eq } from "drizzle-orm"
+import { calculateDistance } from "@/lib/geo-utils"
 
 export interface LocationValidationResult {
   isValid: boolean
@@ -48,43 +50,23 @@ export interface GeofenceValidationOptions {
 }
 
 /**
- * Calculate distance between two coordinates using Haversine formula
- */
-export function calculateDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371000 // Earth's radius in meters
-  const φ1 = (lat1 * Math.PI) / 180
-  const φ2 = (lat2 * Math.PI) / 180
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180
-  const Δλ = ((lon2 - lon1) * Math.PI) / 180
-
-  const a =
-    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-
-  return R * c
-}
-
-/**
  * Validate location accuracy level
  */
 export function validateLocationAccuracy(accuracy: number): {
   level: 'high' | 'medium' | 'low'
   acceptable: boolean
+  value: number
 } {
   if (accuracy <= 10) {
-    return { level: 'high', acceptable: true }
-  }if (accuracy <= 50) {
-    return { level: 'medium', acceptable: true }
-  }if (accuracy <= 100) {
-    return { level: 'low', acceptable: true }
+    return { level: 'high', acceptable: true, value: accuracy }
   }
-    return { level: 'low', acceptable: false }
+  if (accuracy <= 50) {
+    return { level: 'medium', acceptable: true, value: accuracy }
+  }
+  if (accuracy <= 100) {
+    return { level: 'low', acceptable: true, value: accuracy }
+  }
+  return { level: 'low', acceptable: false, value: accuracy }
 }
 
 /**
@@ -100,7 +82,7 @@ export async function findNearestClinicalSite(
   distance: number
 } | null> {
   try {
-    let query = db
+    const query = db
       .select({
         site: clinicalSites,
         location: clinicalSiteLocations,
@@ -116,11 +98,12 @@ export async function findNearestClinicalSite(
       })
       .from(clinicalSiteLocations)
       .innerJoin(clinicalSites, eq(clinicalSites.id, clinicalSiteLocations.clinicalSiteId))
-      .where(eq(clinicalSiteLocations.isActive, true))
-
-    if (clinicalSiteId) {
-      query = query.where(eq(clinicalSites.id, clinicalSiteId))
-    }
+      .where(
+        and(
+          eq(clinicalSiteLocations.isActive, true),
+          clinicalSiteId ? eq(clinicalSites.id, clinicalSiteId) : undefined
+        )
+      )
 
     const results = await query
       .orderBy(sql`distance`)
@@ -154,10 +137,11 @@ export async function verifyLocationProximity(
         site: clinicalSites,
       })
       .from(timeRecords)
-      .innerJoin(clinicalSites, eq(clinicalSites.id, timeRecords.clinicalSiteId))
+      .innerJoin(rotations, eq(timeRecords.rotationId, rotations.id))
+      .innerJoin(clinicalSites, eq(rotations.clinicalSiteId, clinicalSites.id))
       .where(and(
         eq(timeRecords.id, timeRecordId),
-        eq(timeRecords.userId, userId)
+        eq(timeRecords.studentId, userId)
       ))
       .limit(1)
 
@@ -212,15 +196,16 @@ export async function verifyLocationProximity(
 /**
  * Comprehensive location validation with geofencing
  */
+/**
+ * Comprehensive location validation with geofencing
+ */
 export async function validateLocationWithGeofence(
   options: GeofenceValidationOptions
 ): Promise<LocationValidationResult> {
   const {
-    userId,
     latitude,
     longitude,
     accuracy,
-    timeRecordId,
     clinicalSiteId,
     strictMode = false
   } = options
@@ -243,7 +228,11 @@ export async function validateLocationWithGeofence(
     )
 
     if (!nearestSite) {
-      result.errors.push('No clinical site locations found')
+      // If no site location is found, we can't validate geofence.
+      // Policy: If site has no location set, we allow it but flag it?
+      // For now, we'll treat it as valid but add a warning.
+      result.isValid = true
+      result.warnings.push('Clinical site has no location coordinates configured.')
       return result
     }
 
@@ -253,11 +242,11 @@ export async function validateLocationWithGeofence(
       id: site.id,
       name: site.name,
       address: site.address,
-      allowedRadius: location.allowedRadius,
+      allowedRadius: location.radius, // Use radius from location table
     }
 
     // Check geofence
-    result.isWithinGeofence = distance <= location.allowedRadius
+    result.isWithinGeofence = distance <= location.radius
 
     // Validate accuracy
     if (!result.accuracy.acceptable) {
@@ -266,14 +255,23 @@ export async function validateLocationWithGeofence(
       )
     }
 
+    // Determine strict mode: either global env var OR site-specific setting
+    const isStrict = strictMode || location.strictGeofence
+
     // Check proximity
     if (!result.isWithinGeofence) {
-      result.errors.push(
-        `Location is ${result.distanceFromSite}m away from ${site.name} (allowed: ${location.allowedRadius}m)`
-      )
+      const message = `Location is ${result.distanceFromSite}m away from ${site.name} (allowed: ${location.radius}m)`
+      if (isStrict) {
+        result.errors.push(message)
+        if (location.strictGeofence) {
+          result.errors.push("This clinical site enforces strict geofencing.")
+        }
+      } else {
+        result.warnings.push(message)
+      }
     }
 
-    // Add warnings
+    // Add warnings for edge cases
     if (result.accuracy.level === 'low' && result.accuracy.acceptable) {
       result.warnings.push(
         `Location accuracy is low (±${Math.round(accuracy)}m). Consider moving to an area with better GPS signal.`
@@ -287,18 +285,18 @@ export async function validateLocationWithGeofence(
     }
 
     // Determine overall validity
-    result.isValid = result.isWithinGeofence && result.accuracy.acceptable
-
-    // In strict mode, require high accuracy
-    if (strictMode && result.accuracy.level !== 'high') {
-      result.isValid = false
-      result.errors.push('High accuracy GPS required in strict mode')
+    // In non-strict mode, being out of geofence is just a warning (flagged), so it's "valid" for processing but "flagged" in status
+    if (isStrict) {
+      result.isValid = result.isWithinGeofence && result.accuracy.acceptable
+    } else {
+      // In soft mode, we only fail if accuracy is completely unacceptable
+      result.isValid = result.accuracy.acceptable
     }
 
     return result
   } catch (error) {
     console.error('Error validating location with geofence:', error)
-    result.errors.push('Failed to validate location')
+    result.errors.push('Failed to validate location due to system error')
     return result
   }
 }
@@ -316,7 +314,7 @@ export async function checkLocationPermissions(userId: string): Promise<{
       .select()
       .from(locationPermissions)
       .where(eq(locationPermissions.userId, userId))
-      .orderBy(sql`${locationPermissions.updatedAt} DESC`)
+      .orderBy(desc(locationPermissions.updatedAt))
       .limit(1)
 
     if (permissions.length === 0) {
@@ -345,23 +343,23 @@ export async function checkLocationPermissions(userId: string): Promise<{
  * Save location verification result to database
  */
 export async function saveLocationVerification(
-  userId: string,
+  timeRecordId: string,
   verificationType: 'clock_in' | 'clock_out',
   validationResult: LocationValidationResult,
   userLatitude: number,
   userLongitude: number,
   userAccuracy: number,
-  locationSource: 'gps' | 'network' | 'passive',
+  locationSource: 'gps' | 'network' | 'manual', // Fixed enum to match schema
   metadata?: any
 ): Promise<string> {
   try {
-    const verificationStatus = validationResult.isValid 
-      ? 'approved' 
+    const verificationStatus = validationResult.isValid
+      ? 'approved'
       : validationResult.warnings.length > 0 && validationResult.errors.length === 0
         ? 'flagged'
         : 'rejected'
 
-    const flagReason = validationResult.errors.length > 0 
+    const flagReason = validationResult.errors.length > 0
       ? validationResult.errors.join('; ')
       : validationResult.warnings.length > 0
         ? validationResult.warnings.join('; ')
@@ -370,19 +368,18 @@ export async function saveLocationVerification(
     const verificationRecord = await db
       .insert(locationVerifications)
       .values({
-        userId,
+        timeRecordId,
         verificationType,
         userLatitude: userLatitude.toString(),
         userLongitude: userLongitude.toString(),
-        userAccuracy,
+        userAccuracy: userAccuracy.toString(),
         locationSource,
         clinicalSiteLocationId: validationResult.nearestSite?.id,
-        distanceFromSite: validationResult.distanceFromSite,
+        distanceFromSite: validationResult.distanceFromSite.toString(),
         isWithinGeofence: validationResult.isWithinGeofence,
         verificationStatus,
         flagReason,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        createdAt: new Date(),
+        metadata: metadata ?? null,
       })
       .returning({ id: locationVerifications.id })
 

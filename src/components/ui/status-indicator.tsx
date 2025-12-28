@@ -9,17 +9,17 @@ interface StatusIndicatorProps {
   size?: "sm" | "md" | "lg"
 }
 
-export function StatusIndicator({ 
-  type, 
-  status, 
-  text, 
-  className, 
-  size = "md" 
+export function StatusIndicator({
+  type,
+  status,
+  text,
+  className,
+  size = "md",
 }: StatusIndicatorProps) {
   const sizeClasses = {
     sm: "w-4 h-4",
     md: "w-5 h-5",
-    lg: "w-6 h-6"
+    lg: "w-6 h-6",
   }
 
   const getIcon = () => {
@@ -29,9 +29,11 @@ export function StatusIndicator({
       case "location":
         return <MapPin className={sizeClasses[size]} />
       case "connection":
-        return status === "active" ? 
-          <Wifi className={sizeClasses[size]} /> : 
+        return status === "active" ? (
+          <Wifi className={sizeClasses[size]} />
+        ) : (
           <WifiOff className={sizeClasses[size]} />
+        )
       case "success":
         return <CheckCircle className={sizeClasses[size]} />
       case "warning":
@@ -45,12 +47,12 @@ export function StatusIndicator({
 
   const getStatusColor = () => {
     if (status === "loading") return "text-blue-500 animate-pulse"
-    
+
     switch (type) {
       case "success":
         return "text-green-500"
       case "warning":
-        return "text-yellow-500"
+        return "text-warning"
       case "error":
         return "text-red-500"
       case "connection":
@@ -71,15 +73,15 @@ export function StatusIndicator({
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      <div className={cn("flex-shrink-0", getStatusColor())}>
-        {getIcon()}
-      </div>
+      <div className={cn("flex-shrink-0", getStatusColor())}>{getIcon()}</div>
       {text && (
-        <span className={cn(
-          "text-sm font-medium",
-          status === "loading" ? "animate-pulse" : "",
-          getStatusColor()
-        )}>
+        <span
+          className={cn(
+            "text-sm font-medium",
+            status === "loading" ? "animate-pulse" : "",
+            getStatusColor()
+          )}
+        >
           {text}
         </span>
       )}

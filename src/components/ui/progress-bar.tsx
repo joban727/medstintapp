@@ -10,36 +10,33 @@ interface ProgressBarProps {
   animated?: boolean
 }
 
-export function ProgressBar({ 
-  value, 
-  max = 100, 
-  className, 
+export function ProgressBar({
+  value,
+  max = 100,
+  className,
   showPercentage = false,
   size = "md",
   variant = "default",
-  animated = false
+  animated = false,
 }: ProgressBarProps) {
   const percentage = Math.min(Math.max((value / max) * 100, 0), 100)
-  
+
   const sizeClasses = {
     sm: "h-1",
     md: "h-2",
-    lg: "h-3"
+    lg: "h-3",
   }
 
   const variantClasses = {
     default: "bg-blue-500",
-    success: "bg-green-500", 
-    warning: "bg-yellow-500",
-    error: "bg-red-500"
+    success: "bg-green-500",
+    warning: "bg-warning",
+    error: "bg-red-500",
   }
 
   return (
     <div className={cn("w-full", className)}>
-      <div className={cn(
-        "w-full bg-gray-200 rounded-full overflow-hidden",
-        sizeClasses[size]
-      )}>
+      <div className={cn("w-full bg-gray-200 rounded-full overflow-hidden", sizeClasses[size])}>
         <div
           className={cn(
             "h-full transition-all duration-300 ease-out rounded-full",
@@ -50,9 +47,7 @@ export function ProgressBar({
         />
       </div>
       {showPercentage && (
-        <div className="mt-1 text-xs text-gray-600 text-right">
-          {Math.round(percentage)}%
-        </div>
+        <div className="mt-1 text-xs text-gray-600 text-right">{Math.round(percentage)}%</div>
       )}
     </div>
   )

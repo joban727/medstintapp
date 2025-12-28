@@ -1,16 +1,25 @@
 "use client"
 
-import { MapPin, Navigation, Shield, Clock, AlertTriangle, CheckCircle, Wifi, WifiOff } from "lucide-react"
+import {
+  MapPin,
+  Navigation,
+  Shield,
+  Clock,
+  AlertTriangle,
+  CheckCircle,
+  Wifi,
+  WifiOff,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import type { LocationData } from "@/hooks/use-location"
-import { 
-  formatDistance, 
-  formatCoordinates, 
+import {
+  formatDistance,
+  formatCoordinates,
   getAccuracyDescription,
-  getLocationSourceReliability 
+  getLocationSourceReliability,
 } from "@/utils/location-validation"
 import { StatusIndicator } from "@/components/ui/status-indicator"
 import { locationNameService, type LocationDisplayInfo } from "@/lib/location-name-service"
@@ -26,7 +35,7 @@ interface LocationDisplayProps {
   distance?: number
   siteName?: string
   className?: string
-  variant?: 'default' | 'compact'
+  variant?: "default" | "compact"
 }
 
 interface LocationMapPreviewProps {
@@ -40,12 +49,12 @@ interface LocationMapPreviewProps {
 /**
  * Simple map preview component using static map service
  */
-export function LocationMapPreview({ 
-  latitude, 
-  longitude, 
-  accuracy, 
+export function LocationMapPreview({
+  latitude,
+  longitude,
+  accuracy,
   siteName,
-  className = "" 
+  className = "",
 }: LocationMapPreviewProps) {
   const [locationDisplayInfo, setLocationDisplayInfo] = useState<LocationDisplayInfo | null>(null)
   const [isLoadingLocationName, setIsLoadingLocationName] = useState(false)
@@ -53,21 +62,21 @@ export function LocationMapPreview({
   // Get user-friendly location name
   useEffect(() => {
     setIsLoadingLocationName(true)
-    locationNameService.getLocationDisplayName({
-      latitude,
-      longitude
-    }).then(info => {
-      setLocationDisplayInfo(info)
-      setIsLoadingLocationName(false)
-    }).catch(error => {
-      console.error('Failed to get location display name:', error)
-      setIsLoadingLocationName(false)
-    })
+    locationNameService
+      .getLocationDisplayName({ latitude, longitude })
+      .then((info) => {
+        setLocationDisplayInfo(info)
+        setIsLoadingLocationName(false)
+      })
+      .catch((error) => {
+        console.error("Failed to get location display name:", error)
+        setIsLoadingLocationName(false)
+      })
   }, [latitude, longitude])
 
   // Using a static map service for preview (can be replaced with interactive map)
   const mapUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s-l+000(${longitude},${latitude})/${longitude},${latitude},15,0/300x200@2x?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw`
-  
+
   return (
     <div className={`relative overflow-hidden rounded-lg border ${className}`}>
       <div className="aspect-[3/2] bg-gray-100 flex items-center justify-center">
@@ -80,18 +89,13 @@ export function LocationMapPreview({
               Loading location...
             </div>
           ) : (
-            <div className="text-xs">
-              {locationDisplayInfo?.displayName || 'Current Location'}
-            </div>
+            <div className="text-xs">{locationDisplayInfo?.displayName || "Current Location"}</div>
           )}
           {siteName && (
-            <div className="text-xs mt-1 font-medium text-blue-600">
-              {siteName}
-            </div>
+            <div className="text-xs mt-1 font-medium text-medical-primary">{siteName}</div>
           )}
         </div>
       </div>
-      
       {/* Accuracy indicator overlay */}
       <div className="absolute top-2 right-2">
         <Badge variant="secondary" className="text-xs">
@@ -105,52 +109,46 @@ export function LocationMapPreview({
 /**
  * Location accuracy indicator component
  */
-export function LocationAccuracyIndicator({ 
-  accuracy, 
-  className = "" 
-}: { 
+export function LocationAccuracyIndicator({
+  accuracy,
+  className = "",
+}: {
   accuracy: number
-  className?: string 
+  className?: string
 }) {
   const { level, description, color } = getAccuracyDescription(accuracy)
-  
+
   const getIcon = () => {
     switch (level) {
-      case 'excellent':
-      case 'good':
+      case "excellent":
+      case "good":
         return <CheckCircle className="h-4 w-4" />
-      case 'fair':
+      case "fair":
         return <Navigation className="h-4 w-4" />
-      case 'poor':
+      case "poor":
         return <AlertTriangle className="h-4 w-4" />
     }
   }
 
   const getBgColor = () => {
     switch (level) {
-      case 'excellent':
-        return 'bg-green-50 border-green-200'
-      case 'good':
-        return 'bg-green-50 border-green-200'
-      case 'fair':
-        return 'bg-yellow-50 border-yellow-200'
-      case 'poor':
-        return 'bg-red-50 border-red-200'
+      case "excellent":
+        return "bg-green-50 border-green-200"
+      case "good":
+        return "bg-green-50 border-green-200"
+      case "fair":
+        return "bg-yellow-50 border-yellow-200"
+      case "poor":
+        return "bg-red-50 border-red-200"
     }
   }
 
   return (
     <div className={`flex items-center gap-2 p-2 rounded-lg border ${getBgColor()} ${className}`}>
-      <div className={color}>
-        {getIcon()}
-      </div>
+      <div className={color}>{getIcon()}</div>
       <div className="flex-1">
-        <div className={`text-sm font-medium ${color}`}>
-          {description}
-        </div>
-        <div className="text-xs text-gray-600">
-          Accuracy: ±{Math.round(accuracy)} meters
-        </div>
+        <div className={`text-sm font-medium ${color}`}>{description}</div>
+        <div className="text-xs text-gray-600">Accuracy: ±{Math.round(accuracy)} meters</div>
       </div>
     </div>
   )
@@ -159,28 +157,30 @@ export function LocationAccuracyIndicator({
 /**
  * Location source indicator
  */
-export function LocationSourceIndicator({ 
-  source, 
-  className = "" 
-}: { 
+export function LocationSourceIndicator({
+  source,
+  className = "",
+}: {
   source: string
-  className?: string 
+  className?: string
 }) {
   const { reliability, description } = getLocationSourceReliability(source)
-  
+
   const getColor = () => {
     switch (reliability) {
-      case 'high':
-        return 'text-green-600 bg-green-50 border-green-200'
-      case 'medium':
-        return 'text-yellow-600 bg-yellow-50 border-yellow-200'
-      case 'low':
-        return 'text-red-600 bg-red-50 border-red-200'
+      case "high":
+        return "text-healthcare-green bg-green-50 border-green-200"
+      case "medium":
+        return "text-yellow-600 bg-yellow-50 border-yellow-200"
+      case "low":
+        return "text-error bg-red-50 border-red-200"
     }
   }
 
   return (
-    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs ${getColor()} ${className}`}>
+    <div
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs ${getColor()} ${className}`}
+    >
       <Shield className="h-3 w-3" />
       <span className="font-medium">{source.toUpperCase()}</span>
       <span className="text-gray-500">• {description}</span>
@@ -201,29 +201,31 @@ export function LocationDisplay({
   distance,
   siteName,
   className = "",
-  variant = 'default'
+  variant = "default",
 }: LocationDisplayProps) {
   const [locationDisplayInfo, setLocationDisplayInfo] = useState<LocationDisplayInfo | null>(null)
   const [isLoadingLocationName, setIsLoadingLocationName] = useState(false)
 
   // Get user-friendly location name
   useEffect(() => {
-    if (location && 
-        typeof location.latitude === 'number' && 
-        typeof location.longitude === 'number' &&
-        !isNaN(location.latitude) && 
-        !isNaN(location.longitude)) {
+    if (
+      location &&
+      typeof location.latitude === "number" &&
+      typeof location.longitude === "number" &&
+      !isNaN(location.latitude) &&
+      !isNaN(location.longitude)
+    ) {
       setIsLoadingLocationName(true)
-      locationNameService.getLocationDisplayName({
-        latitude: location.latitude,
-        longitude: location.longitude
-      }).then(info => {
-        setLocationDisplayInfo(info)
-        setIsLoadingLocationName(false)
-      }).catch(error => {
-        console.error('Failed to get location display name:', error)
-        setIsLoadingLocationName(false)
-      })
+      locationNameService
+        .getLocationDisplayName({ latitude: location.latitude, longitude: location.longitude })
+        .then((info) => {
+          setLocationDisplayInfo(info)
+          setIsLoadingLocationName(false)
+        })
+        .catch((error) => {
+          console.error("Failed to get location display name:", error)
+          setIsLoadingLocationName(false)
+        })
     }
   }, [location])
 
@@ -244,13 +246,11 @@ export function LocationDisplay({
     return (
       <Card className={className}>
         <CardContent className="p-4">
-          <div className="flex items-center gap-2 text-red-600">
+          <div className="flex items-center gap-2 text-error">
             <AlertTriangle className="h-4 w-4" />
             <span className="text-sm font-medium">Location Error</span>
           </div>
-          <div className="mt-2 text-sm text-gray-600">
-            {error}
-          </div>
+          <div className="mt-2 text-sm text-gray-600">{error}</div>
           <div className="mt-3 text-xs text-gray-500">
             You can still clock in/out manually without location verification.
           </div>
@@ -260,7 +260,7 @@ export function LocationDisplay({
   }
 
   if (!hasPermission) {
-    if (variant === 'compact') {
+    if (variant === "compact") {
       return (
         <div className={`flex items-center gap-2 text-sm text-yellow-600 ${className}`}>
           <AlertTriangle className="h-4 w-4" />
@@ -268,6 +268,7 @@ export function LocationDisplay({
         </div>
       )
     }
+
     return (
       <Card className={className}>
         <CardContent className="p-4">
@@ -276,7 +277,8 @@ export function LocationDisplay({
             <span className="text-sm font-medium">Location Permission Denied</span>
           </div>
           <div className="mt-2 text-sm text-gray-600">
-            Please enable location permissions in your browser settings to use location-based features.
+            Please enable location permissions in your browser settings to use location-based
+            features.
           </div>
           <div className="mt-3 text-xs text-gray-500">
             You can still clock in/out manually without location verification.
@@ -287,12 +289,12 @@ export function LocationDisplay({
   }
 
   if (!location) {
-    if (variant === 'compact') {
+    if (variant === "compact") {
       return (
         <div className={`flex items-center gap-2 text-sm text-gray-500 ${className}`}>
           <MapPin className="h-4 w-4" />
           <span>Location not available</span>
-          {process.env.NODE_ENV === 'development' && (
+          {process.env.NODE_ENV === "development" && (
             <Badge variant="outline" className="text-xs ml-2">
               DEV MODE
             </Badge>
@@ -300,13 +302,14 @@ export function LocationDisplay({
         </div>
       )
     }
+
     return (
       <Card className={className}>
         <CardContent className="p-4">
           <div className="flex items-center gap-2 text-gray-500">
             <MapPin className="h-4 w-4" />
             <span className="text-sm">Location not available</span>
-            {process.env.NODE_ENV === 'development' && (
+            {process.env.NODE_ENV === "development" && (
               <Badge variant="outline" className="text-xs ml-2">
                 DEV MODE
               </Badge>
@@ -320,7 +323,7 @@ export function LocationDisplay({
     )
   }
 
-  if (variant === 'compact') {
+  if (variant === "compact") {
     const { level, color } = getAccuracyDescription(location.accuracy)
     return (
       <div className={`flex items-center gap-2 text-sm ${className}`}>
@@ -332,7 +335,7 @@ export function LocationDisplay({
           </div>
         ) : (
           <span className="font-medium">
-            {locationDisplayInfo?.displayName || 'Current Location'}
+            {locationDisplayInfo?.displayName || "Current Location"}
           </span>
         )}
         <Badge variant="outline" className="text-xs">
@@ -358,7 +361,7 @@ export function LocationDisplay({
               Current Location
             </span>
           ) : (
-            locationDisplayInfo?.displayName || 'Current Location'
+            locationDisplayInfo?.displayName || "Current Location"
           )}
           {distance !== undefined && (
             <Badge variant="outline" className="ml-auto">
@@ -367,8 +370,7 @@ export function LocationDisplay({
           )}
         </CardTitle>
       </CardHeader>
-      
-      <CardContent className="space-y-4">
+      <CardContent className="gap-4">
         {/* Map Preview */}
         {showMap && (
           <LocationMapPreview
@@ -381,7 +383,7 @@ export function LocationDisplay({
 
         {/* Location Details */}
         {showDetails && (
-          <div className="space-y-3">
+          <div className="gap-3">
             {/* Accuracy Indicator */}
             <LocationAccuracyIndicator accuracy={location.accuracy} />
 
@@ -391,9 +393,9 @@ export function LocationDisplay({
                 <span className="text-gray-600">Location:</span>
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{locationDisplayInfo.displayName}</span>
-                  {locationDisplayInfo.type === 'facility' && (
+                  {locationDisplayInfo.type === "facility" && (
                     <Badge variant="secondary" className="text-xs">
-                      {locationDisplayInfo.details?.facilityType || 'Facility'}
+                      {locationDisplayInfo.details?.facilityType || "Facility"}
                     </Badge>
                   )}
                 </div>
@@ -427,7 +429,7 @@ export function LocationDisplay({
 export function LocationSummary({
   location,
   distance,
-  className = ""
+  className = "",
 }: {
   location: LocationData
   distance?: number
@@ -439,22 +441,24 @@ export function LocationSummary({
 
   // Get user-friendly location name
   useEffect(() => {
-    if (location && 
-        typeof location.latitude === 'number' && 
-        typeof location.longitude === 'number' &&
-        !isNaN(location.latitude) && 
-        !isNaN(location.longitude)) {
+    if (
+      location &&
+      typeof location.latitude === "number" &&
+      typeof location.longitude === "number" &&
+      !isNaN(location.latitude) &&
+      !isNaN(location.longitude)
+    ) {
       setIsLoadingLocationName(true)
-      locationNameService.getLocationDisplayName({
-        latitude: location.latitude,
-        longitude: location.longitude
-      }).then(info => {
-        setLocationDisplayInfo(info)
-        setIsLoadingLocationName(false)
-      }).catch(error => {
-        console.error('Failed to get location display name:', error)
-        setIsLoadingLocationName(false)
-      })
+      locationNameService
+        .getLocationDisplayName({ latitude: location.latitude, longitude: location.longitude })
+        .then((info) => {
+          setLocationDisplayInfo(info)
+          setIsLoadingLocationName(false)
+        })
+        .catch((error) => {
+          console.error("Failed to get location display name:", error)
+          setIsLoadingLocationName(false)
+        })
     }
   }, [location])
 
@@ -468,7 +472,7 @@ export function LocationSummary({
         </div>
       ) : (
         <span className="font-medium">
-          {locationDisplayInfo?.displayName || 'Current Location'}
+          {locationDisplayInfo?.displayName || "Current Location"}
         </span>
       )}
       <Badge variant="outline" className="text-xs">
@@ -491,7 +495,7 @@ export function LocationVerificationStatus({
   errors = [],
   warnings = [],
   distance,
-  className = ""
+  className = "",
 }: {
   isVerified: boolean
   errors?: string[]
@@ -502,7 +506,7 @@ export function LocationVerificationStatus({
   if (isVerified) {
     return (
       <Alert className={`border-green-200 bg-green-50 ${className}`}>
-        <CheckCircle className="h-4 w-4 text-green-600" />
+        <CheckCircle className="h-4 w-4 text-healthcare-green" />
         <AlertDescription className="text-green-800">
           <div className="font-medium">Location verified successfully</div>
           {distance !== undefined && (
@@ -516,13 +520,13 @@ export function LocationVerificationStatus({
   }
 
   return (
-    <div className={`space-y-2 ${className}`}>
+    <div className={`gap-2 ${className}`}>
       {errors.length > 0 && (
         <Alert className="border-red-200 bg-red-50">
-          <AlertTriangle className="h-4 w-4 text-red-600" />
+          <AlertTriangle className="h-4 w-4 text-error" />
           <AlertDescription className="text-red-800">
             <div className="font-medium">Location verification failed</div>
-            <ul className="text-sm mt-1 space-y-1">
+            <ul className="text-sm mt-1 gap-1">
               {errors.map((error, index) => (
                 <li key={index}>• {error}</li>
               ))}
@@ -530,13 +534,12 @@ export function LocationVerificationStatus({
           </AlertDescription>
         </Alert>
       )}
-
       {warnings.length > 0 && (
         <Alert className="border-yellow-200 bg-yellow-50">
           <AlertTriangle className="h-4 w-4 text-yellow-600" />
           <AlertDescription className="text-yellow-800">
             <div className="font-medium">Location verification warnings</div>
-            <ul className="text-sm mt-1 space-y-1">
+            <ul className="text-sm mt-1 gap-1">
               {warnings.map((warning, index) => (
                 <li key={index}>• {warning}</li>
               ))}

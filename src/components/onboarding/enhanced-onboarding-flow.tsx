@@ -33,6 +33,27 @@ import { Label } from "../ui/label"
 import { Progress } from "../ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 
+// Role validation utilities
+const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
+  return allowedRoles.includes(userRole)
+}
+
+const isAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
+}
+
+const isSchoolAdmin = (userRole: UserRole): boolean => {
+  return hasRole(userRole, [
+    "SCHOOL_ADMIN" as UserRole,
+    "ADMIN" as UserRole,
+    "SUPER_ADMIN" as UserRole,
+  ])
+}
+
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 interface UserData {
   id: string
   email: string
@@ -65,7 +86,7 @@ interface ClerkUser {
     id: string
     emailAddress: string
     verification: { status: string; strategy: string } | null
-    linkedTo: unknown[]
+    linkedTo: string[]
   }[]
 }
 
@@ -91,1090 +112,614 @@ export function EnhancedOnboardingFlow({
   enableSessionPersistence = true,
 }: EnhancedOnboardingFlowProps) {
   const router = useRouter()
-  const { getToken } = useAuth()
+  const { userId } = useAuth()
   const [isPending, startTransition] = useTransition()
-  const schoolNameId = useId()
-  const schoolAddressId = useId()
-
-  // Enhanced state management
-  const {
-    currentStep,
-    setCurrentStep,
-    selectedRole,
-    setSelectedRole,
-    selectedSchool,
-    setSelectedSchool,
-    selectedProgram,
-    setSelectedProgram,
-    schoolName,
-    setSchoolName,
-    schoolAddress,
-    setSchoolAddress,
-    completedSteps,
-    completeStep,
-    isLoading,
-    setLoading,
-    lastError,
-    setError,
-    clearValidationErrors,
-    resetState,
-  } = useOnboardingStore()
-
-  // Analytics and session management hooks
-  const analytics = useOnboardingAnalytics()
-  const { startTimer, getElapsedTime, resetTimer } = useStepTimer()
-  const {
-    sessionId,
-    isLoading: sessionLoading,
-    error: sessionError,
-    isExpired,
-    timeUntilExpiry,
-    saveSession,
-    loadSession,
-    abandonSession,
-    extendSession,
-    recoverExpiredSession,
-    clearError: clearSessionError,
-  } = useOnboardingSession()
-
-  // Auto-save session data
-  const currentState = {
-    currentStep,
-    completedSteps,
-    selectedRole,
-    selectedSchool,
-    selectedProgram,
-    schoolName,
-    schoolAddress,
-  }
-
-  useAutoSaveSession(currentState, enableSessionPersistence)
-
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>(
+    (initialStep as OnboardingStep) || "role-selection"
+  )
+  const [selectedRole, setSelectedRole] = useState<UserRole>((initialRole as UserRole) || user.role)
+  const [selectedSchool, setSelectedSchool] = useState<string>(user.schoolId || "")
+  const [selectedProgram, setSelectedProgram] = useState<string>(user.programId || "")
+  const [schoolProfile, setSchoolProfile] = useState({
+    name: "",
+    address: "",
+    email: "",
+    phone: "",
+    website: "",
+    description: "",
+  })
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [showTutorial, setShowTutorial] = useState(false)
-  const [tutorialEnabled, _setTutorialEnabled] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isCompleted, setIsCompleted] = useState(false)
 
-  // Tutorial initialization
+  // Analytics hooks
+  const { trackStepStarted, trackStepCompleted, trackValidationError } = useOnboardingAnalytics()
+  const { startTimer, resetTimer } = useStepTimer()
+
+  // Session management hooks
+  const { saveSession, loadSession, abandonSession, sessionId, timeUntilExpiry, isExpired, extendSession, recoverExpiredSession, isLoading: isSessionLoading } = useOnboardingSession()
+  // Auto-save session
+  useAutoSaveSession({
+    currentStep,
+    selectedRole,
+    selectedSchool,
+    selectedProgram,
+    schoolName: schoolProfile.name,
+    schoolAddress: schoolProfile.address,
+  }, enableSessionPersistence)
+
+  // Store hooks
+  const { progress, resetState, completeStep, completedSteps } = useOnboardingStore()
+
+  const formId = useId()
+
+  // Load saved session on mount
   useEffect(() => {
-    const hasSeenTutorial = localStorage.getItem("onboarding-tutorial-seen")
-    if (!hasSeenTutorial && currentStep === "welcome") {
-      setShowTutorial(true)
-    }
-  }, [currentStep])
-
-  const _handleTutorialComplete = useCallback(() => {
-    localStorage.setItem("onboarding-tutorial-seen", "true")
-    setShowTutorial(false)
-    if (enableAnalytics) {
-      analytics.trackEvent({
-        eventType: "step_completed",
-        step: currentStep,
-        sessionId: sessionId || undefined,
-      })
-    }
-  }, [currentStep, sessionId, enableAnalytics, analytics])
-
-  const _toggleTutorial = useCallback(() => {
-    setShowTutorial(!showTutorial)
-    if (enableAnalytics) {
-      analytics.trackEvent({
-        eventType: "user_interaction",
-        step: currentStep,
-        sessionId: sessionId || undefined,
-        metadata: { action: "tutorial_toggled", enabled: !showTutorial },
-      })
-    }
-  }, [showTutorial, currentStep, sessionId, enableAnalytics, analytics])
-
-  // Initialize state from props or session
-  useEffect(() => {
-    const initializeState = async () => {
-      // Try to load existing session first
-      if (enableSessionPersistence) {
-        const sessionData = await loadSession()
-        if (sessionData) {
-          // Restore state from session
-          setCurrentStep(sessionData.currentStep)
-          setSelectedRole((sessionData.formData?.selectedRole as UserRole) || null)
-          setSelectedSchool((sessionData.formData?.selectedSchool as string) || null)
-          setSelectedProgram((sessionData.formData?.selectedProgram as string) || null)
-          setSchoolName((sessionData.formData?.schoolName as string) || "")
-          setSchoolAddress((sessionData.formData?.schoolAddress as string) || "")
-
-          if (enableAnalytics) {
-            await analytics.trackEvent({
-              eventType: "step_started",
-              step: sessionData.currentStep,
-              sessionId: sessionData.id,
-              metadata: { resumed: true },
-            })
-          }
-
-          toast.success("Resumed your onboarding progress")
-          return
+    if (enableSessionPersistence) {
+      loadSession().then((savedSession) => {
+        if (savedSession) {
+          setCurrentStep(savedSession.currentStep)
+          // Map other fields if needed, assuming savedSession structure matches
         }
-      }
-
-      // Initialize from props if no session
-      const initialStepValue = (initialStep as OnboardingStep) || "welcome"
-      const initialRoleValue = (initialRole as UserRole) || user?.role || null
-
-      setCurrentStep(initialStepValue)
-      setSelectedRole(initialRoleValue)
-      setSelectedSchool(user?.schoolId || null)
-      setSelectedProgram(user?.programId || null)
-
-      // User data is managed through individual store methods
-
-      if (enableAnalytics) {
-        await analytics.trackStepStarted(initialStepValue, sessionId || undefined, {
-          initialLoad: true,
-          userRole: user.role,
-        })
-      }
+      })
     }
+  }, [])
 
-    initializeState().catch(console.error)
-  }, [
-    analytics.trackEvent,
-    analytics.trackStepStarted,
-    enableAnalytics,
-    enableSessionPersistence,
-    initialRole,
-    initialStep,
-    loadSession,
-    sessionId,
-    setCurrentStep, // Restore state from session
-    setCurrentStep,
-    setSchoolAddress,
-    setSchoolName,
-    setSelectedProgram,
-    setSelectedRole,
-    setSelectedSchool,
-    user.role,
-    user?.programId,
-    user?.schoolId,
-  ]) // Only run on mount
+  // Auto-save effect removed as it is handled by the hook directly
 
-  // Track step changes
+  // Track step start
   useEffect(() => {
-    if (enableAnalytics && currentStep) {
+    if (enableAnalytics) {
+      trackStepStarted(currentStep, sessionId || undefined)
       startTimer()
-      analytics.trackStepStarted(currentStep, sessionId || undefined)
     }
 
     return () => {
       if (enableAnalytics) {
-        const elapsed = getElapsedTime()
-        if (elapsed > 0) {
-          analytics.trackStepCompleted(currentStep, sessionId || undefined, elapsed)
-        }
         resetTimer()
       }
     }
-  }, [
-    currentStep,
-    enableAnalytics,
-    sessionId,
-    analytics.trackStepCompleted,
-    analytics.trackStepStarted,
-    getElapsedTime,
-    resetTimer,
-    startTimer,
-  ])
+  }, [currentStep, enableAnalytics])
 
-  const steps: Record<OnboardingStep, { title: string; description: string; progress: number }> = {
-    welcome: { title: "Welcome", description: "Getting started", progress: 10 },
-    "role-selection": { title: "Select Role", description: "Choose your role", progress: 25 },
-    "school-selection": { title: "Select School", description: "Choose your school", progress: 50 },
-    "program-selection": {
-      title: "Select Program",
-      description: "Choose your program",
-      progress: 75,
-    },
-    "school-setup": { title: "School Setup", description: "Create your school", progress: 50 },
-    "affiliation-setup": { title: "Affiliation", description: "Set up affiliation", progress: 75 },
-    complete: { title: "Complete", description: "Setup complete", progress: 100 },
-  }
+  // Define onboarding steps
+  const onboardingSteps: OnboardingStep[] = [
+    "role-selection",
+    "school-selection",
+    "program-selection",
+    "school-profile",
+    "profile-completion",
+    "tutorial",
+    "completion",
+  ]
 
-  const handleUpdateUser = async (
-    updates: Partial<Pick<UserData, "role" | "schoolId" | "programId">>
-  ) => {
-    try {
-      setLoading(true)
-      const token = await getToken()
+  // Get current step index
+  const currentStepIndex = onboardingSteps.indexOf(currentStep)
+  const progressPercentage = progress || ((currentStepIndex + 1) / onboardingSteps.length) * 100
 
-      const response = await fetch("/api/user/update", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(updates),
-      })
-
-      if (!response.ok) {
-        let errorMessage = "Failed to update user information"
-        try {
-          const data = await response.json()
-          errorMessage = data?.error || data?.message || errorMessage
-        } catch {
-          try {
-            const text = await response.text()
-            if (text) errorMessage = text
-          } catch {}
-        }
-        throw new Error(errorMessage)
-      }
-
-      const result = await response.json()
-
-      // User data updated through individual store methods
-
-      return result
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to update user information"
-      setError(errorMessage)
-      toast.error(errorMessage)
-
-      if (enableAnalytics) {
-        await analytics.trackApiError(currentStep, sessionId || undefined, errorMessage, {
-          operation: "updateUser",
-          updates,
-        })
-      }
-
-      throw error
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleCreateSchool = async (schoolData: { name: string; address: string }) => {
-    try {
-      setLoading(true)
-      const token = await getToken()
-      if (!token) {
-        throw new Error("No authentication token available")
-      }
-
-      const response = await fetch("/api/schools/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(schoolData),
-      })
-
-      if (!response.ok) {
-        let message = "Failed to create school"
-        try {
-          const data = await response.json()
-          message = data?.error || data?.message || message
-        } catch {
-          try {
-            const text = await response.text()
-            if (text) message = text
-          } catch {}
-        }
-        throw new Error(message)
-      }
-
-      return await response.json()
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to create school"
-      setError(errorMessage)
-      toast.error(errorMessage)
-
-      if (enableAnalytics) {
-        await analytics.trackApiError(currentStep, sessionId || undefined, errorMessage, {
-          operation: "createSchool",
-          schoolData,
-        })
-      }
-
-      throw error
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleNext = () => {
-    startTransition(async () => {
-      try {
-        clearValidationErrors()
-        const stepStartTime = Date.now()
-
-        switch (currentStep) {
-          case "welcome":
-            if (!user?.role) {
-              setCurrentStep("role-selection")
-            } else {
-              determineNextStep(user.role)
-            }
-            break
-
-          case "role-selection":
-            if (!selectedRole) {
-              const errorMsg = "Please select a role"
-              setError(errorMsg)
-              toast.error(errorMsg)
-
-              if (enableAnalytics) {
-                await analytics.trackValidationError(currentStep, sessionId || undefined, {
-                  field: "selectedRole",
-                  error: errorMsg,
-                })
-              }
-              return
-            }
-
-            await handleUpdateUser({ role: selectedRole })
-            completeStep(currentStep)
-            determineNextStep(selectedRole)
-            break
-
-          case "school-selection":
-            if (!selectedSchool) {
-              const errorMsg = "Please select a school"
-              setError(errorMsg)
-              toast.error(errorMsg)
-
-              if (enableAnalytics) {
-                await analytics.trackValidationError(currentStep, sessionId || undefined, {
-                  field: "selectedSchool",
-                  error: errorMsg,
-                })
-              }
-              return
-            }
-
-            await handleUpdateUser({ schoolId: selectedSchool })
-            completeStep(currentStep)
-
-            if (selectedRole === "STUDENT") {
-              setCurrentStep("program-selection")
-            } else {
-              setCurrentStep("complete")
-            }
-            break
-
-          case "program-selection":
-            if (!selectedProgram) {
-              const errorMsg = "Please select a program"
-              setError(errorMsg)
-              toast.error(errorMsg)
-
-              if (enableAnalytics) {
-                await analytics.trackValidationError(currentStep, sessionId || undefined, {
-                  field: "selectedProgram",
-                  error: errorMsg,
-                })
-              }
-              return
-            }
-
-            await handleUpdateUser({ programId: selectedProgram })
-            completeStep(currentStep)
-            setCurrentStep("complete")
-            break
-
-          case "school-setup": {
-            if (!schoolName.trim()) {
-              const errorMsg = "Please enter a school name"
-              setError(errorMsg)
-              toast.error(errorMsg)
-
-              if (enableAnalytics) {
-                await analytics.trackValidationError(currentStep, sessionId || undefined, {
-                  field: "schoolName",
-                  error: errorMsg,
-                })
-              }
-              return
-            }
-
-            const newSchool = await handleCreateSchool({
-              name: schoolName,
-              address: schoolAddress,
-            })
-
-            await handleUpdateUser({ schoolId: newSchool.id })
-            completeStep(currentStep)
-            setCurrentStep("complete")
-            break
-          }
-
-          case "affiliation-setup":
-            if (!selectedSchool) {
-              const errorMsg = "Please select a school affiliation"
-              setError(errorMsg)
-              toast.error(errorMsg)
-
-              if (enableAnalytics) {
-                await analytics.trackValidationError(currentStep, sessionId || undefined, {
-                  field: "selectedSchool",
-                  error: errorMsg,
-                })
-              }
-              return
-            }
-
-            await handleUpdateUser({ schoolId: selectedSchool })
-            completeStep(currentStep)
-            setCurrentStep("complete")
-            break
-
-          case "complete": {
-            const token = await getToken()
-            const completeResponse = await fetch("/api/user/onboarding-complete", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-              },
-            })
-
-            if (!completeResponse.ok) {
-              const errorData = await completeResponse.json()
-              throw new Error(errorData.error || "Failed to complete onboarding")
-            }
-
-            // Track completion
-            if (enableAnalytics) {
-              const totalTime = Date.now() - stepStartTime
-              await analytics.trackOnboardingCompleted(sessionId || undefined, totalTime, {
-                completedSteps: completedSteps.length,
-                finalRole: selectedRole,
-                hasSchool: !!selectedSchool,
-                hasProgram: !!selectedProgram,
-              })
-            }
-
-            // Clean up session
-            if (enableSessionPersistence && sessionId) {
-              await abandonSession()
-            }
-
-            toast.success("Onboarding completed successfully!")
-            router.push("/dashboard")
-            break
-          }
-        }
-
-        // Track step completion
-        if (enableAnalytics) {
-          const elapsed = Date.now() - stepStartTime
-          await analytics.trackStepCompleted(currentStep, sessionId || undefined, elapsed)
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "An error occurred during onboarding"
-        setError(errorMessage)
-
-        if (enableAnalytics) {
-          await analytics.trackApiError(currentStep, sessionId || undefined, errorMessage, {
-            step: currentStep,
-            action: "handleNext",
-          })
-        }
-      }
-    })
-  }
-
-  const handleBack = () => {
-    if (enableAnalytics) {
-      analytics.trackEvent({
-        eventType: "step_started",
-        step: currentStep,
-        sessionId: sessionId || undefined,
-        metadata: { direction: "back" },
-      })
-    }
+  // Validate current step
+  const validateCurrentStep = (): boolean => {
+    const newErrors: Record<string, string> = {}
 
     switch (currentStep) {
       case "role-selection":
-        setCurrentStep("welcome")
+        if (!selectedRole) {
+          newErrors.role = "Please select a role"
+        }
         break
+
       case "school-selection":
-        if (selectedRole) {
-          setCurrentStep("role-selection")
-        } else {
-          setCurrentStep("welcome")
+        if (!selectedSchool) {
+          newErrors.school = "Please select a school"
         }
         break
+
       case "program-selection":
-        setCurrentStep("school-selection")
-        break
-      case "school-setup":
-        setCurrentStep("role-selection")
-        break
-      case "affiliation-setup":
-        setCurrentStep("role-selection")
-        break
-      default:
-        break
-    }
-  }
-
-  const determineNextStep = (role: UserRole) => {
-    switch (role) {
-      case "SCHOOL_ADMIN":
-        setCurrentStep("school-setup")
-        break
-      case "STUDENT":
-        setCurrentStep("school-selection")
-        break
-      case "CLINICAL_PRECEPTOR":
-      case "CLINICAL_SUPERVISOR":
-        setCurrentStep("affiliation-setup")
-        break
-      case "SUPER_ADMIN":
-        setCurrentStep("complete")
-        break
-      default:
-        setCurrentStep("school-selection")
-    }
-  }
-
-  const handleAbandonSession = async () => {
-    if (enableSessionPersistence && sessionId) {
-      const success = await abandonSession()
-      if (success) {
-        if (enableAnalytics) {
-          await analytics.trackSessionAbandoned(currentStep, sessionId, "user_requested")
+        if (!selectedProgram) {
+          newErrors.program = "Please select a program"
         }
-        resetState()
-        toast.success("Session abandoned. Starting fresh.")
-      }
+        break
+
+      case "school-profile":
+        if (!schoolProfile.name) {
+          newErrors.name = "School name is required"
+        }
+        if (!schoolProfile.address) {
+          newErrors.address = "School address is required"
+        }
+        if (!schoolProfile.email || !validateEmail(schoolProfile.email)) {
+          newErrors.email = "Valid email is required"
+        }
+        break
+
+      case "profile-completion":
+        if (!clerkUser.firstName || !clerkUser.lastName) {
+          newErrors.name = "Please provide your full name"
+        }
+        break
     }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
   }
 
-  const getRoleDescription = (role: UserRole | null): string => {
-    if (!role) return "user"
-    const descriptions = {
-      STUDENT: "student",
-      SCHOOL_ADMIN: "school administrator",
-      CLINICAL_PRECEPTOR: "clinical preceptor",
-      CLINICAL_SUPERVISOR: "clinical supervisor",
-      SUPER_ADMIN: "system administrator",
+  // Handle next step
+  const handleNext = useCallback(() => {
+    if (!validateCurrentStep()) {
+      if (enableAnalytics) {
+        trackValidationError(currentStep, sessionId || undefined, { error: "Validation failed" })
+      }
+      return
     }
-    return descriptions[role] || "user"
-  }
 
-  const renderStepContent = () => {
-    switch (currentStep) {
-      case "welcome":
-        return (
-          <div className="space-y-4 text-center">
-            <UserIcon className="mx-auto h-16 w-16 text-blue-500" />
-            <h2 className="font-bold text-2xl">Welcome to MedStint!</h2>
-            <p className="text-muted-foreground">
-              Let&apos;s get you set up with your account. This will only take a few minutes.
-            </p>
-            {sessionId && enableSessionPersistence && (
-              <Alert>
-                <Save className="h-4 w-4" />
-                <AlertDescription>
-                  Your progress is being automatically saved. You can resume anytime.
-                </AlertDescription>
-              </Alert>
-            )}
-          </div>
-        )
+    if (enableAnalytics) {
+      trackStepCompleted(currentStep, sessionId || undefined)
+    }
 
-      case "role-selection":
-        return (
-          <div className="space-y-4">
-            <div className="text-center">
-              <h2 className="font-bold text-2xl">What&apos;s your role?</h2>
-              <p className="text-muted-foreground">This helps us customize your experience</p>
-            </div>
-            <div className="tutorial-role-selection grid gap-3">
-              {Object.entries(ROLE_DISPLAY_NAMES).map(([role, displayName]) => {
-                const isSelected = selectedRole === role
-                const colorClass = ROLE_COLORS[role as UserRole]
-                const roleDescriptions = {
-                  STUDENT: "Access courses, track progress, and connect with clinical sites",
-                  SCHOOL_ADMIN: "Manage school settings, programs, and student enrollment",
-                  CLINICAL_PRECEPTOR:
-                    "Guide students during clinical rotations and provide feedback",
-                  CLINICAL_SUPERVISOR: "Oversee clinical education and coordinate with schools",
-                  SUPER_ADMIN: "Full system access and administrative capabilities",
-                }
-                return (
-                  <InteractiveTooltip
-                    key={role}
-                    content={{
-                      title: displayName,
-                      description:
-                        roleDescriptions[role as keyof typeof roleDescriptions] ||
-                        "Select this role to continue",
-                      tips: [
-                        "Choose the role that best describes your position",
-                        "This will customize your dashboard and features",
-                      ],
-                    }}
-                    position="right"
-                  >
-                    <Card
-                      className={`tutorial-role-card cursor-pointer transition-all hover:shadow-md role-${role.toLowerCase()} ${
-                        isSelected ? "ring-2 ring-blue-500" : ""
-                      }`}
-                      onClick={() => setSelectedRole(role as UserRole)}
-                    >
-                      <CardContent className="flex items-center justify-between p-4">
-                        <div className="flex items-center space-x-3">
-                          <div className={`h-3 w-3 rounded-full ${colorClass}`} />
-                          <span className="font-medium">{displayName}</span>
-                        </div>
-                        {isSelected && <CheckCircle className="h-5 w-5 text-blue-500" />}
-                      </CardContent>
-                    </Card>
-                  </InteractiveTooltip>
-                )
-              })}
-            </div>
-          </div>
-        )
+    completeStep(currentStep)
 
-      case "school-selection": {
-        const filteredSchools = availableSchools.filter((school) => school.isActive)
-        return (
-          <div className="space-y-4">
-            <div className="text-center">
-              <SchoolIcon className="mx-auto h-12 w-12 text-blue-500" />
-              <h2 className="font-bold text-xl">Select Your School</h2>
-              <p className="text-muted-foreground">Choose the school you&apos;re affiliated with</p>
-            </div>
-            <div className="tutorial-school-selection space-y-2">
-              <InteractiveTooltip
-                content={{
-                  title: "School Selection",
-                  description: "Choose the educational institution you are affiliated with",
-                  tips: [
-                    "This determines your available programs",
-                    "Contact support if your school isn't listed",
-                  ],
-                  examples: ["Medical schools", "Nursing schools", "Allied health programs"],
-                }}
-                position="right"
-              >
-                <Label htmlFor="school-select" className="cursor-help">
-                  School *
-                </Label>
-              </InteractiveTooltip>
-              <Select value={selectedSchool || ""} onValueChange={setSelectedSchool}>
-                <SelectTrigger id="school-select" className="tutorial-school-select">
-                  <SelectValue placeholder="Select a school" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredSchools.map((school) => (
-                    <SelectItem key={school.id} value={school.id}>
-                      <div>
-                        <div className="font-medium">{school.name}</div>
-                        <div className="text-muted-foreground text-sm">{school.address}</div>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        )
-      }
+    const nextStepIndex = currentStepIndex + 1
+    if (nextStepIndex < onboardingSteps.length) {
+      setCurrentStep(onboardingSteps[nextStepIndex])
+    } else {
+      setIsCompleted(true)
+    }
+  }, [currentStep, currentStepIndex, validateCurrentStep, enableAnalytics, completeStep])
 
-      case "program-selection": {
-        const schoolPrograms = availablePrograms.filter(
-          (program) => program.schoolId === selectedSchool
-        )
-        return (
-          <div className="space-y-4">
-            <div className="text-center">
-              <GraduationCap className="mx-auto h-12 w-12 text-blue-500" />
-              <h2 className="font-bold text-xl">Select Your Program</h2>
-              <p className="text-muted-foreground">Choose your academic program</p>
-            </div>
-            <div className="tutorial-program-selection space-y-2">
-              <InteractiveTooltip
-                content={{
-                  title: "Academic Program",
-                  description: "Select your specific academic program or degree track",
-                  tips: [
-                    "This customizes your curriculum and clinical requirements",
-                    "You can change this later in settings",
-                  ],
-                  examples: ["MD Program", "BSN Nursing", "PA Studies", "Physical Therapy"],
-                }}
-                position="right"
-              >
-                <Label htmlFor="program-select" className="cursor-help">
-                  Program *
-                </Label>
-              </InteractiveTooltip>
-              <Select value={selectedProgram || ""} onValueChange={setSelectedProgram}>
-                <SelectTrigger id="program-select" className="tutorial-program-select">
-                  <SelectValue placeholder="Select a program" />
-                </SelectTrigger>
-                <SelectContent>
-                  {schoolPrograms.map((program) => (
-                    <SelectItem key={program.id} value={program.id}>
-                      <div>
-                        <div className="font-medium">{program.name}</div>
-                        <div className="text-muted-foreground text-sm">{program.description}</div>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        )
-      }
+  // Handle previous step
+  const handlePrevious = useCallback(() => {
+    const prevStepIndex = currentStepIndex - 1
+    if (prevStepIndex >= 0) {
+      setCurrentStep(onboardingSteps[prevStepIndex])
+    }
+  }, [currentStepIndex])
 
-      case "school-setup":
-        return (
-          <div className="space-y-4">
-            <div className="text-center">
-              <Building2 className="mx-auto h-12 w-12 text-blue-500" />
-              <h2 className="font-bold text-xl">Create Your School</h2>
-              <p className="text-muted-foreground">Set up your school&apos;s information</p>
-            </div>
-            <div className="space-y-4">
-              <div className="tutorial-school-name space-y-2">
-                <InteractiveTooltip
-                  content={{
-                    title: "School Name",
-                    description: "Enter the official name of your educational institution",
-                    tips: [
-                      "Use the full, official name",
-                      "This will appear on certificates and documents",
-                    ],
-                    examples: ["Harvard Medical School", "Johns Hopkins School of Nursing"],
-                    validation: {
-                      rules: ["required", "minLength:3"],
-                      errorMessages: ["School name is required", "Must be at least 3 characters"],
-                    },
-                  }}
-                  position="right"
+  // Handle save progress
+  const handleSaveProgress = useCallback(async () => {
+    setIsSaving(true)
+    try {
+      // Save to backend
+      await saveSession({
+        currentStep,
+        selectedRole,
+        selectedSchool,
+        selectedProgram,
+        schoolName: schoolProfile.name,
+        schoolAddress: schoolProfile.address,
+      })
+
+      toast.success("Progress saved successfully")
+    } catch (error) {
+      console.error("Failed to save progress:", error)
+      toast.error("Failed to save progress")
+    } finally {
+      setIsSaving(false)
+    }
+  }, [currentStep, selectedRole, selectedSchool, selectedProgram, schoolProfile, saveSession])
+
+  // Handle reset
+  const handleReset = useCallback(() => {
+    resetState()
+    abandonSession()
+    setCurrentStep("role-selection")
+    setSelectedRole(user.role)
+    setSelectedSchool(user.schoolId || "")
+    setSelectedProgram(user.programId || "")
+    setSchoolProfile({
+      name: "",
+      address: "",
+      email: "",
+      phone: "",
+      website: "",
+      description: "",
+    })
+    setErrors({})
+    toast.info("Onboarding reset")
+  }, [resetState, abandonSession, user.role, user.schoolId, user.programId])
+
+  // Handle completion
+  const handleComplete = useCallback(() => {
+    startTransition(() => {
+      try {
+        window.location.assign("/dashboard")
+      } catch { }
+    })
+  }, [])
+
+  // Render role selection step
+  const renderRoleSelection = () => (
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <UserIcon className="h-5 w-5" />
+          Select Your Role
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 gap-3">
+          {Object.entries(ROLE_DISPLAY_NAMES).map(([role, displayName]) => (
+            <Button
+              key={role}
+              variant={selectedRole === role ? "default" : "outline"}
+              className="justify-start h-auto p-4"
+              onClick={() => setSelectedRole(role as UserRole)}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="h-10 w-10 rounded-full flex items-center justify-center text-white"
+                  style={{ backgroundColor: ROLE_COLORS[role as UserRole] }}
                 >
-                  <Label htmlFor={schoolNameId} className="cursor-help">
-                    School Name *
-                  </Label>
-                </InteractiveTooltip>
-                <Input
-                  id={schoolNameId}
-                  value={schoolName}
-                  onChange={(e) => setSchoolName(e.target.value)}
-                  placeholder="Enter school name"
-                  required
-                  className="tutorial-school-name-input"
-                />
-              </div>
-              <div className="tutorial-school-address space-y-2">
-                <InteractiveTooltip
-                  content={{
-                    title: "School Address",
-                    description: "Enter the physical address of your school (optional)",
-                    tips: [
-                      "This helps with location-based features",
-                      "You can add this later if needed",
-                    ],
-                    examples: ["123 University Ave, Boston, MA 02115"],
-                  }}
-                  position="right"
-                >
-                  <Label htmlFor={schoolAddressId} className="cursor-help">
-                    School Address
-                  </Label>
-                </InteractiveTooltip>
-                <Input
-                  id={schoolAddressId}
-                  value={schoolAddress}
-                  onChange={(e) => setSchoolAddress(e.target.value)}
-                  placeholder="Enter school address (optional)"
-                  className="tutorial-school-address-input"
-                />
-              </div>
-            </div>
-          </div>
-        )
-
-      case "affiliation-setup":
-        return (
-          <div className="space-y-4">
-            <div className="text-center">
-              <Building2 className="mx-auto h-12 w-12 text-blue-500" />
-              <h2 className="font-bold text-xl">School Affiliation</h2>
-              <p className="text-muted-foreground">
-                Select the school you&apos;re affiliated with as a{" "}
-                {getRoleDescription(selectedRole)}
-              </p>
-            </div>
-            <div className="tutorial-affiliation-selection space-y-2">
-              <InteractiveTooltip
-                content={{
-                  title: "School Affiliation",
-                  description: `Select the school you work with as a ${getRoleDescription(selectedRole)}`,
-                  tips: [
-                    "This connects you with the school's programs",
-                    "You can be affiliated with multiple schools",
-                  ],
-                  examples: ["Teaching hospital partnerships", "Clinical rotation sites"],
-                }}
-                position="right"
-              >
-                <Label htmlFor="affiliation-select" className="cursor-help">
-                  Affiliated School *
-                </Label>
-              </InteractiveTooltip>
-              <Select value={selectedSchool || ""} onValueChange={setSelectedSchool}>
-                <SelectTrigger id="affiliation-select" className="tutorial-affiliation-select">
-                  <SelectValue placeholder="Select your affiliated school" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableSchools
-                    .filter((school) => school.isActive)
-                    .map((school) => (
-                      <SelectItem key={school.id} value={school.id}>
-                        <div>
-                          <div className="font-medium">{school.name}</div>
-                          <div className="text-muted-foreground text-sm">{school.address}</div>
-                        </div>
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        )
-
-      case "complete":
-        return (
-          <div className="space-y-4 text-center">
-            <CheckCircle className="mx-auto h-16 w-16 text-green-500" />
-            <h2 className="font-bold text-2xl">Setup Complete!</h2>
-            <p className="text-muted-foreground">
-              Your account has been configured successfully. You&apos;re ready to start using
-              MedStint.
-            </p>
-            <div className="rounded-lg bg-muted p-4 text-left">
-              <h3 className="mb-2 font-semibold">Your Profile Summary:</h3>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span>Role:</span>
-                  <Badge variant="secondary">
-                    {selectedRole ? ROLE_DISPLAY_NAMES[selectedRole as UserRole] : "Not set"}
-                  </Badge>
+                  {role === "SCHOOL_ADMIN" && <SchoolIcon className="h-5 w-5" />}
+                  {role === "PROGRAM_DIRECTOR" && <GraduationCap className="h-5 w-5" />}
+                  {role === "CLINICAL_COORDINATOR" && <UserIcon className="h-5 w-5" />}
+                  {role === "ADMIN" && <Building2 className="h-5 w-5" />}
                 </div>
-                {selectedSchool && (
-                  <div className="flex justify-between">
-                    <span>School:</span>
-                    <span>
-                      {availableSchools.find((s) => s.id === selectedSchool)?.name ||
-                        schoolName ||
-                        "Custom School"}
-                    </span>
-                  </div>
-                )}
-                {selectedProgram && (
-                  <div className="flex justify-between">
-                    <span>Program:</span>
-                    <span>
-                      {availablePrograms.find((p) => p.id === selectedProgram)?.name || "Not set"}
-                    </span>
-                  </div>
-                )}
+                <div className="text-left">
+                  <div className="font-medium">{displayName}</div>
+                </div>
               </div>
-            </div>
-          </div>
-        )
+            </Button>
+          ))}
+        </div>
+        {errors.role && (
+          <Alert variant="destructive">
+            <AlertDescription>{errors.role}</AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
+  )
 
-      default:
-        return (
-          <div className="text-center">
-            <p>Unknown step: {currentStep}</p>
+  // Render school selection step
+  const renderSchoolSelection = () => (
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <SchoolIcon className="h-5 w-5" />
+          Select Your School
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="school">School</Label>
+          <Select value={selectedSchool} onValueChange={setSelectedSchool}>
+            <SelectTrigger id="school">
+              <SelectValue placeholder="Select a school" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableSchools.map((school) => (
+                <SelectItem key={school.id} value={school.id}>
+                  {school.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {errors.school && (
+          <Alert variant="destructive">
+            <AlertDescription>{errors.school}</AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
+  )
+
+  // Render program selection step
+  const renderProgramSelection = () => {
+    const filteredPrograms = availablePrograms.filter(
+      (program) => program.schoolId === selectedSchool
+    )
+
+    return (
+      <Card className="w-full max-w-md mx-auto">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <GraduationCap className="h-5 w-5" />
+            Select Your Program
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="program">Program</Label>
+            <Select value={selectedProgram} onValueChange={setSelectedProgram}>
+              <SelectTrigger id="program">
+                <SelectValue placeholder="Select a program" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredPrograms.map((program) => (
+                  <SelectItem key={program.id} value={program.id}>
+                    {program.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        )
+          {errors.program && (
+            <Alert variant="destructive">
+              <AlertDescription>{errors.program}</AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Render school profile step
+  const renderSchoolProfile = () => (
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Building2 className="h-5 w-5" />
+          School Profile
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="school-name">School Name</Label>
+          <Input
+            id="school-name"
+            value={schoolProfile.name}
+            onChange={(e) => setSchoolProfile({ ...schoolProfile, name: e.target.value })}
+            placeholder="Enter school name"
+          />
+          {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="school-address">Address</Label>
+          <Input
+            id="school-address"
+            value={schoolProfile.address}
+            onChange={(e) => setSchoolProfile({ ...schoolProfile, address: e.target.value })}
+            placeholder="Enter school address"
+          />
+          {errors.address && <p className="text-sm text-red-500">{errors.address}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="school-email">Email</Label>
+          <Input
+            id="school-email"
+            type="email"
+            value={schoolProfile.email}
+            onChange={(e) => setSchoolProfile({ ...schoolProfile, email: e.target.value })}
+            placeholder="Enter school email"
+          />
+          {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="school-phone">Phone (Optional)</Label>
+          <Input
+            id="school-phone"
+            value={schoolProfile.phone}
+            onChange={(e) => setSchoolProfile({ ...schoolProfile, phone: e.target.value })}
+            placeholder="Enter school phone"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="school-website">Website (Optional)</Label>
+          <Input
+            id="school-website"
+            value={schoolProfile.website}
+            onChange={(e) => setSchoolProfile({ ...schoolProfile, website: e.target.value })}
+            placeholder="Enter school website"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="school-description">Description (Optional)</Label>
+          <Input
+            id="school-description"
+            value={schoolProfile.description}
+            onChange={(e) => setSchoolProfile({ ...schoolProfile, description: e.target.value })}
+            placeholder="Enter school description"
+          />
+        </div>
+      </CardContent>
+    </Card>
+  )
+
+  // Render profile completion step
+  const renderProfileCompletion = () => (
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <UserIcon className="h-5 w-5" />
+          Complete Your Profile
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="name">Full Name</Label>
+          <Input
+            id="name"
+            value={`${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`}
+            readOnly
+            className="bg-muted"
+          />
+          {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input id="email" value={user.email} readOnly className="bg-muted" />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="role">Role</Label>
+          <Badge variant="outline" className="text-sm">
+            {ROLE_DISPLAY_NAMES[selectedRole]}
+          </Badge>
+        </div>
+
+        {selectedSchool && (
+          <div className="space-y-2">
+            <Label htmlFor="school">School</Label>
+            <Badge variant="outline" className="text-sm">
+              {availableSchools.find((s) => s.id === selectedSchool)?.name}
+            </Badge>
+          </div>
+        )}
+
+        {selectedProgram && (
+          <div className="space-y-2">
+            <Label htmlFor="program">Program</Label>
+            <Badge variant="outline" className="text-sm">
+              {availablePrograms.find((p) => p.id === selectedProgram)?.name}
+            </Badge>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+
+  // Render tutorial step
+  const renderTutorial = () => (
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <HelpCircle className="h-5 w-5" />
+          Tutorial
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Would you like to take a quick tutorial to learn how to use the platform?
+        </p>
+
+        <div className="flex gap-2">
+          <Button variant="default" onClick={() => setShowTutorial(true)} className="flex-1">
+            Yes, Show Tutorial
+          </Button>
+          <Button variant="outline" onClick={() => setCurrentStep("completion")} className="flex-1">
+            Skip Tutorial
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
+  // Render completion step
+  const renderCompletion = () => (
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <CheckCircle className="h-5 w-5 text-green-500" />
+          Onboarding Complete
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Congratulations! You have successfully completed the onboarding process.
+        </p>
+
+        <Button onClick={handleComplete} disabled={isPending} className="w-full">
+          {isPending ? "Loading..." : "Go to Dashboard"}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+
+  // Render current step
+  const renderCurrentStep = () => {
+    switch (currentStep) {
+      case "role-selection":
+        return renderRoleSelection()
+      case "school-selection":
+        return renderSchoolSelection()
+      case "program-selection":
+        return renderProgramSelection()
+      case "school-profile":
+        return renderSchoolProfile()
+      case "profile-completion":
+        return renderProfileCompletion()
+      case "tutorial":
+        return renderTutorial()
+      case "completion":
+        return renderCompletion()
+      default:
+        return renderRoleSelection()
     }
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      {/* Tutorial Integration */}
-      {tutorialEnabled && (
-        <TutorialIntegration
-          userRole={selectedRole as UserRole}
-          userId={user.id}
-          onboardingStep={currentStep}
-          className="tutorial-integration"
-        >
-          <div />
-        </TutorialIntegration>
-      )}
-      {/* Progress Bar */}
-      <div className="tutorial-progress-section space-y-2">
-        <div className="flex items-center justify-between text-sm">
-          <InteractiveTooltip
-            content={{
-              title: "Current Step",
-              description: "You are currently on this step of the onboarding process",
-              tips: ["Complete all required fields", "Use the Next button to continue"],
-            }}
-            position="right"
-          >
-            <span className="cursor-help font-medium">
-              {steps[currentStep as OnboardingStep]?.title}
-            </span>
-          </InteractiveTooltip>
-          <InteractiveTooltip
-            content={{
-              title: "Progress Indicator",
-              description: "Shows how much of the onboarding process you have completed",
-              tips: ["Each step brings you closer to completion"],
-            }}
-            position="left"
-          >
-            <span className="cursor-help text-muted-foreground">
-              {Math.round(steps[currentStep as OnboardingStep]?.progress || 0)}% complete
-            </span>
-          </InteractiveTooltip>
-        </div>
-        <Progress
-          value={steps[currentStep as OnboardingStep]?.progress || 0}
-          className="tutorial-progress-bar h-2"
-        />
-      </div>
+    <div className="flex flex-col min-h-screen bg-background">
+      <SessionExpirationWarning
+        timeUntilExpiry={timeUntilExpiry}
+        isExpired={isExpired}
+        onExtendSession={extendSession}
+        onRecoverSession={recoverExpiredSession}
+        isLoading={isSessionLoading}
+      />
 
-      {/* Session Status */}
-      {enableSessionPersistence && (
-        <div className="flex items-center justify-between text-muted-foreground text-sm">
-          <div className="flex items-center space-x-2">
-            {sessionId ? (
-              <>
-                <Save className="h-4 w-4 text-green-500" />
-                <span>Progress saved</span>
-              </>
-            ) : (
-              <>
-                <RotateCcw className="h-4 w-4" />
-                <span>Auto-save enabled</span>
-              </>
+      <div className="flex-1 container max-w-4xl mx-auto py-8 px-4">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold mb-2">Welcome to MedStint Clerk</h1>
+          <p className="text-muted-foreground">
+            Let's get your account set up in just a few steps.
+          </p>
+        </div>
+
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">
+              Step {currentStepIndex + 1} of {onboardingSteps.length}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {Math.round(progressPercentage)}% Complete
+            </span>
+          </div>
+          <Progress value={progressPercentage} className="h-2" />
+        </div>
+
+        <div className="mb-8">{renderCurrentStep()}</div>
+
+        <div className="flex justify-between">
+          <Button variant="outline" onClick={handlePrevious} disabled={currentStepIndex === 0}>
+            Previous
+          </Button>
+
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleSaveProgress} disabled={isSaving}>
+              {isSaving ? "Saving..." : "Save Progress"}
+            </Button>
+
+            <Button variant="outline" onClick={handleReset}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset
+            </Button>
+
+            {currentStep !== "completion" && (
+              <Button onClick={handleNext}>{currentStep === "tutorial" ? "Skip" : "Next"}</Button>
             )}
           </div>
-          {sessionId && (
-            <Button variant="ghost" size="sm" onClick={handleAbandonSession} className="text-xs">
-              Start Fresh
-            </Button>
-          )}
         </div>
-      )}
-
-      {/* Session Expiration Warning */}
-      {enableSessionPersistence && sessionId && (
-        <SessionExpirationWarning
-          timeUntilExpiry={timeUntilExpiry}
-          isExpired={isExpired}
-          onExtendSession={extendSession}
-          onRecoverSession={recoverExpiredSession}
-          isLoading={sessionLoading}
-        />
-      )}
-
-      {/* Error Display */}
-      {(lastError || sessionError) && (
-        <Alert variant="destructive">
-          <AlertDescription>
-            {lastError || sessionError}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                clearValidationErrors()
-                clearSessionError()
-              }}
-              className="ml-2 h-auto p-0 text-xs underline"
-            >
-              Dismiss
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Step Content */}
-      <Card className={`tutorial-step-card step-${currentStep}`}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <InteractiveTooltip
-              content={{
-                title: steps[currentStep as OnboardingStep]?.title || "",
-                description: steps[currentStep as OnboardingStep]?.description || "",
-                tips: ["Fill out all required information", "Use the help tooltips for guidance"],
-              }}
-              position="right"
-            >
-              <span className="cursor-help">{steps[currentStep as OnboardingStep]?.title}</span>
-            </InteractiveTooltip>
-            <InteractiveTooltip
-              content={{
-                title: "Need Help?",
-                description: "Click the tutorial button above for step-by-step guidance",
-                tips: ["Tutorial available for each step", "Contextual help throughout"],
-              }}
-              position="left"
-            >
-              <HelpCircle className="h-4 w-4 cursor-help text-muted-foreground" />
-            </InteractiveTooltip>
-          </CardTitle>
-          <p className="tutorial-step-description text-muted-foreground text-sm">
-            {steps[currentStep as OnboardingStep]?.description}
-          </p>
-        </CardHeader>
-        <CardContent className="tutorial-step-content">{renderStepContent()}</CardContent>
-      </Card>
-
-      {/* Navigation */}
-      <div className="tutorial-navigation flex justify-between">
-        <InteractiveTooltip
-          content={{
-            title: "Previous Step",
-            description: "Go back to the previous step in the onboarding process",
-          }}
-          position="top"
-          disabled={currentStep === "welcome" || isPending || isLoading || sessionLoading}
-        >
-          <Button
-            variant="outline"
-            onClick={handleBack}
-            disabled={currentStep === "welcome" || isPending || isLoading || sessionLoading}
-            className="tutorial-back-button"
-          >
-            Back
-          </Button>
-        </InteractiveTooltip>
-        <InteractiveTooltip
-          content={{
-            title: currentStep === "complete" ? "Complete Onboarding" : "Next Step",
-            description:
-              currentStep === "complete"
-                ? "Finish the onboarding process and access your dashboard"
-                : "Continue to the next step in the setup process",
-          }}
-          position="top"
-          disabled={isPending || isLoading || sessionLoading}
-        >
-          <Button
-            onClick={handleNext}
-            disabled={isPending || isLoading || sessionLoading}
-            className="tutorial-next-button"
-          >
-            {isLoading || sessionLoading
-              ? "Loading..."
-              : currentStep === "complete"
-                ? "Finish"
-                : "Next"}
-          </Button>
-        </InteractiveTooltip>
       </div>
+
+      {showTutorial && (
+        <TutorialIntegration
+          userRole={user.role}
+          onClose={() => {
+            setShowTutorial(false)
+            setCurrentStep("completion")
+          }}
+        >
+          <></>
+        </TutorialIntegration>
+      )}
+
+      {enableAnalytics && (
+        <InteractiveTooltip
+          content={{ description: "This is an interactive tooltip to help you navigate the onboarding process." }}
+          position="bottom"
+        >
+          <div className="fixed bottom-4 right-4 z-50">
+            <HelpCircle className="h-6 w-6 text-muted-foreground" />
+          </div>
+        </InteractiveTooltip>
+      )}
     </div>
   )
 }
