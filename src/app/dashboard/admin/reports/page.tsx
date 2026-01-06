@@ -1,4 +1,4 @@
-import { count } from "drizzle-orm"
+import { count, desc, eq, sql } from "drizzle-orm"
 import {
   Award,
   Building,
@@ -28,10 +28,10 @@ export default async function AdminReportsPage() {
   const _user = await requireAnyRole(["SUPER_ADMIN"], "/dashboard")
 
   // Fetch analytics data
-  const totalUsers = await db.select({ count: count() }).from(users)
-  const totalSchools = await db.select({ count: count() }).from(schools)
-  const totalRotations = await db.select({ count: count() }).from(rotations)
-  const totalEvaluations = await db.select({ count: count() }).from(evaluations)
+  const [totalUsers] = await db.select({ count: count() }).from(users)
+  const [totalSchools] = await db.select({ count: count() }).from(schools)
+  const [totalRotations] = await db.select({ count: count() }).from(rotations)
+  const [totalEvaluations] = await db.select({ count: count() }).from(evaluations)
 
   // User distribution by role
   const usersByRole = await db
@@ -42,17 +42,36 @@ export default async function AdminReportsPage() {
     .from(users)
     .groupBy(users.role)
 
-  // Monthly user registrations (mock data for demo)
-  const _monthlyRegistrations = [
-    { month: "Jan", users: 45 },
-    { month: "Feb", users: 52 },
-    { month: "Mar", users: 48 },
-    { month: "Apr", users: 61 },
-    { month: "May", users: 55 },
-    { month: "Jun", users: 67 },
-  ]
+  // Monthly user registrations (last 6 months)
+  const monthlyRegistrations = await db.execute(sql`
+    SELECT
+      TO_CHAR(created_at, 'Mon') as month,
+      COUNT(*) as users
+    FROM ${users}
+    WHERE created_at >= NOW() - INTERVAL '6 months'
+    GROUP BY TO_CHAR(created_at, 'Mon'), DATE_TRUNC('month', created_at)
+    ORDER BY DATE_TRUNC('month', created_at)
+  `)
 
-  // TODO: Replace with actual API calls for rotation and evaluation data
+  // Rotation completion stats
+  const rotationStats = await db
+    .select({
+      status: rotations.status,
+      count: count(),
+    })
+    .from(rotations)
+    .groupBy(rotations.status)
+
+  const completedRotations = rotationStats.find((s) => s.status === "COMPLETED")?.count || 0
+  const completionRate =
+    totalRotations.count > 0 ? (completedRotations / totalRotations.count) * 100 : 0
+
+  // Evaluation average score
+  const [avgEvaluation] = await db
+    .select({
+      avg: sql<number>`AVG(${evaluations.overallRating})`,
+    })
+    .from(evaluations)
 
   return (
     <div className="space-y-6">
@@ -82,7 +101,7 @@ export default async function AdminReportsPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl">{totalUsers[0]?.count || 0}</div>
+            <div className="font-bold text-2xl">{totalUsers.count}</div>
             <p className="text-muted-foreground text-xs">
               <span className="text-green-600">+12%</span> from last month
             </p>
@@ -94,7 +113,7 @@ export default async function AdminReportsPage() {
             <Building className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl">{totalSchools[0]?.count || 0}</div>
+            <div className="font-bold text-2xl">{totalSchools.count}</div>
             <p className="text-muted-foreground text-xs">
               <span className="text-green-600">+2</span> new this month
             </p>
@@ -106,9 +125,9 @@ export default async function AdminReportsPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl">{totalRotations[0]?.count || 0}</div>
+            <div className="font-bold text-2xl">{totalRotations.count}</div>
             <p className="text-muted-foreground text-xs">
-              <span className="text-green-600">+8%</span> completion rate
+              <span className="text-green-600">{completionRate.toFixed(1)}%</span> completion rate
             </p>
           </CardContent>
         </Card>
@@ -118,9 +137,10 @@ export default async function AdminReportsPage() {
             <Award className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl">{totalEvaluations[0]?.count || 0}</div>
+            <div className="font-bold text-2xl">{totalEvaluations.count}</div>
             <p className="text-muted-foreground text-xs">
-              <span className="text-green-600">94%</span> avg score
+              <span className="text-green-600">{Number(avgEvaluation?.avg || 0).toFixed(1)}</span>{" "}
+              avg score
             </p>
           </CardContent>
         </Card>
@@ -143,10 +163,19 @@ export default async function AdminReportsPage() {
                 <CardDescription>New user sign-ups over the last 6 months</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex h-[300px] items-center justify-center rounded bg-gray-50">
-                  <p className="text-muted-foreground">
-                    Chart placeholder - Monthly user registrations
-                  </p>
+                <div className="flex h-[300px] items-end justify-around rounded bg-gray-50 p-4">
+                  {monthlyRegistrations.rows.map((row: any, i: number) => (
+                    <div key={i} className="flex flex-col items-center gap-2">
+                      <div
+                        className="w-12 rounded-t bg-blue-500 transition-all hover:bg-blue-600"
+                        style={{ height: `${Math.max(Number(row.users) * 5, 20)}px` }}
+                      />
+                      <span className="text-xs">{row.month}</span>
+                    </div>
+                  ))}
+                  {monthlyRegistrations.rows.length === 0 && (
+                    <p className="text-muted-foreground">No data available</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -157,10 +186,19 @@ export default async function AdminReportsPage() {
                 <CardDescription>Breakdown of users across different roles</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex h-[300px] items-center justify-center rounded bg-gray-50">
-                  <p className="text-muted-foreground">
-                    Chart placeholder - User distribution by role
-                  </p>
+                <div className="space-y-4">
+                  {usersByRole.map((role) => (
+                    <div key={role.role} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm">{role.role}</span>
+                        <span className="text-muted-foreground text-sm">{role.count} users</span>
+                      </div>
+                      <Progress
+                        value={(role.count / (totalUsers.count || 1)) * 100}
+                        className="h-2"
+                      />
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -176,14 +214,14 @@ export default async function AdminReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {usersByRole.map((role, _index) => (
+                  {usersByRole.map((role) => (
                     <div key={role.role} className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-sm">{role.role}</span>
                         <span className="text-muted-foreground text-sm">{role.count} users</span>
                       </div>
                       <Progress
-                        value={(role.count / (totalUsers[0]?.count || 1)) * 100}
+                        value={(role.count / (totalUsers.count || 1)) * 100}
                         className="h-2"
                       />
                     </div>
@@ -197,14 +235,23 @@ export default async function AdminReportsPage() {
         <TabsContent value="rotations" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Rotation Completion by School</CardTitle>
-              <CardDescription>Progress tracking across educational institutions</CardDescription>
+              <CardTitle>Rotation Status Overview</CardTitle>
+              <CardDescription>Current status of all rotations</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex h-[400px] items-center justify-center rounded bg-gray-50">
-                <p className="text-muted-foreground">
-                  Chart placeholder - Rotation completion by school
-                </p>
+              <div className="space-y-4">
+                {rotationStats.map((stat) => (
+                  <div key={stat.status} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-sm">{stat.status}</span>
+                      <span className="text-muted-foreground text-sm">{stat.count} rotations</span>
+                    </div>
+                    <Progress
+                      value={(stat.count / (totalRotations.count || 1)) * 100}
+                      className="h-2"
+                    />
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -214,20 +261,6 @@ export default async function AdminReportsPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Evaluation Score Distribution</CardTitle>
-                <CardDescription>Student performance across all evaluations</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex h-[300px] items-center justify-center rounded bg-gray-50">
-                  <p className="text-muted-foreground">
-                    Chart placeholder - Evaluation score distribution
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
                 <CardTitle>Performance Metrics</CardTitle>
                 <CardDescription>Key performance indicators</CardDescription>
               </CardHeader>
@@ -235,19 +268,15 @@ export default async function AdminReportsPage() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-sm">Average Evaluation Score</span>
-                    <Badge className="bg-green-100 text-green-800">87.5%</Badge>
+                    <Badge className="bg-green-100 text-green-800">
+                      {Number(avgEvaluation?.avg || 0).toFixed(1)}
+                    </Badge>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-sm">Rotation Completion Rate</span>
-                    <Badge className="bg-blue-100 text-blue-800">92.3%</Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm">Student Satisfaction</span>
-                    <Badge className="bg-purple-100 text-purple-800">4.6/5</Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm">Preceptor Engagement</span>
-                    <Badge className="bg-orange-100 text-orange-800">89.1%</Badge>
+                    <Badge className="bg-blue-100 text-blue-800">
+                      {completionRate.toFixed(1)}%
+                    </Badge>
                   </div>
                 </div>
               </CardContent>

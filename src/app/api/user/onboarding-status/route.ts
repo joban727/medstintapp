@@ -80,4 +80,3 @@ export const GET = withErrorHandling(async () => {
 
   return await executeOriginalLogic()
 })
-

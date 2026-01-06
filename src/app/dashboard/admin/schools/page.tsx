@@ -128,6 +128,16 @@ export default function SchoolsManagementPage() {
 
       const token = await getToken()
 
+      // Helper to safely parse JSON
+      const safeJsonParse = async (response: Response) => {
+        try {
+          const text = await response.text()
+          return text ? JSON.parse(text) : null
+        } catch {
+          return null
+        }
+      }
+
       // Fetch schools
       const schoolsResponse = await fetch("/api/schools", {
         headers: {
@@ -135,8 +145,10 @@ export default function SchoolsManagementPage() {
         },
       })
       if (schoolsResponse.ok) {
-        const schoolsData = await schoolsResponse.json()
-        setSchools(schoolsData.schools || [])
+        const schoolsResult = await safeJsonParse(schoolsResponse)
+        if (schoolsResult) {
+          setSchools(schoolsResult.data?.schools || schoolsResult.schools || [])
+        }
       }
 
       // Fetch all users
@@ -146,8 +158,10 @@ export default function SchoolsManagementPage() {
         },
       })
       if (usersResponse.ok) {
-        const usersData = await usersResponse.json()
-        setUsers(usersData.users || [])
+        const usersResult = await safeJsonParse(usersResponse)
+        if (usersResult) {
+          setUsers(usersResult.data || usersResult.users || [])
+        }
       }
 
       // Fetch unlinked users
@@ -157,8 +171,10 @@ export default function SchoolsManagementPage() {
         },
       })
       if (unlinkedResponse.ok) {
-        const unlinkedData = await unlinkedResponse.json()
-        setUnlinkedUsers(unlinkedData.unlinkedUsers || [])
+        const unlinkedResult = await safeJsonParse(unlinkedResponse)
+        if (unlinkedResult) {
+          setUnlinkedUsers(unlinkedResult.data?.unlinkedUsers || unlinkedResult.unlinkedUsers || [])
+        }
       }
     } catch (error) {
       console.error("Error fetching data:", error)
@@ -321,14 +337,14 @@ export default function SchoolsManagementPage() {
 
   const filteredSchools = schools.filter(
     (school) =>
-      school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      school.address.toLowerCase().includes(searchTerm.toLowerCase())
+      (school.name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (school.address?.toLowerCase() || "").includes(searchTerm.toLowerCase())
   )
 
   const filteredUsers = users.filter(
     (user) =>
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+      (user.name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (user.email?.toLowerCase() || "").includes(searchTerm.toLowerCase())
   )
 
   if (loading) {

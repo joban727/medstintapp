@@ -5,7 +5,7 @@ import type { ReactNode } from "react"
 import UnifiedErrorBoundary, { ErrorBoundaryConfigs } from "./unified-error-boundary"
 
 interface StudentDashboardErrorWrapperProps {
-    children: ReactNode
+  children: ReactNode
 }
 
 /**
@@ -13,9 +13,7 @@ interface StudentDashboardErrorWrapperProps {
  * This wrapper is maintained for backward compatibility
  */
 export function StudentDashboardErrorWrapper({ children }: StudentDashboardErrorWrapperProps) {
-    return (
-        <UnifiedErrorBoundary config={ErrorBoundaryConfigs.student}>
-            {children}
-        </UnifiedErrorBoundary>
-    )
+  return (
+    <UnifiedErrorBoundary config={ErrorBoundaryConfigs.student}>{children}</UnifiedErrorBoundary>
+  )
 }

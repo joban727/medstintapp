@@ -12,6 +12,7 @@ import { db } from "@/database/connection-pool"
 import { rotations, siteAssignments } from "@/database/schema"
 import { and, eq, sql, or, isNull, lte, gte } from "drizzle-orm"
 import { TimingPerformanceMonitor } from "@/lib/high-precision-timing"
+import { withCSRF } from "@/lib/csrf-middleware"
 
 // Role validation utilities
 const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
@@ -38,7 +39,8 @@ import {
   ERROR_MESSAGES,
 } from "@/lib/api-response"
 
-export async function POST(request: NextRequest) {
+// CSRF-protected POST handler for clock-in
+export const POST = withCSRF(async (request: NextRequest) => {
   return withErrorHandlingAsync(
     async () => {
       return TimingPerformanceMonitor.measure("student-clock-in", async () => {
@@ -56,10 +58,13 @@ export async function POST(request: NextRequest) {
 
         // Only allow students to clock in
         if (user.role !== ("STUDENT" as UserRole as UserRole as UserRole)) {
-          logger.warn({
-            requestId,
-            role: user.role,
-          }, "Non-student clock-in attempt")
+          logger.warn(
+            {
+              requestId,
+              role: user.role,
+            },
+            "Non-student clock-in attempt"
+          )
           return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
         }
 
@@ -72,12 +77,15 @@ export async function POST(request: NextRequest) {
         if (!resolvedRotationId && body.siteId) {
           const now = new Date()
 
-          logger.info({
-            requestId,
-            studentId: user.id,
-            siteId: body.siteId,
-            currentTime: now.toISOString(),
-          }, "Attempting to resolve rotationId")
+          logger.info(
+            {
+              requestId,
+              studentId: user.id,
+              siteId: body.siteId,
+              currentTime: now.toISOString(),
+            },
+            "Attempting to resolve rotationId"
+          )
 
           // Prefer ACTIVE rotation for the student at the given site and within date range
           const activeRotation = await db
@@ -95,10 +103,13 @@ export async function POST(request: NextRequest) {
             )
             .limit(1)
 
-          logger.info({
-            requestId,
-            activeRotation: activeRotation[0]?.id,
-          }, "Active rotation query result")
+          logger.info(
+            {
+              requestId,
+              activeRotation: activeRotation[0]?.id,
+            },
+            "Active rotation query result"
+          )
 
           if (activeRotation[0]?.id) {
             resolvedRotationId = activeRotation[0].id
@@ -119,10 +130,13 @@ export async function POST(request: NextRequest) {
               )
               .limit(1)
 
-            logger.info({
-              requestId,
-              scheduledRotation: scheduledRotation[0]?.id,
-            }, "Scheduled rotation query result")
+            logger.info(
+              {
+                requestId,
+                scheduledRotation: scheduledRotation[0]?.id,
+              },
+              "Scheduled rotation query result"
+            )
 
             if (scheduledRotation[0]?.id) {
               resolvedRotationId = scheduledRotation[0].id
@@ -142,10 +156,13 @@ export async function POST(request: NextRequest) {
                 )
                 .limit(1)
 
-              logger.info({
-                requestId,
-                assignmentRotationId: assignment[0]?.rotationId,
-              }, "Site assignment query result")
+              logger.info(
+                {
+                  requestId,
+                  assignmentRotationId: assignment[0]?.rotationId,
+                },
+                "Site assignment query result"
+              )
 
               if (assignment[0]?.rotationId) {
                 resolvedRotationId = assignment[0].rotationId as string
@@ -164,10 +181,13 @@ export async function POST(request: NextRequest) {
                   )
                   .limit(1)
 
-                logger.info({
-                  requestId,
-                  anyRotation: anyRotation[0]?.id,
-                }, "Any rotation fallback result")
+                logger.info(
+                  {
+                    requestId,
+                    anyRotation: anyRotation[0]?.id,
+                  },
+                  "Any rotation fallback result"
+                )
 
                 if (anyRotation[0]?.id) {
                   resolvedRotationId = anyRotation[0].id
@@ -178,11 +198,14 @@ export async function POST(request: NextRequest) {
         }
 
         if (!resolvedRotationId) {
-          logger.warn({
-            requestId,
-            studentId: user.id,
-            siteId: body.siteId,
-          }, "No rotation found for clock-in")
+          logger.warn(
+            {
+              requestId,
+              studentId: user.id,
+              siteId: body.siteId,
+            },
+            "No rotation found for clock-in"
+          )
           throw createValidationError(
             "No active or scheduled rotation found for selected site",
             "rotationId",
@@ -202,10 +225,13 @@ export async function POST(request: NextRequest) {
         // Execute atomic clock-in operation
         const result = await ClockService.clockIn(clockInRequest)
 
-        logger.info({
-          requestId,
-          recordId: result.recordId,
-        }, "Clock-in API request completed successfully")
+        logger.info(
+          {
+            requestId,
+            recordId: result.recordId,
+          },
+          "Clock-in API request completed successfully"
+        )
 
         // Return success response with enhanced clock status
         return createSuccessResponse(
@@ -234,17 +260,23 @@ export async function POST(request: NextRequest) {
         const requestId = Math.random().toString(36).substring(2)
 
         if (error instanceof ClockError) {
-          logger.error({
-            requestId,
-            type: error.type,
-            code: error.code,
-            retryable: error.retryable,
-          }, "Clock-in API request failed")
+          logger.error(
+            {
+              requestId,
+              type: error.type,
+              code: error.code,
+              retryable: error.retryable,
+            },
+            "Clock-in API request failed"
+          )
         } else {
-          logger.error({
-            requestId,
-            error: error instanceof Error ? error.message : "Unknown error",
-          }, "Clock-in API request failed")
+          logger.error(
+            {
+              requestId,
+              error: error instanceof Error ? error.message : "Unknown error",
+            },
+            "Clock-in API request failed"
+          )
         }
 
         // Handle ClockError instances with proper error formatting
@@ -266,5 +298,4 @@ export async function POST(request: NextRequest) {
       },
     }
   )
-}
-
+})

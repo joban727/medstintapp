@@ -86,11 +86,8 @@ export const FooterSection = () => {
               <div className="hidden gap-12 lg:grid lg:grid-cols-6">
                 {/* Brand Section */}
                 <div className="col-span-2">
-                  <Link href="/" className="group mb-4 flex gap-2 font-bold">
-                    <div className="relative">
-                      <Image src={logoSrc} alt={site.name} width={30} height={30} />
-                    </div>
-                    <h3 className="font-bold text-2xl">{site.name}</h3>
+                  <Link href="/" className="group mb-4 flex font-bold">
+                    <Image src={logoSrc} alt={site.name} width={140} height={40} className="h-10" />
                   </Link>
                   <p className="mb-6 text-muted-foreground text-sm leading-relaxed">
                     Streamline clinical education with comprehensive student tracking, rotation
@@ -136,11 +133,8 @@ export const FooterSection = () => {
               <div className="gap-8 lg:hidden">
                 {/* Brand Section */}
                 <div>
-                  <Link href="/" className="group mb-4 flex gap-2 font-bold">
-                    <div className="relative">
-                      <Image src={logoSrc} alt={site.name} width={30} height={30} />
-                    </div>
-                    <h3 className="font-bold text-2xl">{site.name}</h3>
+                  <Link href="/" className="group mb-4 flex font-bold">
+                    <Image src={logoSrc} alt={site.name} width={140} height={40} className="h-10" />
                   </Link>
                   <p className="mb-6 text-muted-foreground text-sm leading-relaxed">
                     Streamline clinical education with comprehensive student tracking, rotation

@@ -91,11 +91,7 @@ export const ContactSection = () => {
         <Card className="bg-muted/60">
           <CardContent className="p-4">
             <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="grid w-full gap-4"
-                noValidate
-              >
+              <form onSubmit={form.handleSubmit(onSubmit)} className="grid w-full gap-4" noValidate>
                 <div className="md:!flex-row flex flex-col gap-8">
                   <FormField
                     control={form.control}

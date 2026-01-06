@@ -8,6 +8,7 @@ import { auditLogs, users } from "../../../database/schema"
 import { getSchoolContext, type SchoolContext } from "../../../lib/school-utils"
 import { cacheIntegrationService } from "@/lib/cache-integration"
 import { withErrorHandling } from "@/lib/api-response"
+import { withCSRF } from "@/lib/csrf-middleware"
 
 import type { UserRole } from "@/types"
 /**
@@ -977,7 +978,7 @@ const deleteParamsSchema = z.object({
  * - Audit trail for all deletion activities
  * - Safety checks and confirmation requirements
  */
-export async function DELETE(request: NextRequest) {
+export const DELETE = withCSRF(async (request: NextRequest) => {
   const startTime = Date.now()
   let context: { userId?: string; userRole?: string; schoolId?: string | null } | null = null
 
@@ -1272,5 +1273,4 @@ export async function DELETE(request: NextRequest) {
     )
     return addSecurityHeaders(response)
   }
-}
-
+})

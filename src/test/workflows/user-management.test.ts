@@ -103,7 +103,7 @@ describe('User Management Workflow', () => {
 
         // Seed DB
         // Seed DB
-        await dbMock.insert(users).values(initialUser)
+        await (dbMock.insert(users).values(initialUser) as any)
 
         // Mock auth
         vi.mocked(auth).mockResolvedValue({

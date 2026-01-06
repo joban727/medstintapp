@@ -4,6 +4,7 @@ import { db } from "@/database/connection-pool"
 import { timeSyncSessions, syncEvents } from "@/database/schema"
 import { eq, desc, and, gte } from "drizzle-orm"
 import { withErrorHandling } from "@/lib/api-response"
+import { withCSRF } from "@/lib/csrf-middleware"
 
 // Time authority service endpoint
 export async function GET(request: NextRequest) {
@@ -90,7 +91,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST endpoint for reporting client time and calculating drift
-export async function POST(request: NextRequest) {
+export const POST = withCSRF(async (request: NextRequest) => {
   try {
     const { userId } = await auth()
 
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
     console.error("Drift measurement error:", error)
     return new Response("Internal Server Error", { status: 500 })
   }
-}
+})
 
 // Handle preflight requests for CORS
 export async function OPTIONS() {
@@ -160,4 +161,3 @@ export async function OPTIONS() {
     },
   })
 }
-

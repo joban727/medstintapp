@@ -118,10 +118,9 @@ export function CompleteOnboarding({ user, clerkUser }: CompleteOnboardingProps)
           {steps.map((step, index) => (
             <div key={step.label} className="flex items-center">
               <div
-                className={`h-2 w-2 rounded-full ${step.active || step.completed
-                    ? "bg-primary"
-                    : "bg-muted"
-                  }`}
+                className={`h-2 w-2 rounded-full ${
+                  step.active || step.completed ? "bg-primary" : "bg-muted"
+                }`}
               />
               {index < steps.length - 1 && (
                 <div className={`w-8 h-px ${step.completed ? "bg-primary" : "bg-muted"}`} />
@@ -140,7 +139,8 @@ export function CompleteOnboarding({ user, clerkUser }: CompleteOnboardingProps)
           All set, {clerkUser.firstName}!
         </h1>
         <p className="text-muted-foreground text-lg mb-12 max-w-md mx-auto">
-          Your workspace has been created and configured. You're ready to start managing your clinical education program.
+          Your workspace has been created and configured. You're ready to start managing your
+          clinical education program.
         </p>
 
         {/* Action Button */}

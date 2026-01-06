@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { GlassCard } from "@/components/ui/glass-card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import {
   Table,
@@ -53,7 +52,7 @@ export function PendingInvitationsList() {
   }, [])
 
   return (
-    <GlassCard>
+    <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-md shadow-sm">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -96,7 +95,10 @@ export function PendingInvitationsList() {
               </TableHeader>
               <TableBody>
                 {invitations.map((invite) => (
-                  <TableRow key={invite.id} className="hover:bg-muted/50 dark:hover:bg-white/5 border-border dark:border-white/10">
+                  <TableRow
+                    key={invite.id}
+                    className="hover:bg-muted/50 dark:hover:bg-white/5 border-border dark:border-white/10"
+                  >
                     <TableCell className="font-medium">{invite.email}</TableCell>
                     <TableCell>
                       <Badge
@@ -104,11 +106,11 @@ export function PendingInvitationsList() {
                         className={cn(
                           "border-0",
                           invite.status === "PENDING" &&
-                          "bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30",
+                            "bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30",
                           invite.status === "ACCEPTED" &&
-                          "bg-green-500/20 text-green-500 hover:bg-green-500/30",
+                            "bg-green-500/20 text-green-500 hover:bg-green-500/30",
                           invite.status === "EXPIRED" &&
-                          "bg-red-500/20 text-red-500 hover:bg-red-500/30"
+                            "bg-red-500/20 text-red-500 hover:bg-red-500/30"
                         )}
                       >
                         {invite.status}
@@ -127,6 +129,6 @@ export function PendingInvitationsList() {
           </div>
         )}
       </CardContent>
-    </GlassCard>
+    </Card>
   )
 }

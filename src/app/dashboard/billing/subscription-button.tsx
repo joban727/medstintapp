@@ -3,8 +3,8 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 import { Button } from "../../../components/ui/button"
-import { updateExistingSubscription } from "../../../lib/payments/actions"
-import type { Plan } from "../../../lib/payments/plans"
+import { updateExistingSubscription, createSubscription } from "../../../lib/payments/actions"
+import type { Plan } from "../../../lib/payments/plans-service"
 
 interface SubscriptionButtonProps {
   buttonText: string
@@ -36,7 +36,7 @@ export default function SubscriptionButton({
         // Update existing subscription
         const loadingToast = toast.loading("Updating subscription...")
 
-        const result = await updateExistingSubscription(subId, plan.priceId)
+        const result = await updateExistingSubscription(subId, plan.stripePriceId)
         // Subscription updated successfully
 
         toast.dismiss(loadingToast)
@@ -51,26 +51,16 @@ export default function SubscriptionButton({
         }
       } else {
         // Create new subscription
-        // TODO: Implement subscription creation with your payment provider
-        const response = await fetch("/api/billing/create-subscription", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            planId: plan.priceId,
-            successUrl: "/dashboard/billing",
-            cancelUrl: "/dashboard/billing",
-          }),
-        })
+        const result = await createSubscription(
+          plan.stripePriceId,
+          `${window.location.origin}/dashboard/billing`,
+          `${window.location.origin}/dashboard/billing`
+        )
 
-        if (!response.ok) {
-          toast.error("Failed to create subscription")
+        if (result.status && result.url) {
+          window.location.href = result.url
         } else {
-          const result = await response.json()
-          if (result.url && typeof window !== "undefined") {
-            window.location.href = result.url
-          }
+          toast.error(result.message || "Failed to create subscription")
         }
       }
     } catch (_err) {

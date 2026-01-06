@@ -436,7 +436,6 @@ export function getNavigationItems(userRole: UserRole): NavigationItem[] {
         href: `${baseRoute}/resources`,
         icon: "BookOpen",
       },
-
     ],
     SYSTEM: [],
   }

@@ -54,7 +54,7 @@ class UnifiedErrorBoundary extends Component<Props, State> {
       showDetails: process.env.NODE_ENV === "development",
       enableChunkErrorHandling: true,
       fallbackType: "dashboard",
-      onError: () => { },
+      onError: () => {},
       ...props.config,
     }
 

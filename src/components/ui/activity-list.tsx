@@ -1,260 +1,245 @@
-"use client"
-
-import * as React from "react"
-import { type LucideIcon, AlertCircle, CheckCircle2, Info, Clock } from "lucide-react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "@/lib/utils"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { cn } from "@/lib/utils"
+import Link from "next/link"
 
-// ============================================================================
-// Activity Type Definitions
-// ============================================================================
-
-const activityTypeVariants = cva("rounded-full p-1.5", {
-  variants: {
-    type: {
-      info: "bg-blue-100 dark:bg-blue-900/50",
-      success: "bg-green-100 dark:bg-green-900/50",
-      warning: "bg-orange-100 dark:bg-orange-900/50",
-      error: "bg-red-100 dark:bg-red-900/50",
-      default: "bg-gray-100 dark:bg-gray-800",
-    },
-  },
-  defaultVariants: {
-    type: "default",
-  },
-})
-
-const activityIconVariants = cva("h-3.5 w-3.5", {
-  variants: {
-    type: {
-      info: "text-blue-600 dark:text-blue-400",
-      success: "text-green-600 dark:text-green-400",
-      warning: "text-orange-600 dark:text-orange-400",
-      error: "text-red-600 dark:text-red-400",
-      default: "text-gray-600 dark:text-gray-400",
-    },
-  },
-  defaultVariants: {
-    type: "default",
-  },
-})
-
-type ActivityType = "info" | "success" | "warning" | "error" | "default"
-
-const typeIcons: Record<ActivityType, LucideIcon> = {
-  info: Info,
-  success: CheckCircle2,
-  warning: AlertCircle,
-  error: AlertCircle,
-  default: Clock,
+// Original ActivityList interface for avatar-based activity
+// Original ActivityList interface for avatar-based activity
+export interface ActivityItem {
+  id: string
+  user: {
+    name: string
+    image?: string
+    initials: string
+  }
+  action: string
+  target?: string
+  timestamp: string
 }
 
-// ============================================================================
-// ActivityList Component
-// ============================================================================
+export type Activity = ActivityItem
 
-interface Activity {
+interface ActivityListPropsOriginal {
+  title?: string
+  items: ActivityItem[]
+  className?: string
+}
+
+// New simplified activity interface
+export interface SimpleActivity {
   id: string
   message: string
   time: string
-  type?: ActivityType
-  icon?: LucideIcon
+  type?: "info" | "success" | "warning" | "error"
 }
 
-interface ActivityListProps extends React.HTMLAttributes<HTMLElement> {
-  /** Section title */
+interface ActivityListProps {
   title?: string
-  /** Section description */
   description?: string
-  /** Array of activities to display */
-  activities: Activity[]
-  /** Maximum number of activities to show */
-  maxItems?: number
-  /** Maximum height of the list container */
+  items?: ActivityItem[]
+  activities?: SimpleActivity[]
+  className?: string
   maxHeight?: string
-  /** Show empty state message */
-  emptyMessage?: string
 }
 
-/**
- * Unified activity list component for displaying recent activities.
- */
-const ActivityList = React.forwardRef<HTMLDivElement, ActivityListProps>(
-  (
-    {
-      title = "Recent Activity",
-      description,
-      activities,
-      maxItems,
-      emptyMessage = "No recent activity",
-      className,
-      maxHeight,
-      ...props
-    },
-    ref
-  ) => {
-    const displayedActivities = maxItems ? activities.slice(0, maxItems) : activities
+export function ActivityList({
+  title = "Recent Activity",
+  description,
+  items,
+  activities,
+  className,
+  maxHeight = "300px",
+}: ActivityListProps) {
+  const typeColors = {
+    info: "bg-blue-500/10 text-blue-500",
+    success: "bg-green-500/10 text-green-500",
+    warning: "bg-yellow-500/10 text-yellow-500",
+    error: "bg-red-500/10 text-red-500",
+  }
 
+  // Use new simplified format if activities is provided
+  if (activities) {
     return (
-      <Card ref={ref} className={cn("glass-card-subtle rounded-xl", className)} {...props}>
+      <Card className={className}>
         <CardHeader>
           <CardTitle>{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </CardHeader>
         <CardContent>
-          {displayedActivities.length > 0 ? (
-            <div
-              className={cn("space-y-3", maxHeight && "overflow-y-auto pr-2")}
-              style={{ maxHeight: maxHeight }}
-            >
-              <ul className="space-y-3" role="list" aria-label={title}>
-                {displayedActivities.map((activity) => {
-                  const type = activity.type || "default"
-                  const Icon = activity.icon || typeIcons[type]
-
-                  return (
-                    <li
-                      key={activity.id}
-                      className="list-item-interactive group flex items-start space-x-3 rounded-lg border border-transparent p-3 hover:bg-muted/50 hover:border-border/50 transition-all duration-200"
-                      role="listitem"
-                    >
-                      <div className={cn(activityTypeVariants({ type }), "transition-transform group-hover:scale-110")} aria-hidden="true">
-                        <Icon className={cn(activityIconVariants({ type }))} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">{activity.message}</p>
-                        <p className="text-xs text-muted-foreground">{activity.time}</p>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
+          <ScrollArea className={`pr-4`} style={{ height: maxHeight }}>
+            <div className="space-y-3">
+              {activities.map((activity) => (
+                <div key={activity.id} className="flex items-start gap-3 rounded-lg border p-3">
+                  <div
+                    className={cn(
+                      "mt-0.5 h-2 w-2 rounded-full",
+                      typeColors[activity.type || "info"]
+                    )}
+                  />
+                  <div className="grid gap-1 flex-1">
+                    <p className="text-sm leading-relaxed">{activity.message}</p>
+                    <p className="text-xs text-muted-foreground">{activity.time}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          ) : (
-            <p className="text-center text-muted-foreground text-sm py-4">{emptyMessage}</p>
-          )}
+          </ScrollArea>
         </CardContent>
       </Card>
     )
   }
-)
-ActivityList.displayName = "ActivityList"
 
-// ============================================================================
-// TaskList Component
-// ============================================================================
+  // Use original format with avatar-based items
+  return (
+    <Card className={className}>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        {description && <CardDescription>{description}</CardDescription>}
+      </CardHeader>
+      <CardContent>
+        <ScrollArea className={`pr-4`} style={{ height: maxHeight }}>
+          <div className="space-y-4">
+            {(items || []).map((item) => (
+              <div key={item.id} className="flex items-start gap-4 text-sm">
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={item.user.image} alt={item.user.name} />
+                  <AvatarFallback>{item.user.initials}</AvatarFallback>
+                </Avatar>
+                <div className="grid gap-1">
+                  <p className="font-medium leading-none">
+                    {item.user.name}{" "}
+                    <span className="text-muted-foreground font-normal">{item.action}</span>{" "}
+                    {item.target && <span className="font-medium">{item.target}</span>}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{item.timestamp}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </CardContent>
+    </Card>
+  )
+}
 
-const taskPriorityVariants = cva("h-2 w-2 rounded-full", {
-  variants: {
-    priority: {
-      high: "bg-red-500",
-      medium: "bg-yellow-500",
-      low: "bg-green-500",
-    },
-  },
-  defaultVariants: {
-    priority: "medium",
-  },
-})
-
-interface Task {
+// TaskList component
+interface TaskItem {
   id: string
   title: string
   description?: string
-  dueDate?: string
-  priority?: "high" | "medium" | "low"
   count?: number
+  priority?: "low" | "medium" | "high"
   href?: string
   actionLabel?: string
+  status?: "pending" | "in-progress" | "completed"
+  dueDate?: string
 }
 
-interface TaskListProps extends React.HTMLAttributes<HTMLElement> {
-  /** Section title */
+interface TaskListProps {
   title?: string
-  /** Section description */
   description?: string
-  /** Array of tasks to display */
-  tasks: Task[]
-  /** Callback when action button is clicked */
-  onActionClick?: (taskId: string) => void
-  /** Show empty state message */
+  tasks?: TaskItem[]
+  items?: TaskItem[]
   emptyMessage?: string
+  className?: string
 }
 
-/**
- * Unified task list component for displaying pending tasks with priorities.
- */
-const TaskList = React.forwardRef<HTMLDivElement, TaskListProps>(
-  (
-    {
-      title = "Pending Tasks",
-      description,
-      tasks,
-      onActionClick,
-      emptyMessage = "No pending tasks",
-      className,
-      ...props
-    },
-    ref
-  ) => {
+export function TaskList({
+  title = "Tasks",
+  description,
+  tasks,
+  items,
+  emptyMessage = "No tasks",
+  className,
+}: TaskListProps) {
+  const allItems = tasks || items || []
+
+  const priorityColors = {
+    low: "text-muted-foreground",
+    medium: "text-yellow-500",
+    high: "text-red-500",
+  }
+
+  const statusColors = {
+    pending: "bg-yellow-500/10 text-yellow-500",
+    "in-progress": "bg-blue-500/10 text-blue-500",
+    completed: "bg-green-500/10 text-green-500",
+  }
+
+  if (allItems.length === 0) {
     return (
-      <Card ref={ref} className={cn("glass-card-subtle rounded-xl", className)} {...props}>
+      <Card className={className}>
         <CardHeader>
           <CardTitle>{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </CardHeader>
         <CardContent>
-          {tasks.length > 0 ? (
-            <ul className="space-y-3" role="list" aria-label={title}>
-              {tasks.map((task) => (
-                <li
-                  key={task.id}
-                  className="list-item-interactive group flex items-center justify-between rounded-lg border border-transparent p-3 hover:bg-muted/50 hover:border-border/50 transition-all duration-200"
-                  role="listitem"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={cn(taskPriorityVariants({ priority: task.priority }), "ring-2 ring-offset-2 ring-transparent group-hover:ring-border transition-all")}
-                      aria-label={`${task.priority || "medium"} priority`}
-                    />
-                    <div>
-                      <p className="font-medium text-sm text-foreground group-hover:text-primary transition-colors">{task.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {task.dueDate}
-                        {task.count !== undefined && ` • ${task.count} items`}
-                      </p>
-                    </div>
-                  </div>
-                  {(task.href || onActionClick) && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => onActionClick?.(task.id)}
-                      asChild={!!task.href}
-                    >
-                      {task.href ? (
-                        <a href={task.href}>{task.actionLabel || "Review"}</a>
-                      ) : (
-                        <span>{task.actionLabel || "Review"}</span>
-                      )}
-                    </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-center text-muted-foreground text-sm py-4">{emptyMessage}</p>
-          )}
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
         </CardContent>
       </Card>
     )
   }
-)
-TaskList.displayName = "TaskList"
 
-export { ActivityList, TaskList, activityTypeVariants, activityIconVariants, taskPriorityVariants }
-export type { Activity, ActivityListProps, Task, TaskListProps, ActivityType }
+  return (
+    <Card className={className}>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        {description && <CardDescription>{description}</CardDescription>}
+      </CardHeader>
+      <CardContent>
+        <ScrollArea className="h-[300px] pr-4">
+          <div className="space-y-3">
+            {allItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-start justify-between gap-4 rounded-lg border p-3"
+              >
+                <div className="grid gap-1 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium leading-none">{item.title}</p>
+                    {item.count !== undefined && item.count > 0 && (
+                      <Badge variant="secondary" className="text-xs">
+                        {item.count}
+                      </Badge>
+                    )}
+                  </div>
+                  {item.description && (
+                    <p className="text-xs text-muted-foreground">{item.description}</p>
+                  )}
+                  {item.dueDate && (
+                    <p className="text-xs text-muted-foreground">Due: {item.dueDate}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {item.priority && (
+                    <span className={cn("text-xs font-medium", priorityColors[item.priority])}>
+                      {item.priority}
+                    </span>
+                  )}
+                  {item.status && (
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-1 text-xs font-medium",
+                        statusColors[item.status]
+                      )}
+                    >
+                      {item.status}
+                    </span>
+                  )}
+                  {item.href && (
+                    <Button asChild size="sm" variant="ghost">
+                      <Link href={item.href}>{item.actionLabel || "View"}</Link>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </CardContent>
+    </Card>
+  )
+}

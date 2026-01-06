@@ -9,7 +9,7 @@ import {
   assessments,
   clinicalSites,
   rotations,
-  programs
+  programs,
 } from "@/database/schema"
 import {
   createSuccessResponse,
@@ -30,10 +30,7 @@ const generateReportData = async (params: URLSearchParams) => {
   const toDate = to ? new Date(to) : new Date()
 
   // Base filters
-  const dateFilter = and(
-    gte(timeRecords.date, fromDate),
-    lte(timeRecords.date, toDate)
-  )
+  const dateFilter = and(gte(timeRecords.date, fromDate), lte(timeRecords.date, toDate))
 
   // 1. Summary Statistics
   const [studentCount] = await db
@@ -41,9 +38,7 @@ const generateReportData = async (params: URLSearchParams) => {
     .from(users)
     .where(eq(users.role, "STUDENT"))
 
-  const [competencyCount] = await db
-    .select({ count: count() })
-    .from(competencies)
+  const [competencyCount] = await db.select({ count: count() }).from(competencies)
 
   const [assignmentStats] = await db
     .select({
@@ -57,11 +52,11 @@ const generateReportData = async (params: URLSearchParams) => {
     .from(timeRecords)
     .where(dateFilter)
 
-  const [scoreStats] = await db
-    .select({ average: avg(assessments.score) })
-    .from(assessments)
+  const [scoreStats] = await db.select({ average: avg(assessments.score) }).from(assessments)
 
-  const completionRate = assignmentStats?.total ? (Number(assignmentStats.completed) / Number(assignmentStats.total)) * 100 : 0
+  const completionRate = assignmentStats?.total
+    ? (Number(assignmentStats.completed) / Number(assignmentStats.total)) * 100
+    : 0
 
   // 2. Time Tracking Trends (Daily)
   const dailyHours = await db
@@ -106,16 +101,19 @@ const generateReportData = async (params: URLSearchParams) => {
       totalHours: Number(hoursStats?.total || 0).toFixed(2),
     },
     timeTracking: {
-      dailyHours: dailyHours.map(d => ({ date: d.date.toISOString().split('T')[0], hours: Number(d.hours) })),
+      dailyHours: dailyHours.map((d) => ({
+        date: d.date.toISOString().split("T")[0],
+        hours: Number(d.hours),
+      })),
       weeklyTrends: [], // Placeholder for complex aggregation
       topActivities: [], // Placeholder
     },
     competencyProgress: {
-      byCategory: competencyProgress.map(c => ({
-        category: c.category || 'Uncategorized',
+      byCategory: competencyProgress.map((c) => ({
+        category: c.category || "Uncategorized",
         total: c.count,
         completed: Number(c.completed),
-        rate: c.count ? (Number(c.completed) / c.count) * 100 : 0
+        rate: c.count ? (Number(c.completed) / c.count) * 100 : 0,
       })),
       byStudent: [],
       overallTrends: [],
@@ -131,7 +129,10 @@ const generateReportData = async (params: URLSearchParams) => {
       timeToCompletion: [],
     },
     clinicalSites: {
-      utilizationRates: siteUtilization.map(s => ({ name: s.name, activeRotations: s.activeRotations })),
+      utilizationRates: siteUtilization.map((s) => ({
+        name: s.name,
+        activeRotations: s.activeRotations,
+      })),
       performanceByLocation: [],
       capacityAnalysis: [],
     },
@@ -158,4 +159,3 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   return createSuccessResponse(reportData)
 })
-

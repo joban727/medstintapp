@@ -5,10 +5,9 @@
  */
 
 import { neonConfig, Pool, type PoolClient } from "@neondatabase/serverless"
+import { logger } from "@/lib/logger"
 import { sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/node-postgres"
-// Temporarily disabled to fix build issues
-// import { queryPerformanceLogger } from "../lib/query-performance-logger"
 import * as schema from "./schema"
 
 // Configure Neon for serverless environments to prevent WebSocket issues
@@ -128,10 +127,12 @@ class DynamicPoolManager {
     this.evaluationTimer = setInterval(() => {
       this.evaluateScaling()
     }, this.config.evaluationInterval)
-    
+
     // Only use unref in Node.js environment to prevent process hanging
     if (typeof process !== 'undefined' && process.versions?.node && this.evaluationTimer) {
-      (this.evaluationTimer as any).unref?.()
+      if (this.evaluationTimer && typeof (this.evaluationTimer as any).unref === "function") {
+        ; (this.evaluationTimer as any).unref()
+      }
     }
   }
 
@@ -161,7 +162,7 @@ class DynamicPoolManager {
     if (newMax > currentMax) {
       pool.options.max = newMax
       this.lastScaleAction = Date.now()
-      // Scaled up connection pool
+      logger.info({ oldMax: currentMax, newMax: newMax, reason: "high utilization or waiting clients" }, "Database pool scaled up")
     }
   }
 
@@ -172,11 +173,12 @@ class DynamicPoolManager {
     if (newMax < currentMax && metrics.totalCount > newMax) {
       pool.options.max = newMax
       this.lastScaleAction = Date.now()
-      // Scaled down connection pool
+      logger.info({ oldMax: currentMax, newMax: newMax, reason: "low utilization and no waiting clients" }, "Database pool scaled down")
     }
   }
 
   private getEnhancedPoolMetrics(): PoolMetrics {
+    logger.info({ poolSize: pool.totalCount, active: pool.waitingCount }, "Database pool metrics evaluated")
     const totalCount = pool.totalCount
     const idleCount = pool.idleCount
     const waitingCount = pool.waitingCount
@@ -392,15 +394,7 @@ export const dbUtils = {
       query?: string
     } = {}
   ): Promise<T> {
-    // Temporarily disabled performance logging to fix build issues
     return operation()
-    // return queryPerformanceLogger.executeWithLogging(operation, {
-    //   name: operationName,
-    //   query: options.query,
-    //   endpoint: options.endpoint,
-    //   userId: options.userId,
-    //   schoolId: options.schoolId,
-    // })
   },
 
   /**
@@ -435,17 +429,13 @@ export const dbUtils = {
    * Get query performance metrics
    */
   async getPerformanceMetrics(_hours = 24) {
-    // Temporarily disabled performance logging to fix build issues
-    return { summary: "Performance logging temporarily disabled" }
-    // return queryPerformanceLogger.getPerformanceSummary(hours)
+    return { summary: "Performance logging disabled" }
   },
 
   /**
    * Cleanup old performance logs
    */
   async cleanupPerformanceLogs() {
-    // Temporarily disabled performance logging to fix build issues
     return { cleaned: 0 }
-    // return queryPerformanceLogger.cleanup()
   },
 }

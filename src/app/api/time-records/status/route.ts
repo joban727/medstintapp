@@ -60,14 +60,13 @@ export async function GET(request: NextRequest) {
       isClockedIn,
       currentRecord: isClockedIn
         ? {
-          id: latestRecord.id,
-          clockIn: latestRecord.clockIn,
-          rotationId: latestRecord.rotationId,
-        }
+            id: latestRecord.id,
+            clockIn: latestRecord.clockIn,
+            rotationId: latestRecord.rotationId,
+          }
         : null,
       lastClockIn: isClockedIn ? latestRecord.clockIn : null,
       totalHoursToday: totalHoursToday.toString(),
     })
   })
 }
-

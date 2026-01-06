@@ -216,7 +216,9 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   // Perform server-side validation
   // Import dynamically to avoid circular dependencies if any (though here it should be fine)
-  const { validateLocationWithGeofence, saveLocationVerification } = await import("@/services/location-validation")
+  const { validateLocationWithGeofence, saveLocationVerification } = await import(
+    "@/services/location-validation"
+  )
 
   const validationResult = await validateLocationWithGeofence({
     userId,
@@ -224,7 +226,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     longitude: userLongitude,
     accuracy: userAccuracy,
     clinicalSiteId: rotation.clinicalSiteId,
-    strictMode: false // Soft validation for now
+    strictMode: false, // Soft validation for now
   })
 
   // Save the verification record
@@ -317,9 +319,9 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       coordinates:
         siteLatitude && siteLongitude
           ? {
-            latitude: Number.parseFloat(siteLatitude),
-            longitude: Number.parseFloat(siteLongitude),
-          }
+              latitude: Number.parseFloat(siteLatitude),
+              longitude: Number.parseFloat(siteLongitude),
+            }
           : null,
       allowedRadius,
       contact: {
@@ -335,4 +337,3 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   return NextResponse.json(response, { status: 200 })
 })
-

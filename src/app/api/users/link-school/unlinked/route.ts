@@ -71,4 +71,3 @@ export const GET = withErrorHandling(async (_request: NextRequest) => {
 
   return await executeOriginalLogic()
 })
-

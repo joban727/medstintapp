@@ -107,7 +107,11 @@ const specialtyColors: Record<string, string> = {
   Other: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
 }
 
-export function FacultyStaffClient({ preceptorData, facultyData, clinicalSites }: FacultyStaffClientProps) {
+export function FacultyStaffClient({
+  preceptorData,
+  facultyData,
+  clinicalSites,
+}: FacultyStaffClientProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [specialtyFilter, setSpecialtyFilter] = useState("all")
@@ -194,7 +198,7 @@ export function FacultyStaffClient({ preceptorData, facultyData, clinicalSites }
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center glass-card-subtle p-4 rounded-lg">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center bg-white/5 backdrop-blur-sm border border-white/10 p-4 rounded-lg">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -260,7 +264,7 @@ export function FacultyStaffClient({ preceptorData, facultyData, clinicalSites }
         </TabsList>
 
         <TabsContent value="preceptors" className="space-y-4">
-          <Card className="glass-card overflow-hidden">
+          <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm overflow-hidden">
             <CardHeader>
               <CardTitle>Clinical Preceptors</CardTitle>
               <CardDescription>
@@ -276,18 +280,29 @@ export function FacultyStaffClient({ preceptorData, facultyData, clinicalSites }
                       <div className="flex items-center gap-2">
                         <Avatar className="h-8 w-8">
                           <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                            {preceptor.name?.split(" ").map((n) => n[0]).join("") || "P"}
+                            {preceptor.name
+                              ?.split(" ")
+                              .map((n) => n[0])
+                              .join("") || "P"}
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
                           <div className="font-medium truncate">{preceptor.name || "Unknown"}</div>
-                          <div className="text-muted-foreground text-xs truncate">{preceptor.email}</div>
+                          <div className="text-muted-foreground text-xs truncate">
+                            {preceptor.email}
+                          </div>
                         </div>
                       </div>
                       {getStatusBadge(preceptor.status)}
                     </div>
                     <MobileDataField label="Specialty">
-                      <Badge variant="secondary" className={cn("text-xs", specialtyColors[preceptor.specialty] || "bg-gray-100")}>
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "text-xs",
+                          specialtyColors[preceptor.specialty] || "bg-gray-100"
+                        )}
+                      >
                         {preceptor.specialty}
                       </Badge>
                     </MobileDataField>
@@ -295,7 +310,9 @@ export function FacultyStaffClient({ preceptorData, facultyData, clinicalSites }
                       <span className="truncate">{preceptor.clinicalSite}</span>
                     </MobileDataField>
                     <MobileDataField label="Students">
-                      <span>{preceptor.activeStudents}/{preceptor.maxCapacity}</span>
+                      <span>
+                        {preceptor.activeStudents}/{preceptor.maxCapacity}
+                      </span>
                     </MobileDataField>
                     <MobileDataField label="Rating">
                       <div className="flex items-center gap-1">
@@ -350,7 +367,7 @@ export function FacultyStaffClient({ preceptorData, facultyData, clinicalSites }
                             variant="secondary"
                             className={cn(
                               specialtyColors[preceptor.specialty] ||
-                              "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+                                "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
                             )}
                           >
                             {preceptor.specialty}
@@ -385,7 +402,10 @@ export function FacultyStaffClient({ preceptorData, facultyData, clinicalSites }
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="glass-card-subtle">
+                            <DropdownMenuContent
+                              align="end"
+                              className="bg-black/80 backdrop-blur-xl border border-white/10"
+                            >
                               <DropdownMenuItem className="gap-2 cursor-pointer focus:bg-primary/10 focus:text-primary">
                                 <Eye className="h-4 w-4" />
                                 View Details
@@ -425,12 +445,17 @@ export function FacultyStaffClient({ preceptorData, facultyData, clinicalSites }
                       <div className="flex items-center gap-2">
                         <Avatar className="h-8 w-8">
                           <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                            {faculty.name?.split(" ").map((n) => n[0]).join("") || "F"}
+                            {faculty.name
+                              ?.split(" ")
+                              .map((n) => n[0])
+                              .join("") || "F"}
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
                           <div className="font-medium truncate">{faculty.name || "Unknown"}</div>
-                          <div className="text-muted-foreground text-xs truncate">{faculty.email}</div>
+                          <div className="text-muted-foreground text-xs truncate">
+                            {faculty.email}
+                          </div>
                         </div>
                       </div>
                       {getStatusBadge(faculty.status)}

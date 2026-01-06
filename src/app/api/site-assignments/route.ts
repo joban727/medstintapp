@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server"
-import { and, eq } from "drizzle-orm"
+import { and, eq, type SQL } from "drizzle-orm"
 import { type NextRequest } from "next/server"
-import { z } from "zod"
+import { z, type ZodIssue } from "zod"
 import { db } from "@/database/connection-pool"
 import type { UserRole } from "@/types"
 import { siteAssignments, users, clinicalSites } from "@/database/schema"
@@ -79,7 +79,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     | null
 
   // Build query conditions
-  const conditions = [] as any[]
+  const conditions: SQL<unknown>[] = []
 
   if (studentId) {
     conditions.push(eq(siteAssignments.studentId, studentId))
@@ -141,7 +141,10 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     const context = await getSchoolContext()
 
     // Only admins can create site assignments
-    if (!context.userRole || !(["SUPER_ADMIN", "SCHOOL_ADMIN"] as UserRole[]).includes(context.userRole)) {
+    if (
+      !context.userRole ||
+      !(["SUPER_ADMIN", "SCHOOL_ADMIN"] as UserRole[]).includes(context.userRole)
+    ) {
       return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
     }
 
@@ -165,9 +168,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       }
 
       // Verify all students exist and belong to the school
-      const studentConditions = [
-        eq(users.role, "STUDENT"),
-      ]
+      const studentConditions = [eq(users.role, "STUDENT")]
       if (context.userRole === ("SCHOOL_ADMIN" as UserRole) && context.schoolId) {
         studentConditions.push(eq(users.schoolId, context.schoolId))
       }
@@ -286,10 +287,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       }
 
       // Verify student exists and belongs to the school (for school admins)
-      const studentConditions = [
-        eq(users.id, validatedData.studentId),
-        eq(users.role, "STUDENT"),
-      ]
+      const studentConditions = [eq(users.id, validatedData.studentId), eq(users.role, "STUDENT")]
       if (context.userRole === ("SCHOOL_ADMIN" as UserRole) && context.schoolId) {
         studentConditions.push(eq(users.schoolId, context.schoolId))
       }
@@ -379,7 +377,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return createValidationErrorResponse("Validation failed", error.issues as any)
+      return createValidationErrorResponse("Validation failed", error.issues)
     }
     return createErrorResponse(
       "Failed to create site assignment",
@@ -448,4 +446,3 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
 
   return createSuccessResponse({ id }, "Site assignment deleted successfully")
 })
-

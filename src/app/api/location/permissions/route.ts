@@ -75,6 +75,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       permissionStatus,
       browserInfo: browserInfo || null,
       deviceInfo: deviceInfo || null,
+      locationSource: "gps", // Default to gps for now
     })
     .onConflictDoUpdate({
       target: locationPermissions.userId,
@@ -82,6 +83,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
         permissionStatus,
         browserInfo,
         deviceInfo,
+        locationSource: "gps",
         updatedAt: new Date(),
       },
     })
@@ -119,4 +121,3 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
     { status: 200 }
   )
 })
-

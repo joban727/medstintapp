@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { and, eq, gte, lte } from "drizzle-orm"
+import { and, eq, gte, lte, type SQL } from "drizzle-orm"
 import { db } from "@/database/connection-pool"
 import { rotations, users, clinicalSites } from "@/database/schema"
 import {
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const limit = Number.parseInt(searchParams.get("limit") || "100")
     const offset = Number.parseInt(searchParams.get("offset") || "0")
 
-    const conditions: any[] = []
+    const conditions: SQL<unknown>[] = []
     if (programId) conditions.push(eq(users.programId, programId))
     if (siteId) conditions.push(eq(rotations.clinicalSiteId, siteId))
     if (studentId) conditions.push(eq(rotations.studentId, studentId))
@@ -72,4 +72,3 @@ export async function GET(request: NextRequest) {
     })
   })
 }
-

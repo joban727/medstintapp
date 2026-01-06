@@ -79,12 +79,20 @@ interface TimeRecord {
 interface TimecardCorrectionDialogProps {
   timeRecord: TimeRecord
   trigger: React.ReactNode
+  onSuccess?: () => void
 }
 
-export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrectionDialogProps) {
+export function TimecardCorrectionDialog({
+  timeRecord,
+  trigger,
+  onSuccess,
+}: TimecardCorrectionDialogProps) {
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedChanges, setSelectedChanges] = useState<Record<string, unknown>>({})
+  const [timeDisplayValues, setTimeDisplayValues] = useState<{ clockIn: string; clockOut: string }>(
+    { clockIn: "", clockOut: "" }
+  )
 
   const form = useForm<CorrectionFormData>({
     resolver: zodResolver(correctionSchema),
@@ -113,6 +121,23 @@ export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrec
       console.error("Failed to parse activities:", error)
       return []
     }
+  }
+
+  // Handle time changes by combining the record's date with the new time
+  const handleTimeChange = (field: "clockIn" | "clockOut", timeValue: string) => {
+    // Update display value for the controlled input
+    setTimeDisplayValues((prev) => ({ ...prev, [field]: timeValue }))
+
+    if (!timeValue) {
+      handleFieldChange(field, null)
+      return
+    }
+    // Combine with the record's date to create full ISO timestamp
+    const recordDate = new Date(timeRecord.date)
+    const [hours, minutes] = timeValue.split(":").map(Number)
+    const fullDateTime = new Date(recordDate)
+    fullDateTime.setHours(hours, minutes, 0, 0)
+    handleFieldChange(field, fullDateTime.toISOString())
   }
 
   const handleFieldChange = (field: string, value: unknown) => {
@@ -173,8 +198,9 @@ export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrec
       setOpen(false)
       form.reset()
       setSelectedChanges({})
-      // Refresh the page to show updated data
-      window.location.reload()
+      setTimeDisplayValues({ clockIn: "", clockOut: "" })
+      // Notify parent component of success for refresh
+      onSuccess?.()
     } catch (error) {
       // Error submitting correction
       toast.error(error instanceof Error ? error.message : "Failed to submit correction request")
@@ -330,8 +356,8 @@ export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrec
                       <Label className="font-medium text-sm">Correct Clock In</Label>
                       <Input
                         type="time"
-                        value={(selectedChanges.clockIn as string) || ""}
-                        onChange={(e) => handleFieldChange("clockIn", e.target.value)}
+                        value={timeDisplayValues.clockIn}
+                        onChange={(e) => handleTimeChange("clockIn", e.target.value)}
                         placeholder="HH:MM"
                       />
                     </div>
@@ -339,8 +365,8 @@ export function TimecardCorrectionDialog({ timeRecord, trigger }: TimecardCorrec
                       <Label className="font-medium text-sm">Correct Clock Out</Label>
                       <Input
                         type="time"
-                        value={(selectedChanges.clockOut as string) || ""}
-                        onChange={(e) => handleFieldChange("clockOut", e.target.value)}
+                        value={timeDisplayValues.clockOut}
+                        onChange={(e) => handleTimeChange("clockOut", e.target.value)}
                         placeholder="HH:MM"
                       />
                     </div>

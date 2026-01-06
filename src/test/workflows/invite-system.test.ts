@@ -26,6 +26,10 @@ vi.mock('@/lib/auth-utils', () => ({
     invalidateUserCache: vi.fn(),
 }))
 
+vi.mock('@/lib/csrf-middleware', () => ({
+    withCSRF: (handler: any) => handler
+}))
+
 // Mock drizzle-orm operators to return structures compatible with stateful-db.ts
 vi.mock('drizzle-orm', async () => {
     const actual = await vi.importActual('drizzle-orm')

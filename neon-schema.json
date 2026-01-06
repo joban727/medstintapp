@@ -1,0 +1,5364 @@
+{
+  "cohort_rotation_assignments": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "cohort_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "rotation_template_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "clinical_site_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "start_date",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "end_date",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "required_hours",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "max_students",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'DRAFT'::text"
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "schools": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "address",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "phone",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "email",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "website",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "accreditation",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "admin_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "connection_logs": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "session_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "event_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "protocol",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "duration_ms",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "error_message",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "metadata",
+      "type": "jsonb",
+      "nullable": true,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "evaluations": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "assignment_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "student_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "rotation_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "evaluator_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "clinical_site_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "period",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "observation_date",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "feedback",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "overall_rating",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "criteria",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "metadata",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clinical_skills",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "communication",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "professionalism",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "critical_thinking",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "strengths",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "areas_for_improvement",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "goals",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "comments",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "student_signature",
+      "type": "boolean",
+      "nullable": true,
+      "default": "false"
+    },
+    {
+      "name": "evaluator_signature",
+      "type": "boolean",
+      "nullable": true,
+      "default": "false"
+    },
+    {
+      "name": "signed_at",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "location_permissions": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "permission_status",
+      "type": "text",
+      "nullable": false,
+      "default": "'not_requested'::text"
+    },
+    {
+      "name": "permission_type",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "browser_info",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "device_info",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "requested_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "responded_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "last_used_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "location_source",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "timestamp",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "battery_level",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "network_type",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_background",
+      "type": "boolean",
+      "nullable": true,
+      "default": "false"
+    }
+  ],
+  "location_verifications": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "time_record_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "clinical_site_location_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "verification_time",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "verification_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_latitude",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_longitude",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_accuracy",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "location_source",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "distance_from_site",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_within_geofence",
+      "type": "boolean",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "verification_status",
+      "type": "text",
+      "nullable": false,
+      "default": "'approved'::text"
+    },
+    {
+      "name": "flag_reason",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "reviewed_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "reviewed_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "metadata",
+      "type": "jsonb",
+      "nullable": true,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "facility_management": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "facility_name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "facility_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "address",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "latitude",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "longitude",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "geofence_radius",
+      "type": "integer",
+      "nullable": false,
+      "default": "100"
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "is_custom",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "osm_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "priority",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "contact_info",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "operating_hours",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "specialties",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clinical_site_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "strict_geofence",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    }
+  ],
+  "site_assignments": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "student_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "clinical_site_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "rotation_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'ACTIVE'::text"
+    },
+    {
+      "name": "start_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "end_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "assigned_by",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "clinical_site_locations": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "clinical_site_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "latitude",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "longitude",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "radius",
+      "type": "integer",
+      "nullable": false,
+      "default": "100"
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "is_primary",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "floor",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "department",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "strict_geofence",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    }
+  ],
+  "onboarding_sessions": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "current_step",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "completed_steps",
+      "type": "ARRAY",
+      "nullable": true,
+      "default": "'{}'::text[]"
+    },
+    {
+      "name": "form_data",
+      "type": "jsonb",
+      "nullable": true,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "metadata",
+      "type": "jsonb",
+      "nullable": true,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "(now() + '7 days'::interval)"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "onboarding_analytics": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "session_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "event_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "step",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "duration_ms",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "metadata",
+      "type": "jsonb",
+      "nullable": true,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "invitations": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "email",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "cohort_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "role",
+      "type": "text",
+      "nullable": false,
+      "default": "'STUDENT'::text"
+    },
+    {
+      "name": "token",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'PENDING'::text"
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "invited_by",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "cohorts": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "start_date",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "end_date",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "capacity",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'ACTIVE'::text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "graduation_year",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "assessments": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "student_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "competency_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "assessor_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "rotation_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "method",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "date",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "score",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "max_score",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "passed",
+      "type": "boolean",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "attempts",
+      "type": "integer",
+      "nullable": false,
+      "default": "1"
+    },
+    {
+      "name": "feedback",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "recommendations",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "next_assessment_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "subscriptions": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "plan",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "reference_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "stripe_customer_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "stripe_subscription_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": true,
+      "default": "'incomplete'::text"
+    },
+    {
+      "name": "period_start",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "period_end",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "cancel_at_period_end",
+      "type": "boolean",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "seats",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "trial_start",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "trial_end",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "clinical_sites": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "address",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "phone",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "email",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "capacity",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "specialties",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "contact_person_name",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "contact_person_title",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "contact_person_phone",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "contact_person_email",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "requirements",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "competency_templates": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "category",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "level",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "source",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "version",
+      "type": "text",
+      "nullable": false,
+      "default": "'1.0'::text"
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "metadata",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "content",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "tags",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_public",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    }
+  ],
+  "rate_limits": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "key",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "endpoint",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "count",
+      "type": "integer",
+      "nullable": false,
+      "default": "1"
+    },
+    {
+      "name": "window_start",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "window_end",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "rotations": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "student_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "clinical_site_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "preceptor_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "supervisor_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "specialty",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "start_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "end_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "required_hours",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "completed_hours",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'SCHEDULED'::text"
+    },
+    {
+      "name": "objectives",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "cohort_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "cohort_rotation_assignment_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "rotation_template_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "cache_entries": [
+    {
+      "name": "key",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "value",
+      "type": "jsonb",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "tags",
+      "type": "ARRAY",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "rubric_criteria": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "competency_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "template_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "criterion_name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "weight",
+      "type": "numeric",
+      "nullable": false,
+      "default": "1.0"
+    },
+    {
+      "name": "max_score",
+      "type": "numeric",
+      "nullable": false,
+      "default": "5.0"
+    },
+    {
+      "name": "performance_levels",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "order_index",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "compliance_submissions": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "student_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "requirement_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'PENDING'::text"
+    },
+    {
+      "name": "submission_data",
+      "type": "jsonb",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "document_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "reviewed_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "reviewed_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "competency_deployments": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "template_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "competency_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "deployment_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'PENDING'::text"
+    },
+    {
+      "name": "deployed_by",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "deployed_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "effective_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "expiry_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "rollback_data",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "target_programs",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "target_users",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "competency_assignments": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "competency_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "deployment_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "assigned_by",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "assignment_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'ASSIGNED'::text"
+    },
+    {
+      "name": "due_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "completion_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "progress_percentage",
+      "type": "numeric",
+      "nullable": true,
+      "default": "0.0"
+    }
+  ],
+  "jobs": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "payload",
+      "type": "jsonb",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'PENDING'::text"
+    },
+    {
+      "name": "attempts",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "max_attempts",
+      "type": "integer",
+      "nullable": false,
+      "default": "3"
+    },
+    {
+      "name": "last_error",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "run_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "processed_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "site_evaluations": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "student_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "rotation_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "clinical_site_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "preceptor_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "rating",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "feedback",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "learning_opportunities_rating",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "preceptor_support_rating",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "facility_quality_rating",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "recommend_to_others",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "is_anonymous",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "location_accuracy_logs": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "latitude",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "longitude",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "accuracy",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "location_source",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "notification_templates": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "subject",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "content",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "variables",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "trigger_event",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "recipient_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "scheduled_delay",
+      "type": "integer",
+      "nullable": true,
+      "default": "0"
+    },
+    {
+      "name": "created_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "clinical_site_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "program_compliance_requirements": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "requirement_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "due_date_offset_days",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "competency_submissions": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "competency_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "submission_type",
+      "type": "text",
+      "nullable": false,
+      "default": "'INDIVIDUAL'::text"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'SUBMITTED'::text"
+    },
+    {
+      "name": "submitted_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "reviewed_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "reviewed_at",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "feedback",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "metadata",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "student_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "submitted_by",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "assessment_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "evaluation_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "rotation_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "evidence",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "due_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "completion_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "compliance_requirements": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "frequency",
+      "type": "text",
+      "nullable": false,
+      "default": "'ONCE'::text"
+    },
+    {
+      "name": "is_required",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "programs": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "duration",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "class_year",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "requirements",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "time_records": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "student_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "clinical_preceptor_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "total_hours",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'PENDING'::text"
+    },
+    {
+      "name": "approved_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "approved_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "rotation_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "date",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "clock_in",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_out",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "activities",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_in_ip_address",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_in_user_agent",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_out_ip_address",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_out_user_agent",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_in_latitude",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_in_longitude",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_out_latitude",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_out_longitude",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_in_accuracy",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_out_accuracy",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_in_source",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_out_source",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "accounts": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "provider_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "account_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "refresh_token",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "access_token",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "scope",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "id_token",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "access_token_expires_at",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "refresh_token_expires_at",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "password",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "sessions": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "token",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "ip_address",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "user_agent",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "verifications": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "identifier",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "value",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "audit_logs": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "action",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "resource",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "resource_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "ip_address",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "user_agent",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "details",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "session_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "severity",
+      "type": "text",
+      "nullable": false,
+      "default": "'LOW'::text"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'SUCCESS'::text"
+    }
+  ],
+  "students": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "student_number",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "cohort",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "year_level",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "semester",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "academic_advisor_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "emergency_contact_name",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "emergency_contact_phone",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "emergency_contact_relation",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "medical_conditions",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "allergies",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "medications",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "immunization_status",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "background_check_status",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "background_check_date",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "drug_screen_status",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "drug_screen_date",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "documents": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "mime_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "file_name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "original_name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "file_size",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "file_path",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "uploaded_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "document_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "related_entity_type",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "related_entity_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_public",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "is_archived",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "metadata",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "tags",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
+    },
+    {
+      "name": "version",
+      "type": "integer",
+      "nullable": false,
+      "default": "1"
+    },
+    {
+      "name": "checksum",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "competencies": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "level",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_required",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "category",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "criteria",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "template_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "version",
+      "type": "text",
+      "nullable": true,
+      "default": "'1.0'::text"
+    },
+    {
+      "name": "source",
+      "type": "text",
+      "nullable": true,
+      "default": "'CUSTOM'::text"
+    },
+    {
+      "name": "is_deployed",
+      "type": "boolean",
+      "nullable": true,
+      "default": "false"
+    },
+    {
+      "name": "deployment_scope",
+      "type": "text",
+      "nullable": true,
+      "default": "'PROGRAM_SPECIFIC'::text"
+    }
+  ],
+  "notifications": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "title",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "message",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "is_read",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "read_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "priority",
+      "type": "text",
+      "nullable": false,
+      "default": "'medium'::text"
+    },
+    {
+      "name": "data",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "action_url",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "competency_versions": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "competency_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "version_number",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "changes_summary",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "previous_data",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_by",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "clinical_supervisors": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "license_number",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "specialty",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "license_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "license_state",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "license_expiration_date",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "years_of_experience",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clinical_site_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "department",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "title",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "supervisory_role",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "max_supervisees",
+      "type": "integer",
+      "nullable": false,
+      "default": "10"
+    },
+    {
+      "name": "current_supervisee_count",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "supervision_schedule",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "supervision_style",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "qualifications",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "clinical_preceptors": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "license_number",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "specialty",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "license_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "license_state",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "license_expiration_date",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "years_of_experience",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clinical_site_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "department",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "title",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "max_students",
+      "type": "integer",
+      "nullable": false,
+      "default": "4"
+    },
+    {
+      "name": "current_student_count",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "availability_schedule",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "teaching_preferences",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "evaluation_criteria",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "query_performance_log": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "query_hash",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "endpoint",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "query_text",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "execution_time",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "rows_affected",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "method",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "user_agent",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "ip_address",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "session_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "error_message",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "stack_trace",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "query_plan",
+      "type": "jsonb",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "cache_hit",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "indexes_used",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
+    },
+    {
+      "name": "tables_accessed",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
+    }
+  ],
+  "users": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "email",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "role",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "email_verified",
+      "type": "boolean",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "phone",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "image",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "avatar",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "avatar_url",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "department",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "student_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "enrollment_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "expected_graduation",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "academic_status",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "gpa",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "total_clinical_hours",
+      "type": "integer",
+      "nullable": true,
+      "default": "0"
+    },
+    {
+      "name": "completed_rotations",
+      "type": "integer",
+      "nullable": true,
+      "default": "0"
+    },
+    {
+      "name": "stripe_customer_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "address",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "onboarding_completed",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "onboarding_completed_at",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "cohort_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "approval_status",
+      "type": "text",
+      "nullable": false,
+      "default": "'PENDING'::text"
+    },
+    {
+      "name": "subscription_status",
+      "type": "text",
+      "nullable": true,
+      "default": "'NONE'::text"
+    },
+    {
+      "name": "subscription_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "timecard_corrections": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "original_time_record_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "student_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "rotation_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "correction_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "requested_changes",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "reason",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "student_notes",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'PENDING'::text"
+    },
+    {
+      "name": "reviewed_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "reviewed_at",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "reviewer_notes",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "applied_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "applied_at",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "original_data",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "priority",
+      "type": "text",
+      "nullable": false,
+      "default": "'MEDIUM'::text"
+    },
+    {
+      "name": "due_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "accreditation_options": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "abbreviation",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "is_default",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "sort_order",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "progress_snapshots": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "competency_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "assignment_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "progress_percentage",
+      "type": "numeric",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'ACTIVE'::text"
+    },
+    {
+      "name": "snapshot_date",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "metadata",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "learning_analytics": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "competency_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "metric_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "metric_value",
+      "type": "numeric",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "time_period",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "aggregation_level",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "metadata",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "recorded_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "notification_queue": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "notification_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "title",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "message",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "priority",
+      "type": "text",
+      "nullable": false,
+      "default": "'MEDIUM'::text"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'PENDING'::text"
+    },
+    {
+      "name": "related_entity_type",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "related_entity_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "metadata",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "scheduled_for",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "sent_at",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "read_at",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "report_cache": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "report_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "cache_key",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "filters",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "data",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "competency_rubrics": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "competency_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "criteria",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "scoring_scale",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "version",
+      "type": "text",
+      "nullable": false,
+      "default": "'1.0'::text"
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "created_by",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "import_export_logs": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "operation_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "file_name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "file_size",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "records_processed",
+      "type": "integer",
+      "nullable": true,
+      "default": "0"
+    },
+    {
+      "name": "records_successful",
+      "type": "integer",
+      "nullable": true,
+      "default": "0"
+    },
+    {
+      "name": "records_failed",
+      "type": "integer",
+      "nullable": true,
+      "default": "0"
+    },
+    {
+      "name": "error_details",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'PENDING'::text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "processed_by",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "started_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "completed_at",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "program_clinical_sites": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "clinical_site_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "priority",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "capacity_override",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_default",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "start_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "end_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "eligibility_rules",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "mv_competency_analytics": [
+    {
+      "name": "competency_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "competency_name",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "total_assignments",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "completed_assignments",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "average_score",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "pass_rate",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "completion_rate",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "last_updated",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "mv_daily_activity_summary": [
+    {
+      "name": "activity_date",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "active_users",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "total_hours",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "submissions",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "evaluations",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "mv_school_statistics": [
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "total_students",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "active_students",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "total_rotations",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "active_rotations",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "completion_rate",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "last_updated",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "mv_user_progress_summary": [
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "rotation_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "total_assignments",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "completed_assignments",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "pending_assignments",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "overdue_assignments",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "completion_rate",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "average_score",
+      "type": "numeric",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "last_updated",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "scheduled_reports": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "frequency",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "recipients",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "format",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "filters",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_by",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "run_count",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "last_run",
+      "type": "timestamp without time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "next_run",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "time_sync_sessions": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "client_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "start_time",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "last_sync",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "protocol",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'active'::text"
+    },
+    {
+      "name": "drift_ms",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "sync_events": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "session_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "event_type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "server_time",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "client_time",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "drift_ms",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "metadata",
+      "type": "jsonb",
+      "nullable": true,
+      "default": "'{}'::jsonb"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "synchronized_clock_records": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "time_record_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "session_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "synced_clock_in",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "synced_clock_out",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "clock_in_drift_ms",
+      "type": "integer",
+      "nullable": true,
+      "default": "0"
+    },
+    {
+      "name": "clock_out_drift_ms",
+      "type": "integer",
+      "nullable": true,
+      "default": "0"
+    },
+    {
+      "name": "sync_accuracy",
+      "type": "text",
+      "nullable": true,
+      "default": "'medium'::text"
+    },
+    {
+      "name": "verification_status",
+      "type": "text",
+      "nullable": true,
+      "default": "'pending'::text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ],
+  "meetings": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "title",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "start_time",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "end_time",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "organizer_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "student_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "default": "'VIRTUAL'::text"
+    },
+    {
+      "name": "location",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "meeting_link",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'SCHEDULED'::text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "nullable": false,
+      "default": null
+    }
+  ],
+  "rotation_templates": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "school_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "program_id",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "specialty",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "default_duration_weeks",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "default_required_hours",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "name": "default_clinical_site_id",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "objectives",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "name": "sort_order",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "created_by",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    }
+  ]
+}

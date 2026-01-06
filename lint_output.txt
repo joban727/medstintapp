@@ -1,0 +1,6 @@
+﻿
+> medstint2@0.0.1 lint
+> biome lint
+
+Checked 484 files in 937ms. No fixes applied.
+Found 1 warning.

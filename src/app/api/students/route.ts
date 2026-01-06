@@ -16,58 +16,34 @@ import {
 
 // GET /api/students - List students (school-scoped for admins/supervisors/preceptors)
 export async function GET(request: NextRequest) {
-  // Try cached response first
-  try {
-    // Normalize cache key to avoid caching sensitive params
-    const { searchParams } = new URL(request.url)
-    const cacheParams = {
-      active: searchParams.get("active"),
-      limit: searchParams.get("limit"),
-      search: (searchParams.get("search") || "").slice(0, 50), // Truncate for cache key
-    }
-    const cacheKey = `api:students:list:${JSON.stringify(cacheParams)}`
-    const cached = await cacheIntegrationService.cachedApiResponse(
-      cacheKey,
-      async () => {
-        return await execute()
-      },
-      300
-    )
+  // Authenticate first to get context for cache key
+  const { userId } = await auth()
+  if (!userId) {
+    return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
+  }
 
-    if (cached) {
-      return cached
-    }
-  } catch (cacheError) {
-    console.warn("Cache error in students/route.ts:", cacheError)
+  const [currentUser] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+  if (!currentUser) {
+    return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
+  }
+
+  // Only allow admin, supervisor, and preceptor roles to list students
+  const allowedRoles: UserRole[] = [
+    "SUPER_ADMIN" as UserRole,
+    "SCHOOL_ADMIN" as UserRole,
+    "CLINICAL_SUPERVISOR" as UserRole,
+    "CLINICAL_PRECEPTOR" as UserRole,
+  ]
+  if (!allowedRoles.includes(currentUser.role as UserRole)) {
+    return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
   }
 
   async function execute() {
     return withErrorHandlingAsync(async () => {
-      const { userId } = await auth()
-      if (!userId) {
-        return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
-      }
-
-      const [currentUser] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
-      if (!currentUser) {
-        return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
-      }
-
-      // Only allow admin, supervisor, and preceptor roles to list students
-      const allowedRoles: UserRole[] = [
-        "SUPER_ADMIN" as UserRole,
-        "SCHOOL_ADMIN" as UserRole,
-        "CLINICAL_SUPERVISOR" as UserRole,
-        "CLINICAL_PRECEPTOR" as UserRole,
-      ]
-      if (!allowedRoles.includes(currentUser.role as UserRole)) {
-        return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
-      }
-
       const { searchParams } = new URL(request.url)
       const active = searchParams.get("active")
       const limitParam = searchParams.get("limit")
-      const search = (searchParams.get("search") || "").slice(0, 100) // Limit search length for security
+      const search = (searchParams.get("search") || "").slice(0, 100)
       const limit = Math.max(1, Math.min(500, Number.parseInt(limitParam || "200", 10)))
 
       // Build where condition
@@ -76,18 +52,31 @@ export async function GET(request: NextRequest) {
         baseConditions.push(eq(users.isActive, true))
       }
       if (search) {
-        // Match name OR email
         baseConditions.push(
           or(ilike(users.name, `%${search}%`), ilike(users.email, `%${search}%`)) as SQL
         )
       }
 
-      // School scoping: school admins, preceptors, supervisors see their school; super admins see all
+      // Strict School Isolation
       let whereCondition: SQL | undefined
-      if (currentUser.schoolId) {
-        whereCondition = and(eq(users.schoolId, currentUser.schoolId), ...baseConditions)
+
+      if (currentUser.role === "SUPER_ADMIN") {
+        // Super Admin sees all, unless they are scoped to a school (optional)
+        if (currentUser.schoolId) {
+          whereCondition = and(eq(users.schoolId, currentUser.schoolId), ...baseConditions)
+        } else {
+          whereCondition = and(...baseConditions)
+        }
       } else {
-        whereCondition = and(...baseConditions)
+        // All other roles MUST have a schoolId
+        if (!currentUser.schoolId) {
+          // Log this anomaly
+          console.error(
+            `User ${currentUser.id} (${currentUser.role}) has no schoolId but tried to list students.`
+          )
+          return createSuccessResponse({ students: [] }) // Return empty instead of error to avoid leaking info
+        }
+        whereCondition = and(eq(users.schoolId, currentUser.schoolId), ...baseConditions)
       }
 
       const rows = await db
@@ -128,6 +117,29 @@ export async function GET(request: NextRequest) {
     })
   }
 
+  // Try cached response
+  try {
+    const { searchParams } = new URL(request.url)
+    const cacheParams = {
+      active: searchParams.get("active"),
+      limit: searchParams.get("limit"),
+      search: (searchParams.get("search") || "").slice(0, 50),
+      // CRITICAL: Include user context in cache key
+      schoolId: currentUser.schoolId,
+      role: currentUser.role,
+      userId: currentUser.id, // Add userId to be absolutely safe if needed, but schoolId/role is usually enough for lists
+    }
+    const cacheKey = `api:students:list:${JSON.stringify(cacheParams)}`
+
+    const cached = await cacheIntegrationService.cachedApiResponse(cacheKey, execute, 300)
+
+    if (cached) {
+      return cached
+    }
+  } catch (cacheError) {
+    // Use logger if available, otherwise console.warn
+    console.warn("Cache error in students/route.ts:", cacheError)
+  }
+
   return await execute()
 }
-

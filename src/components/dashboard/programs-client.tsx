@@ -120,9 +120,9 @@ export function ProgramsClient({ initialPrograms, initialStats, schoolId }: Prog
             avgStudentsPerProgram:
               programsWithStats.length > 0
                 ? Math.round(
-                  programsWithStats.reduce((sum: number, p: Program) => sum + p.studentCount, 0) /
-                  programsWithStats.length
-                )
+                    programsWithStats.reduce((sum: number, p: Program) => sum + p.studentCount, 0) /
+                      programsWithStats.length
+                  )
                 : 0,
           }
           setStats(newStats)
@@ -163,12 +163,18 @@ export function ProgramsClient({ initialPrograms, initialStats, schoolId }: Prog
               <BookOpen className="h-5 w-5 text-amber-600 dark:text-amber-400" />
             </div>
             <div className="flex-1">
-              <p className="font-medium text-amber-800 dark:text-amber-200">School Setup Required</p>
+              <p className="font-medium text-amber-800 dark:text-amber-200">
+                School Setup Required
+              </p>
               <p className="text-sm text-amber-600 dark:text-amber-400">
                 Complete the school setup wizard to create and manage programs.
               </p>
             </div>
-            <Button asChild variant="outline" className="border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900">
+            <Button
+              asChild
+              variant="outline"
+              className="border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900"
+            >
               <a href="/dashboard/school-admin/setup">Go to Setup</a>
             </Button>
           </CardContent>
@@ -204,10 +210,11 @@ export function ProgramsClient({ initialPrograms, initialStats, schoolId }: Prog
           description="Students per program"
           icon={Clock}
           variant="orange"
-        />      </StatGrid>
+        />{" "}
+      </StatGrid>
 
       {/* Programs Management */}
-      <Card className="glass-card overflow-hidden">
+      <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm overflow-hidden">
         <CardHeader>
           <CardTitle>Program Directory</CardTitle>
           <CardDescription>
@@ -216,7 +223,7 @@ export function ProgramsClient({ initialPrograms, initialStats, schoolId }: Prog
         </CardHeader>
         <CardContent className="p-0">
           {/* Search and Filter */}
-          <div className="flex flex-col gap-4 md:flex-row md:items-center p-6 glass-card-subtle mx-6 mb-6 rounded-lg">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center p-6 bg-white/5 backdrop-blur-sm border border-white/10 mx-6 mb-6 rounded-lg">
             <div className="relative flex-1">
               <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -281,10 +288,15 @@ export function ProgramsClient({ initialPrograms, initialStats, schoolId }: Prog
                   <span>{program.studentCount} students</span>
                 </MobileDataField>
                 <div className="flex gap-2 pt-2">
-                  <Button variant="outline" size="sm" className="flex-1 min-h-[44px]" onClick={() => {
-                    setSelectedProgram(program)
-                    setIsManageCohortsModalOpen(true)
-                  }}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 min-h-[44px]"
+                    onClick={() => {
+                      setSelectedProgram(program)
+                      setIsManageCohortsModalOpen(true)
+                    }}
+                  >
                     <BookOpen className="h-4 w-4 mr-1" /> Cohorts
                   </Button>
                   <Button variant="outline" size="sm" className="flex-1 min-h-[44px]">
@@ -380,7 +392,10 @@ export function ProgramsClient({ initialPrograms, initialStats, schoolId }: Prog
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="glass-card-subtle">
+                        <DropdownMenuContent
+                          align="end"
+                          className="bg-black/80 backdrop-blur-xl border border-white/10"
+                        >
                           <DropdownMenuItem className="cursor-pointer focus:bg-primary/10 focus:text-primary">
                             View Details
                           </DropdownMenuItem>

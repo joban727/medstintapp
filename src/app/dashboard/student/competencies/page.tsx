@@ -7,26 +7,26 @@ import { PageContainer } from "@/components/ui/page-container"
 import { Separator } from "@/components/ui/separator"
 
 export default async function StudentCompetenciesPage() {
-    const { userId } = await auth()
+  const { userId } = await auth()
 
-    if (!userId) {
-        redirect("/sign-in")
-    }
+  if (!userId) {
+    redirect("/sign-in")
+  }
 
-    return (
-        <PageContainer>
-            <div className="space-y-6">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Competencies</h1>
-                    <p className="text-muted-foreground">
-                        Track your progress across all assigned competencies.
-                    </p>
-                </div>
-                <Separator />
-                <Suspense fallback={<DashboardLoading />}>
-                    <CompetencyProgressTracker studentId={userId} />
-                </Suspense>
-            </div>
-        </PageContainer>
-    )
+  return (
+    <PageContainer>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Competencies</h1>
+          <p className="text-muted-foreground">
+            Track your progress across all assigned competencies.
+          </p>
+        </div>
+        <Separator />
+        <Suspense fallback={<DashboardLoading />}>
+          <CompetencyProgressTracker studentId={userId} />
+        </Suspense>
+      </div>
+    </PageContainer>
+  )
 }

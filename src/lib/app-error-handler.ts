@@ -203,14 +203,17 @@ export class AppErrorHandler {
         `${error.code}: ${error.message}`
       )
     } else {
-      logger[logLevel]({
-        code: error.code,
-        severity: error.severity,
-        category: error.category,
-        recoverable: error.recoverable,
-        context: error.context ? JSON.stringify(error.context) : undefined,
-        timestamp: error.timestamp.toISOString(),
-      }, `${error.code}: ${error.message}`)
+      logger[logLevel](
+        {
+          code: error.code,
+          severity: error.severity,
+          category: error.category,
+          recoverable: error.recoverable,
+          context: error.context ? JSON.stringify(error.context) : undefined,
+          timestamp: error.timestamp.toISOString(),
+        },
+        `${error.code}: ${error.message}`
+      )
     }
   }
 

@@ -3,118 +3,69 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-interface ResponsiveTableProps {
-    children: React.ReactNode
-    className?: string
+/**
+ * ResponsiveTableWrapper
+ *
+ * A wrapper component for tables that provides horizontal scrolling
+ * and responsive behavior for desktop views.
+ */
+interface ResponsiveTableWrapperProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: React.ReactNode
 }
 
-/**
- * Responsive table wrapper that adds horizontal scrolling on mobile
- * and ensures tables don't break layout on small screens.
- */
 export function ResponsiveTableWrapper({
-    children,
-    className,
-}: ResponsiveTableProps) {
-    return (
-        <div className={cn("w-full overflow-x-auto", className)}>
-            {children}
-        </div>
-    )
-}
-
-interface MobileDataCardProps {
-    children: React.ReactNode
-    className?: string
+  children,
+  className,
+  ...props
+}: ResponsiveTableWrapperProps) {
+  return (
+    <div className={cn("w-full overflow-x-auto", className)} {...props}>
+      {children}
+    </div>
+  )
 }
 
 /**
- * A card representation of a table row for mobile views.
- * Uses the glass-card design pattern for consistency.
+ * MobileDataCard
+ *
+ * A card component designed for displaying data items on mobile devices.
+ * Provides consistent styling for mobile-first data presentation.
  */
-export function MobileDataCard({
-    children,
-    className,
-}: MobileDataCardProps) {
-    return (
-        <div
-            className={cn(
-                "glass-card rounded-lg p-4 space-y-3 mb-3 last:mb-0",
-                className
-            )}
-        >
-            {children}
-        </div>
-    )
+interface MobileDataCardProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: React.ReactNode
 }
 
-interface MobileDataFieldProps {
-    label: string
-    children: React.ReactNode
-    className?: string
+export function MobileDataCard({ children, className, ...props }: MobileDataCardProps) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border border-white/10 bg-white/5 backdrop-blur-md p-4 shadow-sm",
+        "hover:bg-white/10 transition-all duration-200",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </div>
+  )
 }
 
 /**
- * A field within a mobile data card showing label and value.
+ * MobileDataField
+ *
+ * A field component for displaying label-value pairs on mobile devices.
+ * Used within MobileDataCard for consistent data presentation.
  */
-export function MobileDataField({
-    label,
-    children,
-    className,
-}: MobileDataFieldProps) {
-    return (
-        <div className={cn("flex justify-between items-center gap-2", className)}>
-            <span className="text-muted-foreground text-sm font-medium">{label}</span>
-            <span className="text-sm font-medium text-right">{children}</span>
-        </div>
-    )
+interface MobileDataFieldProps extends React.HTMLAttributes<HTMLDivElement> {
+  label: string
+  children: React.ReactNode
 }
 
-interface ResponsiveFilterBarProps {
-    children: React.ReactNode
-    className?: string
-}
-
-/**
- * A filter bar that stacks on mobile and spreads on desktop.
- */
-export function ResponsiveFilterBar({
-    children,
-    className,
-}: ResponsiveFilterBarProps) {
-    return (
-        <div
-            className={cn(
-                "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
-                "glass-card-subtle p-4 rounded-lg",
-                className
-            )}
-        >
-            {children}
-        </div>
-    )
-}
-
-interface ResponsiveFilterGroupProps {
-    children: React.ReactNode
-    className?: string
-}
-
-/**
- * A group of filter controls that wrap on mobile.
- */
-export function ResponsiveFilterGroup({
-    children,
-    className,
-}: ResponsiveFilterGroupProps) {
-    return (
-        <div
-            className={cn(
-                "flex flex-wrap gap-2 items-center",
-                className
-            )}
-        >
-            {children}
-        </div>
-    )
+export function MobileDataField({ label, children, className, ...props }: MobileDataFieldProps) {
+  return (
+    <div className={cn("flex items-center justify-between py-1.5", className)} {...props}>
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <div className="text-sm font-medium text-foreground">{children}</div>
+    </div>
+  )
 }

@@ -141,12 +141,9 @@ export function SchoolProfileOnboarding({ user, clerkUser }: SchoolProfileOnboar
           {steps.map((step, index) => (
             <div key={step.label} className="flex items-center">
               <div
-                className={`h-2 w-2 rounded-full ${step.active
-                  ? "bg-primary"
-                  : step.completed
-                    ? "bg-primary/40"
-                    : "bg-muted"
-                  }`}
+                className={`h-2 w-2 rounded-full ${
+                  step.active ? "bg-primary" : step.completed ? "bg-primary/40" : "bg-muted"
+                }`}
               />
               {index < steps.length - 1 && (
                 <div className={`w-8 h-px ${step.completed ? "bg-primary/40" : "bg-muted"}`} />
@@ -161,9 +158,7 @@ export function SchoolProfileOnboarding({ user, clerkUser }: SchoolProfileOnboar
           <h1 className="text-2xl md:text-3xl font-semibold text-foreground mb-2">
             School Profile
           </h1>
-          <p className="text-muted-foreground">
-            Tell us about your institution
-          </p>
+          <p className="text-muted-foreground">Tell us about your institution</p>
         </div>
 
         {/* Form Card */}

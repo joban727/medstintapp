@@ -3,8 +3,9 @@ import { NextResponse } from "next/server"
 import { db } from "@/database/connection-pool"
 import { users } from "@/database/schema"
 import { cacheIntegrationService } from "@/lib/cache-integration"
+import { withCSRF } from "@/lib/csrf-middleware"
 
-export async function POST(request: Request) {
+export const POST = withCSRF(async (request: Request) => {
   try {
     const body = await request.json()
     const { userId, schoolId, programId } = body ?? {}
@@ -39,5 +40,4 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json({ ok: false, error: (error as Error).message }, { status: 500 })
   }
-}
-
+})

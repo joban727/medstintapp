@@ -175,4 +175,3 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
     message: "Session abandoned successfully",
   })
 })
-

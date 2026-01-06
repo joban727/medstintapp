@@ -63,7 +63,12 @@ interface AddPreceptorModalProps {
   clinicalSites: ClinicalSiteOption[]
 }
 
-export function AddPreceptorModal({ open, onOpenChange, onSuccess, clinicalSites }: AddPreceptorModalProps) {
+export function AddPreceptorModal({
+  open,
+  onOpenChange,
+  onSuccess,
+  clinicalSites,
+}: AddPreceptorModalProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -191,11 +196,15 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess, clinicalSites
                       <SelectContent>
                         <SelectItem value="General Radiology">General Radiology</SelectItem>
                         <SelectItem value="MRI">MRI</SelectItem>
-                        <SelectItem value="Ultrasound / Sonography">Ultrasound / Sonography</SelectItem>
+                        <SelectItem value="Ultrasound / Sonography">
+                          Ultrasound / Sonography
+                        </SelectItem>
                         <SelectItem value="CT Scan">CT Scan</SelectItem>
                         <SelectItem value="Nuclear Medicine">Nuclear Medicine</SelectItem>
                         <SelectItem value="Mammography">Mammography</SelectItem>
-                        <SelectItem value="Interventional Radiology">Interventional Radiology</SelectItem>
+                        <SelectItem value="Interventional Radiology">
+                          Interventional Radiology
+                        </SelectItem>
                         <SelectItem value="Fluoroscopy">Fluoroscopy</SelectItem>
                         <SelectItem value="Mobile Radiography">Mobile Radiography</SelectItem>
                         <SelectItem value="Surgical Radiography">Surgical Radiography</SelectItem>
@@ -214,10 +223,7 @@ export function AddPreceptorModal({ open, onOpenChange, onSuccess, clinicalSites
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Clinical Site *</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select clinical site" />

@@ -155,9 +155,9 @@ export default async function UserTypeSelectionPage() {
       emailAddress: email.emailAddress,
       verification: email.verification
         ? {
-          status: email.verification.status,
-          strategy: email.verification.strategy,
-        }
+            status: email.verification.status,
+            strategy: email.verification.strategy,
+          }
         : null,
       linkedTo: email.linkedTo.map((link) => link.id),
     })),
@@ -230,12 +230,7 @@ export default async function UserTypeSelectionPage() {
           const [invitation] = await db
             .select()
             .from(invitations)
-            .where(
-              and(
-                eq(invitations.email, userEmail),
-                eq(invitations.status, "PENDING")
-              )
-            )
+            .where(and(eq(invitations.email, userEmail), eq(invitations.status, "PENDING")))
             .limit(1)
 
           // Only approve if they have a PENDING invitation
@@ -346,8 +341,15 @@ export default async function UserTypeSelectionPage() {
             <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
               <div className="w-full max-w-md rounded-lg bg-white p-8 text-center shadow-lg">
                 <h1 className="mb-4 font-bold text-2xl text-red-600">Database Error</h1>
-                <p className="mb-4 text-gray-600">Unable to load your user profile. Please try refreshing the page.</p>
-                <a href="/onboarding/user-type" className="inline-block rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">Refresh Page</a>
+                <p className="mb-4 text-gray-600">
+                  Unable to load your user profile. Please try refreshing the page.
+                </p>
+                <a
+                  href="/onboarding/user-type"
+                  className="inline-block rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                >
+                  Refresh Page
+                </a>
               </div>
             </div>
           )
@@ -358,8 +360,15 @@ export default async function UserTypeSelectionPage() {
           <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
             <div className="w-full max-w-md rounded-lg bg-white p-8 text-center shadow-lg">
               <h1 className="mb-4 font-bold text-2xl text-red-600">Setup Error</h1>
-              <p className="mb-4 text-gray-600">There was an issue setting up your account. Please try refreshing the page.</p>
-              <a href="/onboarding/user-type" className="inline-block rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">Refresh Page</a>
+              <p className="mb-4 text-gray-600">
+                There was an issue setting up your account. Please try refreshing the page.
+              </p>
+              <a
+                href="/onboarding/user-type"
+                className="inline-block rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+              >
+                Refresh Page
+              </a>
             </div>
           </div>
         )
@@ -375,8 +384,15 @@ export default async function UserTypeSelectionPage() {
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
         <div className="w-full max-w-md rounded-lg bg-white p-8 text-center shadow-lg">
           <h1 className="mb-4 font-bold text-2xl text-red-600">Account Setup Required</h1>
-          <p className="mb-4 text-gray-600">Unable to find your account information. Please try signing out and signing in again.</p>
-          <a href="/auth/sign-out" className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">Sign Out</a>
+          <p className="mb-4 text-gray-600">
+            Unable to find your account information. Please try signing out and signing in again.
+          </p>
+          <a
+            href="/auth/sign-out"
+            className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          >
+            Sign Out
+          </a>
         </div>
       </div>
     )

@@ -12,6 +12,7 @@ import {
 } from "../../../database/schema"
 import { cache, invalidateRelatedCaches } from "@/lib/neon-cache"
 import { cacheIntegrationService } from "@/lib/cache-integration"
+import { withCSRF } from "@/lib/csrf-middleware"
 
 import type { UserRole } from "@/types"
 // Validation schemas
@@ -32,13 +33,17 @@ const progressCreateSchema = z.object({
   assignmentId: z.string(),
   progressPercentage: z.number().min(0).max(100),
   status: z.enum(["ACTIVE", "COMPLETED", "OVERDUE"]).default("ACTIVE"),
-  metadata: z.record(z.string(), z.any()).optional(),
+  metadata: z
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+    .optional(),
 })
 
 const progressUpdateSchema = z.object({
   progressPercentage: z.number().min(0).max(100).optional(),
   status: z.enum(["ACTIVE", "COMPLETED", "OVERDUE"]).optional(),
-  metadata: z.record(z.string(), z.any()).optional(),
+  metadata: z
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+    .optional(),
 })
 
 // Helper function to check permissions
@@ -55,11 +60,14 @@ async function checkPermissions(userId: string, targetUserId?: string) {
   }
 
   const userRole = user[0].role
-  const isAdmin = userRole !== null && ["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(userRole as UserRole)
-  const isSupervisor = userRole !== null && [
-    "CLINICAL_SUPERVISOR" as UserRole,
-    "CLINICAL_PRECEPTOR" as UserRole,
-  ].includes(userRole as UserRole)
+  const isAdmin =
+    userRole !== null &&
+    ["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(userRole as UserRole)
+  const isSupervisor =
+    userRole !== null &&
+    ["CLINICAL_SUPERVISOR" as UserRole, "CLINICAL_PRECEPTOR" as UserRole].includes(
+      userRole as UserRole
+    )
   const isOwnData = userId === targetUserId
 
   return {
@@ -92,21 +100,17 @@ export async function GET(request: NextRequest) {
   }
 
   async function executeOriginalLogic() {
-    console.log("executeOriginalLogic called")
     try {
       const { userId } = await auth()
-      console.log("Auth userId:", userId)
       if (!userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
       }
 
       const { searchParams } = new URL(request.url)
       const query = progressQuerySchema.parse(Object.fromEntries(searchParams))
-      console.log("Query parsed:", query)
 
       // Check permissions
       const permissions = await checkPermissions(userId, query.userId)
-      console.log("Permissions:", permissions)
       if (!permissions.canView) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 })
       }
@@ -137,7 +141,11 @@ export async function GET(request: NextRequest) {
       } else if (permissions.userRole === ("STUDENT" as UserRole)) {
         // Students can only see their own progress
         conditions.push(eq(progressSnapshots.userId, userId))
-      } else if (permissions.schoolId && permissions.userRole && !permissions.userRole.includes("SUPER_ADMIN")) {
+      } else if (
+        permissions.schoolId &&
+        permissions.userRole &&
+        !permissions.userRole.includes("SUPER_ADMIN")
+      ) {
         // School-level filtering for non-super admins
         conditions.push(eq(users.schoolId, permissions.schoolId))
       }
@@ -226,7 +234,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/competency-progress - Create progress snapshot
-export async function POST(request: NextRequest) {
+export const POST = withCSRF(async (request: NextRequest) => {
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -272,14 +280,6 @@ export async function POST(request: NextRequest) {
 
     const result = await db.insert(progressSnapshots).values(progressSnapshot).returning()
 
-    // Log progress creation for monitoring
-    console.log("Progress created:", {
-      type: "progress_created",
-      snapshot: result[0],
-      userId: data.userId,
-      competencyId: data.competencyId,
-    })
-
     // Invalidate related caches
     await invalidateRelatedCaches({
       userId: data.userId,
@@ -301,17 +301,17 @@ export async function POST(request: NextRequest) {
 
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateByTags(['competency'])
+      await cacheIntegrationService.invalidateByTags(["competency"])
     } catch (cacheError) {
       console.warn("Cache invalidation error in competency-progress/route.ts:", cacheError)
     }
 
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
+})
 
 // PUT /api/competency-progress - Bulk update progress snapshots
-export async function PUT(request: NextRequest) {
+export const PUT = withCSRF(async (request: NextRequest) => {
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -358,15 +358,8 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Log bulk progress updates for monitoring
+    // Invalidate related caches for all updated snapshots
     if (results.length > 0) {
-      console.log("Bulk progress updated:", {
-        type: "progress_bulk_updated",
-        snapshots: results,
-        count: results.length,
-      })
-
-      // Invalidate related caches for all updated snapshots
       const uniqueUserIds = [...new Set(results.map((r) => r.userId))]
       const uniqueCompetencyIds = [...new Set(results.map((r) => r.competencyId))]
 
@@ -395,12 +388,11 @@ export async function PUT(request: NextRequest) {
 
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateByTags(['competency'])
+      await cacheIntegrationService.invalidateByTags(["competency"])
     } catch (cacheError) {
       console.warn("Cache invalidation error in competency-progress/route.ts:", cacheError)
     }
 
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
-
+})

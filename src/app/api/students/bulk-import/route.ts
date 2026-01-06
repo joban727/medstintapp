@@ -104,4 +104,3 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     `Imported ${created} students. ${skipped} skipped, ${failed} failed.`
   )
 })
-

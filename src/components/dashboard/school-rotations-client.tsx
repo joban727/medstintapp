@@ -22,6 +22,7 @@ import {
   ResponsiveTableWrapper,
 } from "@/components/ui/responsive-table"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { CreateRotationModal } from "@/components/modals/create-rotation-modal"
 import { AssignStudentsModal } from "@/components/modals/assign-students-modal"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -90,9 +91,12 @@ export function SchoolRotationsClient({
   const [statusFilter, setStatusFilter] = useState("all")
   const [specialtyFilter, setSpecialtyFilter] = useState("all")
   const [cohortFilter, setCohortFilter] = useState("all")
+  const router = useRouter()
 
   // Extract unique cohorts
-  const uniqueCohorts = Array.from(new Set(rotationDetails.map(r => r.cohortName).filter(Boolean))).sort()
+  const uniqueCohorts = Array.from(
+    new Set(rotationDetails.map((r) => r.cohortName).filter(Boolean))
+  ).sort()
 
   const statusColors = {
     SCHEDULED:
@@ -115,7 +119,8 @@ export function SchoolRotationsClient({
   const specialtyColors = {
     "General Radiology": "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
     MRI: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
-    "Ultrasound / Sonography": "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+    "Ultrasound / Sonography":
+      "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
     "CT Scan": "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
     "Nuclear Medicine": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
     Mammography: "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-400",
@@ -146,7 +151,7 @@ export function SchoolRotationsClient({
   const handleCreateSuccess = () => {
     setIsCreateModalOpen(false)
     // Refresh the page to show the new rotation
-    window.location.reload()
+    router.refresh()
   }
 
   const handleAssignOpen = (rotation: RotationDetail) => {
@@ -157,7 +162,7 @@ export function SchoolRotationsClient({
   const handleAssignSuccess = () => {
     setIsAssignModalOpen(false)
     setSelectedRotation(null)
-    window.location.reload()
+    router.refresh()
   }
 
   return (
@@ -214,8 +219,7 @@ export function SchoolRotationsClient({
         />
       </StatGrid>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between glass-card-subtle p-4 rounded-lg">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between glass-card p-4">
         <div className="flex flex-1 items-center gap-2">
           <Search className="h-4 w-4 text-muted-foreground" />
           <Input
@@ -275,8 +279,7 @@ export function SchoolRotationsClient({
         </div>
       </div>
 
-      {/* Rotations Table */}
-      <Card className="glass-card overflow-hidden">
+      <Card className="glass-card overflow-hidden border-0">
         <CardHeader>
           <CardTitle>Rotations</CardTitle>
           <CardDescription>Manage and monitor all clinical rotations</CardDescription>
@@ -296,18 +299,13 @@ export function SchoolRotationsClient({
                         className={cn(
                           "mt-1 text-xs",
                           specialtyColors[rotation.specialty as keyof typeof specialtyColors] ||
-                          "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+                            "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
                         )}
                       >
                         {rotation.specialty}
                       </Badge>
                     </div>
-                    <Badge
-                      className={cn(
-                        "shrink-0",
-                        statusColors[rotation.status]
-                      )}
-                    >
+                    <Badge className={cn("shrink-0", statusColors[rotation.status])}>
                       <StatusIcon className="mr-1 h-3 w-3" />
                       {rotation.status}
                     </Badge>
@@ -319,16 +317,25 @@ export function SchoolRotationsClient({
                     <span className="truncate">{rotation.clinicalSite}</span>
                   </MobileDataField>
                   <MobileDataField label="Duration">
-                    <span>{rotation.startDate?.toLocaleDateString()} - {rotation.endDate?.toLocaleDateString()}</span>
+                    <span>
+                      {rotation.startDate?.toLocaleDateString()} -{" "}
+                      {rotation.endDate?.toLocaleDateString()}
+                    </span>
                   </MobileDataField>
                   <MobileDataField label="Students">
-                    <span>{rotation.studentsAssigned}/{rotation.maxStudents}</span>
+                    <span>
+                      {rotation.studentsAssigned}/{rotation.maxStudents}
+                    </span>
                   </MobileDataField>
                   <div className="flex gap-2 pt-2">
-                    <Button size="sm" className="flex-1 min-h-[44px]" onClick={() => {
-                      setSelectedRotation(rotation)
-                      setIsAssignModalOpen(true)
-                    }}>
+                    <Button
+                      size="sm"
+                      className="flex-1 min-h-[44px]"
+                      onClick={() => {
+                        setSelectedRotation(rotation)
+                        setIsAssignModalOpen(true)
+                      }}
+                    >
                       <Users className="h-4 w-4 mr-1" /> Assign
                     </Button>
                     <Button variant="outline" size="sm" className="flex-1 min-h-[44px]">
@@ -374,7 +381,7 @@ export function SchoolRotationsClient({
                             className={cn(
                               "mt-1",
                               specialtyColors[rotation.specialty as keyof typeof specialtyColors] ||
-                              "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+                                "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
                             )}
                           >
                             {rotation.specialty}
@@ -450,7 +457,10 @@ export function SchoolRotationsClient({
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="glass-card-subtle">
+                          <DropdownMenuContent
+                            align="end"
+                            className="glass-dropdown border-white/10"
+                          >
                             <DropdownMenuItem className="cursor-pointer focus:bg-primary/10 focus:text-primary">
                               <Eye className="mr-2 h-4 w-4" />
                               View Details
@@ -489,13 +499,13 @@ export function SchoolRotationsClient({
         rotation={
           selectedRotation
             ? {
-              id: selectedRotation.id,
-              clinicalSiteId: selectedRotation.clinicalSiteId,
-              startDate: selectedRotation.startDate,
-              endDate: selectedRotation.endDate,
-              currentAssigned: selectedRotation.studentsAssigned,
-              maxCapacity: selectedRotation.maxStudents,
-            }
+                id: selectedRotation.id,
+                clinicalSiteId: selectedRotation.clinicalSiteId,
+                startDate: selectedRotation.startDate,
+                endDate: selectedRotation.endDate,
+                currentAssigned: selectedRotation.studentsAssigned,
+                maxCapacity: selectedRotation.maxStudents,
+              }
             : null
         }
         onSuccess={handleAssignSuccess}

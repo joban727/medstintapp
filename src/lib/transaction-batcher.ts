@@ -8,6 +8,7 @@ import type { ExtractTablesWithRelations } from "drizzle-orm"
 import type { PgQueryResultHKT, PgTransaction } from "drizzle-orm/pg-core"
 import { db } from "@/database/connection-pool"
 import type * as schema from "@/database/schema"
+import { logger } from "@/lib/logger"
 
 // Transaction batch configuration
 interface TransactionBatchConfig {
@@ -114,11 +115,11 @@ export class TransactionBatcher {
       )
 
       const duration = Date.now() - startTime
-      console.log(`🚀 Immediate transaction executed in ${duration}ms`)
+      logger.info({ duration }, "🚀 Immediate transaction executed")
 
       return result
     } catch (error) {
-      console.error("❌ Immediate transaction failed:", error)
+      logger.error({ error }, "❌ Immediate transaction failed")
       throw error
     }
   }
@@ -161,7 +162,7 @@ export class TransactionBatcher {
     const operations = this.pendingOperations.splice(0, this.config.maxBatchSize)
     const startTime = Date.now()
 
-    console.log(`🔄 Executing transaction batch with ${operations.length} operations`)
+    logger.info({ operationCount: operations.length }, "🔄 Executing transaction batch")
 
     let retryCount = 0
     let success = false
@@ -174,14 +175,15 @@ export class TransactionBatcher {
         const duration = Date.now() - startTime
         this.updateMetrics(operations.length, duration, true)
 
-        console.log(
-          `✅ Transaction batch completed in ${duration}ms (${operations.length} operations)`
+        logger.info(
+          { duration, operationCount: operations.length },
+          "✅ Transaction batch completed"
         )
       } catch (error) {
         retryCount++
-        console.warn(
-          `⚠️ Transaction batch failed (attempt ${retryCount}/${this.config.maxRetries}):`,
-          error
+        logger.warn(
+          { error, retryCount, maxRetries: this.config.maxRetries },
+          "⚠️ Transaction batch failed"
         )
 
         if (retryCount >= this.config.maxRetries) {
@@ -317,7 +319,7 @@ export class TransactionBatcher {
    * Graceful shutdown - complete all pending operations
    */
   async shutdown(): Promise<void> {
-    console.log("🔄 Shutting down transaction batcher...")
+    logger.info("🔄 Shutting down transaction batcher...")
 
     // Clear timer
     if (this.batchTimer) {
@@ -333,7 +335,7 @@ export class TransactionBatcher {
       await this.delay(10) // Small delay to prevent busy waiting
     }
 
-    console.log("✅ Transaction batcher shutdown complete")
+    logger.info("✅ Transaction batcher shutdown complete")
   }
 
   /**
@@ -398,7 +400,7 @@ export const transactionUtils = {
         lastError = error as Error
 
         if (attempt < maxRetries) {
-          console.warn(`⚠️ Transaction attempt ${attempt} failed, retrying...`)
+          logger.warn({ attempt }, "⚠️ Transaction attempt failed, retrying...")
           await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 100))
         }
       }

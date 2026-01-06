@@ -14,6 +14,7 @@ import {
 } from "../../../database/schema"
 import { cache, invalidateRelatedCaches } from "@/lib/neon-cache"
 import { cacheIntegrationService } from "@/lib/cache-integration"
+import { withCSRF } from "@/lib/csrf-middleware"
 
 import type { UserRole } from "@/types"
 // Validation schemas
@@ -62,11 +63,14 @@ async function checkPermissions(userId: string, targetUserId?: string) {
   }
 
   const userRole = user[0].role
-  const isAdmin = userRole !== null && ["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(userRole as UserRole)
-  const isSupervisor = userRole !== null && [
-    "CLINICAL_SUPERVISOR" as UserRole,
-    "CLINICAL_PRECEPTOR" as UserRole,
-  ].includes(userRole as UserRole)
+  const isAdmin =
+    userRole !== null &&
+    ["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(userRole as UserRole)
+  const isSupervisor =
+    userRole !== null &&
+    ["CLINICAL_SUPERVISOR" as UserRole, "CLINICAL_PRECEPTOR" as UserRole].includes(
+      userRole as UserRole
+    )
   const isStudent = userRole === ("STUDENT" as UserRole)
   const isOwnData = userId === targetUserId
 
@@ -474,7 +478,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/competency-analytics - Generate and store analytics
-export async function POST(request: NextRequest) {
+export const POST = withCSRF(async (request: NextRequest) => {
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -522,17 +526,17 @@ export async function POST(request: NextRequest) {
 
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateByTags(['competency'])
+      await cacheIntegrationService.invalidateByTags(["competency"])
     } catch (cacheError) {
       console.warn("Cache invalidation error in competency-analytics/route.ts:", cacheError)
     }
 
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
+})
 
 // DELETE /api/competency-analytics - Clean up old analytics
-export async function DELETE(request: NextRequest) {
+export const DELETE = withCSRF(async (request: NextRequest) => {
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -564,12 +568,11 @@ export async function DELETE(request: NextRequest) {
 
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateByTags(['competency'])
+      await cacheIntegrationService.invalidateByTags(["competency"])
     } catch (cacheError) {
       console.warn("Cache invalidation error in competency-analytics/route.ts:", cacheError)
     }
 
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
-
+})

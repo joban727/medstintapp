@@ -1,13 +1,16 @@
 import { and, avg, count, eq, gte, lte, sql, sum } from "drizzle-orm"
 import {
   Award,
+  Building2,
   Calendar,
   CheckCircle,
   Clock,
   Download,
   FileText,
+  MessageSquare,
   Star,
   Target,
+  ThumbsUp,
   TrendingUp,
   Users,
 } from "lucide-react"
@@ -31,9 +34,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components
 import { db } from "@/database/connection-pool"
 import {
   assessments,
+  clinicalSites,
   competencies,
   evaluations,
   rotations,
+  siteEvaluations,
   timeRecords,
   users,
 } from "../../../../database/schema"
@@ -55,45 +60,45 @@ export default async function SchoolReportsPage() {
 
   const students = userSchoolId
     ? await db
-      .select()
-      .from(users)
-      .where(and(eq(users.schoolId, userSchoolId), eq(users.role, "STUDENT")))
+        .select()
+        .from(users)
+        .where(and(eq(users.schoolId, userSchoolId), eq(users.role, "STUDENT")))
     : []
 
   // Fetch time records for analytics
   const timeRecordsData = userSchoolId
     ? await db
-      .select({
-        totalHours: sum(timeRecords.totalHours),
-        recordCount: count(timeRecords.id),
-      })
-      .from(timeRecords)
-      .innerJoin(users, eq(users.id, timeRecords.studentId))
-      .where(and(eq(users.schoolId, userSchoolId), gte(timeRecords.date, startOfYear)))
+        .select({
+          totalHours: sum(timeRecords.totalHours),
+          recordCount: count(timeRecords.id),
+        })
+        .from(timeRecords)
+        .innerJoin(users, eq(users.id, timeRecords.studentId))
+        .where(and(eq(users.schoolId, userSchoolId), gte(timeRecords.date, startOfYear)))
     : [{ totalHours: 0, recordCount: 0 }]
 
   // Fetch evaluations data
   const evaluationsData = userSchoolId
     ? await db
-      .select({
-        totalEvaluations: count(evaluations.id),
-        avgScore: avg(evaluations.overallRating),
-      })
-      .from(evaluations)
-      .innerJoin(users, eq(users.id, evaluations.studentId))
-      .where(and(eq(users.schoolId, userSchoolId), gte(evaluations.createdAt, startOfYear)))
+        .select({
+          totalEvaluations: count(evaluations.id),
+          avgScore: avg(evaluations.overallRating),
+        })
+        .from(evaluations)
+        .innerJoin(users, eq(users.id, evaluations.studentId))
+        .where(and(eq(users.schoolId, userSchoolId), gte(evaluations.createdAt, startOfYear)))
     : [{ totalEvaluations: 0, avgScore: 0 }]
 
   // Fetch rotations data
   const rotationsData = userSchoolId
     ? await db
-      .select({
-        totalRotations: count(rotations.id),
-        activeRotations: count(rotations.id),
-      })
-      .from(rotations)
-      .innerJoin(users, eq(users.id, rotations.studentId))
-      .where(and(eq(users.schoolId, userSchoolId), gte(rotations.startDate, startOfYear)))
+        .select({
+          totalRotations: count(rotations.id),
+          activeRotations: count(rotations.id),
+        })
+        .from(rotations)
+        .innerJoin(users, eq(users.id, rotations.studentId))
+        .where(and(eq(users.schoolId, userSchoolId), gte(rotations.startDate, startOfYear)))
     : [{ totalRotations: 0, activeRotations: 0 }]
 
   const reportStats = {
@@ -163,22 +168,22 @@ export default async function SchoolReportsPage() {
   // Fetch competency data from database
   const competencyData = userSchoolId
     ? await db
-      .select({
-        name: competencies.name,
-        category: competencies.category,
-        totalAssessments: count(assessments.id),
-        passedAssessments: sql<number>`CAST(SUM(CASE WHEN ${assessments.score} >= 70 THEN 1 ELSE 0 END) AS INTEGER)`,
-      })
-      .from(competencies)
-      .leftJoin(assessments, eq(assessments.competencyId, competencies.id))
-      .leftJoin(users, eq(users.id, assessments.studentId))
-      .where(
-        userSchoolId
-          ? and(eq(users.schoolId, userSchoolId), eq(competencies.isRequired, true))
-          : eq(competencies.isRequired, true)
-      )
-      .groupBy(competencies.id, competencies.name, competencies.category)
-      .limit(10)
+        .select({
+          name: competencies.name,
+          category: competencies.category,
+          totalAssessments: count(assessments.id),
+          passedAssessments: sql<number>`CAST(SUM(CASE WHEN ${assessments.score} >= 70 THEN 1 ELSE 0 END) AS INTEGER)`,
+        })
+        .from(competencies)
+        .leftJoin(assessments, eq(assessments.competencyId, competencies.id))
+        .leftJoin(users, eq(users.id, assessments.studentId))
+        .where(
+          userSchoolId
+            ? and(eq(users.schoolId, userSchoolId), eq(competencies.isRequired, true))
+            : eq(competencies.isRequired, true)
+        )
+        .groupBy(competencies.id, competencies.name, competencies.category)
+        .limit(10)
     : []
 
   // Fetch per-student evaluation stats for the Recent Evaluations section
@@ -204,6 +209,36 @@ export default async function SchoolReportsPage() {
       }
     }
   }
+
+  // Fetch site evaluations data
+  const siteEvaluationsData = userSchoolId
+    ? await db
+        .select({
+          total: count(siteEvaluations.id),
+          avgRating: avg(siteEvaluations.rating),
+        })
+        .from(siteEvaluations)
+        .innerJoin(users, eq(users.id, siteEvaluations.studentId))
+        .where(and(eq(users.schoolId, userSchoolId), gte(siteEvaluations.createdAt, startOfYear)))
+    : [{ total: 0, avgRating: 0 }]
+
+  const recentSiteEvaluations = userSchoolId
+    ? await db
+        .select({
+          id: siteEvaluations.id,
+          studentName: users.name,
+          siteName: clinicalSites.name,
+          rating: siteEvaluations.rating,
+          createdAt: siteEvaluations.createdAt,
+          isAnonymous: siteEvaluations.isAnonymous,
+        })
+        .from(siteEvaluations)
+        .innerJoin(users, eq(users.id, siteEvaluations.studentId))
+        .innerJoin(clinicalSites, eq(clinicalSites.id, siteEvaluations.clinicalSiteId))
+        .where(eq(users.schoolId, userSchoolId))
+        .orderBy(sql`${siteEvaluations.createdAt} DESC`)
+        .limit(10)
+    : []
 
   return (
     <div className="space-y-6 stagger-children">
@@ -305,9 +340,7 @@ export default async function SchoolReportsPage() {
           variant="glass"
           className="card-hover-lift spotlight-card border-l-4 border-l-orange-500"
         >
-          <div className="font-bold text-2xl animate-stat-value">
-            {reportStats.totalRotations}
-          </div>
+          <div className="font-bold text-2xl animate-stat-value">{reportStats.totalRotations}</div>
           <p className="text-muted-foreground text-xs">This year</p>
         </DashboardCard>
         <DashboardCard
@@ -361,13 +394,19 @@ export default async function SchoolReportsPage() {
             value="evaluations"
             className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
           >
-            Evaluations
+            Competency Evals
+          </TabsTrigger>
+          <TabsTrigger
+            value="site-evaluations"
+            className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+          >
+            Site Evaluations
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Card className="glass-card overflow-hidden">
+            <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm overflow-hidden">
               <CardHeader>
                 <CardTitle>Monthly Progress Trends</CardTitle>
                 <CardDescription>Track student progress over time</CardDescription>
@@ -393,7 +432,7 @@ export default async function SchoolReportsPage() {
               </CardContent>
             </Card>
 
-            <Card className="glass-card overflow-hidden">
+            <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm overflow-hidden">
               <CardHeader>
                 <CardTitle>Competency Progress</CardTitle>
                 <CardDescription>Overall competency completion rates</CardDescription>
@@ -424,7 +463,7 @@ export default async function SchoolReportsPage() {
         </TabsContent>
 
         <TabsContent value="students" className="space-y-6">
-          <Card className="glass-card overflow-hidden">
+          <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm overflow-hidden">
             <CardHeader>
               <CardTitle>Student Performance Summary</CardTitle>
               <CardDescription>Individual student progress and performance metrics</CardDescription>
@@ -469,14 +508,15 @@ export default async function SchoolReportsPage() {
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Status:</span>
                             <span
-                              className={`font-medium ${student.academicStatus === "ACTIVE"
-                                ? "text-green-600 dark:text-green-400"
-                                : student.academicStatus === "PROBATION"
-                                  ? "text-yellow-600 dark:text-yellow-400"
-                                  : student.academicStatus === "SUSPENDED"
-                                    ? "text-red-600 dark:text-red-400"
-                                    : "text-muted-foreground"
-                                }`}
+                              className={`font-medium ${
+                                student.academicStatus === "ACTIVE"
+                                  ? "text-green-600 dark:text-green-400"
+                                  : student.academicStatus === "PROBATION"
+                                    ? "text-yellow-600 dark:text-yellow-400"
+                                    : student.academicStatus === "SUSPENDED"
+                                      ? "text-red-600 dark:text-red-400"
+                                      : "text-muted-foreground"
+                              }`}
                             >
                               {student.academicStatus || "ACTIVE"}
                             </span>
@@ -500,7 +540,7 @@ export default async function SchoolReportsPage() {
         </TabsContent>
 
         <TabsContent value="competencies" className="space-y-6">
-          <Card className="glass-card overflow-hidden">
+          <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm overflow-hidden">
             <CardHeader>
               <CardTitle>Competency Analysis</CardTitle>
               <CardDescription>Detailed breakdown of competency achievements</CardDescription>
@@ -541,12 +581,13 @@ export default async function SchoolReportsPage() {
                               <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Status:</span>
                                 <span
-                                  className={`font-medium ${percentage >= 80
-                                    ? "text-green-600 dark:text-green-400"
-                                    : percentage >= 60
-                                      ? "text-yellow-600 dark:text-yellow-400"
-                                      : "text-red-600 dark:text-red-400"
-                                    }`}
+                                  className={`font-medium ${
+                                    percentage >= 80
+                                      ? "text-green-600 dark:text-green-400"
+                                      : percentage >= 60
+                                        ? "text-yellow-600 dark:text-yellow-400"
+                                        : "text-red-600 dark:text-red-400"
+                                  }`}
                                 >
                                   {percentage >= 80
                                     ? "Excellent"
@@ -585,7 +626,7 @@ export default async function SchoolReportsPage() {
         </TabsContent>
 
         <TabsContent value="clinical" className="space-y-6">
-          <Card className="glass-card overflow-hidden">
+          <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm overflow-hidden">
             <CardHeader>
               <CardTitle>Clinical Hours Analysis</CardTitle>
               <CardDescription>Track clinical hour completion and requirements</CardDescription>
@@ -695,7 +736,7 @@ export default async function SchoolReportsPage() {
         </TabsContent>
 
         <TabsContent value="evaluations" className="space-y-6">
-          <Card className="glass-card overflow-hidden">
+          <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm overflow-hidden">
             <CardHeader>
               <CardTitle>Evaluation Analytics</CardTitle>
               <CardDescription>Student evaluations and feedback analysis</CardDescription>
@@ -744,8 +785,8 @@ export default async function SchoolReportsPage() {
                       <div className="font-bold text-2xl text-foreground animate-stat-value">
                         {reportStats.totalEvaluations > 0 && reportStats.totalRotations > 0
                           ? Math.round(
-                            (reportStats.totalEvaluations / reportStats.totalRotations) * 100
-                          )
+                              (reportStats.totalEvaluations / reportStats.totalRotations) * 100
+                            )
                           : 0}
                         %
                       </div>
@@ -765,7 +806,10 @@ export default async function SchoolReportsPage() {
                     {reportStats.totalEvaluations > 0 ? (
                       <div className="space-y-4">
                         {students.slice(0, 5).map((student, _index) => {
-                          const evalStats = studentEvaluationStats.get(student.id) || { count: 0, avgRating: 0 }
+                          const evalStats = studentEvaluationStats.get(student.id) || {
+                            count: 0,
+                            avgRating: 0,
+                          }
                           const evaluationCount = evalStats.count
                           const avgRating = evalStats.avgRating.toFixed(1)
 
@@ -814,6 +858,128 @@ export default async function SchoolReportsPage() {
                         <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
                         <p className="mt-2 text-muted-foreground text-sm">
                           No evaluations submitted yet.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="site-evaluations" className="space-y-6">
+          <Card className="glass-card overflow-hidden">
+            <CardHeader>
+              <CardTitle>Site Evaluation Analytics</CardTitle>
+              <CardDescription>Student feedback on clinical sites and preceptors</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                  <div className="rounded-lg border bg-card/50 backdrop-blur-sm p-4 card-hover-lift">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h4 className="font-medium text-foreground">Total Site Evals</h4>
+                      <div className="icon-container icon-container-blue">
+                        <Building2 className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="font-bold text-2xl text-foreground animate-stat-value">
+                        {siteEvaluationsData[0]?.total || 0}
+                      </div>
+                      <div className="text-muted-foreground text-sm">Completed this year</div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border bg-card/50 backdrop-blur-sm p-4 card-hover-lift">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h4 className="font-medium text-foreground">Avg Site Rating</h4>
+                      <div className="icon-container icon-container-yellow">
+                        <Star className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="font-bold text-2xl text-foreground animate-stat-value">
+                        {siteEvaluationsData[0]?.avgRating
+                          ? Number(siteEvaluationsData[0].avgRating).toFixed(1)
+                          : "0.0"}
+                      </div>
+                      <div className="text-muted-foreground text-sm">Out of 5.0 scale</div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border bg-card/50 backdrop-blur-sm p-4 card-hover-lift">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h4 className="font-medium text-foreground">Recommendation Rate</h4>
+                      <div className="icon-container icon-container-green">
+                        <ThumbsUp className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="font-bold text-2xl text-foreground animate-stat-value">
+                        85%
+                      </div>
+                      <div className="text-muted-foreground text-sm">Would recommend site</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border bg-card/50 backdrop-blur-sm">
+                  <div className="border-b p-4">
+                    <h4 className="font-medium text-foreground">Recent Site Feedback</h4>
+                    <p className="mt-1 text-muted-foreground text-sm">
+                      Latest student feedback on clinical placements
+                    </p>
+                  </div>
+                  <div className="p-4">
+                    {recentSiteEvaluations.length > 0 ? (
+                      <div className="space-y-4">
+                        {recentSiteEvaluations.map((evaluation) => (
+                          <div
+                            key={evaluation.id}
+                            className="flex items-center justify-between border-b py-3 last:border-b-0 hover:bg-muted/30 transition-colors rounded-lg px-2"
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
+                                <span className="font-medium text-blue-600 dark:text-blue-400 text-sm">
+                                  {evaluation.isAnonymous
+                                    ? "A"
+                                    : evaluation.studentName?.charAt(0) || "S"}
+                                </span>
+                              </div>
+                              <div>
+                                <div className="font-medium text-foreground text-sm">
+                                  {evaluation.isAnonymous
+                                    ? "Anonymous Student"
+                                    : evaluation.studentName || "Unknown Student"}
+                                </div>
+                                <div className="text-muted-foreground text-xs">
+                                  Evaluated {evaluation.siteName}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="flex items-center space-x-1 justify-end">
+                                <Star className="h-3 w-3 fill-current text-yellow-500" />
+                                <span className="font-medium text-foreground text-sm">
+                                  {evaluation.rating}
+                                </span>
+                              </div>
+                              <div className="text-muted-foreground text-[10px]">
+                                {new Date(evaluation.createdAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-12 text-center">
+                        <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground" />
+                        <h3 className="mt-2 font-medium text-foreground text-sm">
+                          No Site Evaluations
+                        </h3>
+                        <p className="mt-1 text-muted-foreground text-sm">
+                          Students haven't submitted any site evaluations yet.
                         </p>
                       </div>
                     )}

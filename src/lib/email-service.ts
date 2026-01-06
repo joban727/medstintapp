@@ -40,7 +40,14 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       return false
     }
 
-    const { to, subject, html, text, from = "MedStint <noreply@medstint.com>", attachments } = options
+    const {
+      to,
+      subject,
+      html,
+      text,
+      from = "MedStint <noreply@medstint.com>",
+      attachments,
+    } = options
 
     const emailData: any = {
       from,

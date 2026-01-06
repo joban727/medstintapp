@@ -7,6 +7,7 @@ import { rotations, timecardCorrections, timeRecords, users } from "../../../../
 import { logAuditEvent } from "../../../../../lib/rbac-middleware"
 import { cacheIntegrationService } from "@/lib/cache-integration"
 import type { UserRole } from "@/types"
+import { withCSRF } from "@/lib/csrf-middleware"
 import {
   createSuccessResponse,
   createErrorResponse,
@@ -23,223 +24,225 @@ const approvalSchema = z.object({
   applyImmediately: z.boolean().default(false),
 })
 
-// POST /api/timecard-corrections/[id]/approve - Approve or reject a timecard correction
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return withErrorHandlingAsync(async () => {
-    const { id } = await params
-    const { userId } = await auth()
-    if (!userId) {
-      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
-    }
-
-    const correctionId = id
-
-    let validatedData
-    try {
-      const body = await request.json()
-      validatedData = approvalSchema.parse(body)
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return createValidationErrorResponse(
-          ERROR_MESSAGES.VALIDATION_ERROR,
-          error.issues.map((issue) => ({
-            field: issue.path.join("."),
-            code: issue.code,
-            details: issue.message,
-          }))
-        )
+// POST /api/timecard-corrections/[id]/approve - Approve/reject correction (CSRF protected)
+export const POST = withCSRF(
+  async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+    return withErrorHandlingAsync(async () => {
+      const { id } = await params
+      const { userId } = await auth()
+      if (!userId) {
+        return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
       }
-      throw error
-    }
 
-    // Get the correction
-    const [correction] = await db
-      .select()
-      .from(timecardCorrections)
-      .where(eq(timecardCorrections.id, correctionId))
-      .limit(1)
+      const correctionId = id
 
-    if (!correction) {
-      return createErrorResponse("Correction not found", HTTP_STATUS.NOT_FOUND)
-    }
+      let validatedData
+      try {
+        const body = await request.json()
+        validatedData = approvalSchema.parse(body)
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return createValidationErrorResponse(
+            ERROR_MESSAGES.VALIDATION_ERROR,
+            error.issues.map((issue) => ({
+              field: issue.path.join("."),
+              code: issue.code,
+              details: issue.message,
+            }))
+          )
+        }
+        throw error
+      }
 
-    // Check if correction is still pending
-    if (correction.status !== "PENDING") {
-      return createErrorResponse("Correction has already been reviewed", HTTP_STATUS.CONFLICT)
-    }
-
-    // Get current user and verify permissions
-    const [currentUser] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
-
-    if (!currentUser) {
-      return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
-    }
-
-    // Check if user has permission to approve/reject
-    let hasPermission = false
-
-    if (
-      currentUser.role !== null &&
-      [
-        "SCHOOL_ADMIN" as UserRole,
-        "CLINICAL_SUPERVISOR" as UserRole,
-        "SUPER_ADMIN" as UserRole,
-      ].includes(currentUser.role as UserRole)
-    ) {
-      hasPermission = true
-    } else if (currentUser.role === ("CLINICAL_PRECEPTOR" as UserRole as UserRole)) {
-      // Check if the preceptor is assigned to the rotation
-      const [rotation] = await db
+      // Get the correction
+      const [correction] = await db
         .select()
-        .from(rotations)
-        .where(and(eq(rotations.id, correction.rotationId), eq(rotations.preceptorId, userId)))
+        .from(timecardCorrections)
+        .where(eq(timecardCorrections.id, correctionId))
         .limit(1)
 
-      if (rotation) {
-        hasPermission = true
+      if (!correction) {
+        return createErrorResponse("Correction not found", HTTP_STATUS.NOT_FOUND)
       }
-    }
 
-    if (!hasPermission) {
-      return createErrorResponse(
-        "You don't have permission to review this correction",
-        HTTP_STATUS.FORBIDDEN
-      )
-    }
+      // Check if correction is still pending
+      if (correction.status !== "PENDING") {
+        return createErrorResponse("Correction has already been reviewed", HTTP_STATUS.CONFLICT)
+      }
 
-    // Update the correction status
-    const now = new Date()
-    const newStatus = validatedData.action === "APPROVE" ? "APPROVED" : "REJECTED"
+      // Get current user and verify permissions
+      const [currentUser] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
 
-    await db
-      .update(timecardCorrections)
-      .set({
-        status: newStatus,
-        reviewedBy: userId,
-        reviewedAt: now,
-        reviewerNotes: validatedData.reviewerNotes || null,
-        updatedAt: now,
-      })
-      .where(eq(timecardCorrections.id, correctionId))
+      if (!currentUser) {
+        return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
+      }
 
-    // If approved and applyImmediately is true, apply the changes
-    let appliedChanges = false
-    if (validatedData.action === "APPROVE" && validatedData.applyImmediately) {
-      try {
-        const requestedChanges = JSON.parse(correction.requestedChanges)
+      // Check if user has permission to approve/reject
+      let hasPermission = false
 
-        // Get the original time record
-        const [originalRecord] = await db
+      if (
+        currentUser.role !== null &&
+        [
+          "SCHOOL_ADMIN" as UserRole,
+          "CLINICAL_SUPERVISOR" as UserRole,
+          "SUPER_ADMIN" as UserRole,
+        ].includes(currentUser.role as UserRole)
+      ) {
+        hasPermission = true
+      } else if (currentUser.role === ("CLINICAL_PRECEPTOR" as UserRole as UserRole)) {
+        // Check if the preceptor is assigned to the rotation
+        const [rotation] = await db
           .select()
-          .from(timeRecords)
-          .where(eq(timeRecords.id, correction.originalTimeRecordId))
+          .from(rotations)
+          .where(and(eq(rotations.id, correction.rotationId), eq(rotations.preceptorId, userId)))
           .limit(1)
 
-        if (originalRecord) {
-          // Prepare update fields
-          const updateFields: {
-            updatedAt: Date
-            clockIn?: Date
-            clockOut?: Date
-            activities?: string
-            notes?: string
-            date?: Date
-            totalHours?: string
-          } = {
-            updatedAt: now,
-          }
-
-          // Apply requested changes
-          if (requestedChanges.clockIn) {
-            updateFields.clockIn = new Date(requestedChanges.clockIn)
-          }
-          if (requestedChanges.clockOut) {
-            updateFields.clockOut = new Date(requestedChanges.clockOut)
-          }
-          if (requestedChanges.activities) {
-            updateFields.activities = requestedChanges.activities
-          }
-          if (requestedChanges.notes) {
-            updateFields.notes = requestedChanges.notes
-          }
-          if (requestedChanges.date) {
-            updateFields.date = new Date(requestedChanges.date as string)
-          }
-
-          // Recalculate total hours if clock times changed
-          if (requestedChanges.clockIn || requestedChanges.clockOut) {
-            const clockIn = requestedChanges.clockIn
-              ? new Date(requestedChanges.clockIn as string)
-              : originalRecord.clockIn
-            const clockOut = requestedChanges.clockOut
-              ? new Date(requestedChanges.clockOut as string)
-              : originalRecord.clockOut
-
-            if (clockIn && clockOut) {
-              const diffMs = clockOut.getTime() - clockIn.getTime()
-              const diffHours = diffMs / (1000 * 60 * 60)
-              updateFields.totalHours = Math.max(0, Math.round(diffHours * 100) / 100).toString()
-            }
-          }
-
-          // Update the time record
-          await db
-            .update(timeRecords)
-            .set(updateFields)
-            .where(eq(timeRecords.id, correction.originalTimeRecordId))
-
-          // Update correction to mark as applied
-          await db
-            .update(timecardCorrections)
-            .set({
-              appliedBy: userId,
-              appliedAt: now,
-              updatedAt: now,
-            })
-            .where(eq(timecardCorrections.id, correctionId))
-
-          appliedChanges = true
+        if (rotation) {
+          hasPermission = true
         }
-      } catch (error) {
-        console.error("Error applying correction changes:", error)
-        // Don't fail the approval, just log the error
       }
-    }
 
-    // Log audit event
-    await logAuditEvent({
-      userId: userId,
-      action: `TIMECARD_CORRECTION_${validatedData.action}`,
-      resource: "TIMECARD_CORRECTION",
-      resourceId: correctionId,
-      details: {
-        correctionId,
-        originalTimeRecordId: correction.originalTimeRecordId,
-        studentId: correction.studentId,
-        action: validatedData.action,
-        reviewerNotes: validatedData.reviewerNotes,
-        appliedImmediately: appliedChanges,
-        correctionType: correction.correctionType,
-      },
-      ipAddress:
-        request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
-      userAgent: request.headers.get("user-agent") || undefined,
-      severity: validatedData.action === "APPROVE" ? "MEDIUM" : "LOW",
-      status: "SUCCESS",
+      if (!hasPermission) {
+        return createErrorResponse(
+          "You don't have permission to review this correction",
+          HTTP_STATUS.FORBIDDEN
+        )
+      }
+
+      // Update the correction status
+      const now = new Date()
+      const newStatus = validatedData.action === "APPROVE" ? "APPROVED" : "REJECTED"
+
+      await db
+        .update(timecardCorrections)
+        .set({
+          status: newStatus,
+          reviewedBy: userId,
+          reviewedAt: now,
+          reviewerNotes: validatedData.reviewerNotes || null,
+          updatedAt: now,
+        })
+        .where(eq(timecardCorrections.id, correctionId))
+
+      // If approved and applyImmediately is true, apply the changes
+      let appliedChanges = false
+      if (validatedData.action === "APPROVE" && validatedData.applyImmediately) {
+        try {
+          const requestedChanges = JSON.parse(correction.requestedChanges)
+
+          // Get the original time record
+          const [originalRecord] = await db
+            .select()
+            .from(timeRecords)
+            .where(eq(timeRecords.id, correction.originalTimeRecordId))
+            .limit(1)
+
+          if (originalRecord) {
+            // Prepare update fields
+            const updateFields: {
+              updatedAt: Date
+              clockIn?: Date
+              clockOut?: Date
+              activities?: string
+              notes?: string
+              date?: Date
+              totalHours?: string
+            } = {
+              updatedAt: now,
+            }
+
+            // Apply requested changes
+            if (requestedChanges.clockIn) {
+              updateFields.clockIn = new Date(requestedChanges.clockIn)
+            }
+            if (requestedChanges.clockOut) {
+              updateFields.clockOut = new Date(requestedChanges.clockOut)
+            }
+            if (requestedChanges.activities) {
+              updateFields.activities = requestedChanges.activities
+            }
+            if (requestedChanges.notes) {
+              updateFields.notes = requestedChanges.notes
+            }
+            if (requestedChanges.date) {
+              updateFields.date = new Date(requestedChanges.date as string)
+            }
+
+            // Recalculate total hours if clock times changed
+            if (requestedChanges.clockIn || requestedChanges.clockOut) {
+              const clockIn = requestedChanges.clockIn
+                ? new Date(requestedChanges.clockIn as string)
+                : originalRecord.clockIn
+              const clockOut = requestedChanges.clockOut
+                ? new Date(requestedChanges.clockOut as string)
+                : originalRecord.clockOut
+
+              if (clockIn && clockOut) {
+                const diffMs = clockOut.getTime() - clockIn.getTime()
+                const diffHours = diffMs / (1000 * 60 * 60)
+                updateFields.totalHours = Math.max(0, Math.round(diffHours * 100) / 100).toString()
+              }
+            }
+
+            // Update the time record
+            await db
+              .update(timeRecords)
+              .set(updateFields)
+              .where(eq(timeRecords.id, correction.originalTimeRecordId))
+
+            // Update correction to mark as applied
+            await db
+              .update(timecardCorrections)
+              .set({
+                appliedBy: userId,
+                appliedAt: now,
+                updatedAt: now,
+              })
+              .where(eq(timecardCorrections.id, correctionId))
+
+            appliedChanges = true
+          }
+        } catch (error) {
+          console.error("Error applying correction changes:", error)
+          // Don't fail the approval, just log the error
+        }
+      }
+
+      // Log audit event
+      await logAuditEvent({
+        userId: userId,
+        action: `TIMECARD_CORRECTION_${validatedData.action}`,
+        resource: "TIMECARD_CORRECTION",
+        resourceId: correctionId,
+        details: {
+          correctionId,
+          originalTimeRecordId: correction.originalTimeRecordId,
+          studentId: correction.studentId,
+          action: validatedData.action,
+          reviewerNotes: validatedData.reviewerNotes,
+          appliedImmediately: appliedChanges,
+          correctionType: correction.correctionType,
+        },
+        ipAddress:
+          request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
+        userAgent: request.headers.get("user-agent") || undefined,
+        severity: validatedData.action === "APPROVE" ? "MEDIUM" : "LOW",
+        status: "SUCCESS",
+      })
+
+      const responseMessage =
+        validatedData.action === "APPROVE"
+          ? `Timecard correction approved${appliedChanges ? " and applied" : ""} successfully`
+          : "Timecard correction rejected successfully"
+
+      return createSuccessResponse({
+        message: responseMessage,
+        status: newStatus,
+        appliedChanges,
+      })
     })
-
-    const responseMessage =
-      validatedData.action === "APPROVE"
-        ? `Timecard correction approved${appliedChanges ? " and applied" : ""} successfully`
-        : "Timecard correction rejected successfully"
-
-    return createSuccessResponse({
-      message: responseMessage,
-      status: newStatus,
-      appliedChanges,
-    })
-  })
-}
+  }
+)
 
 // GET /api/timecard-corrections/[id]/approve - Get correction details for review
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

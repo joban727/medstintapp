@@ -142,15 +142,31 @@ export default function AnalyticsPage() {
   const predictiveInsights = data?.predictiveInsights || []
 
   const totalStudents = sitePerformance.reduce((sum, site) => sum + site.students, 0)
-  const overallAvgScore = totalStudents > 0
-    ? Math.round(sitePerformance.reduce((sum, site) => sum + site.avgScore * site.students, 0) / totalStudents)
-    : 0
-  const overallPassRate = totalStudents > 0
-    ? Math.round(sitePerformance.reduce((sum, site) => sum + site.passRate * site.students, 0) / totalStudents)
-    : 0
-  const competencyCompletion = competencyData.length > 0
-    ? Math.round((competencyData.reduce((sum, comp) => sum + (comp.total > 0 ? comp.completed / comp.total : 0), 0) / competencyData.length) * 100)
-    : 0
+  const overallAvgScore =
+    totalStudents > 0
+      ? Math.round(
+          sitePerformance.reduce((sum, site) => sum + site.avgScore * site.students, 0) /
+            totalStudents
+        )
+      : 0
+  const overallPassRate =
+    totalStudents > 0
+      ? Math.round(
+          sitePerformance.reduce((sum, site) => sum + site.passRate * site.students, 0) /
+            totalStudents
+        )
+      : 0
+  const competencyCompletion =
+    competencyData.length > 0
+      ? Math.round(
+          (competencyData.reduce(
+            (sum, comp) => sum + (comp.total > 0 ? comp.completed / comp.total : 0),
+            0
+          ) /
+            competencyData.length) *
+            100
+        )
+      : 0
 
   return (
     <div className="space-y-6">
@@ -425,7 +441,9 @@ export default function AnalyticsPage() {
                         <div className="text-muted-foreground text-sm">Avg Score</div>
                       </div>
                       <div className="w-32">
-                        <Progress value={comp.total > 0 ? (comp.completed / comp.total) * 100 : 0} />
+                        <Progress
+                          value={comp.total > 0 ? (comp.completed / comp.total) * 100 : 0}
+                        />
                       </div>
                       <div className="font-medium text-sm">
                         {Math.round(comp.total > 0 ? (comp.completed / comp.total) * 100 : 0)}%

@@ -6,12 +6,11 @@ import {
   Building2,
   CheckCircle,
   GraduationCap,
-  HelpCircle,
   RotateCcw,
-  Save,
   School as SchoolIcon,
   User as UserIcon,
 } from "lucide-react"
+import { logger } from "@/lib/client-logger"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useId, useState, useTransition } from "react"
 import { toast } from "sonner"
@@ -22,8 +21,6 @@ import { useOnboardingStore } from "../../stores/onboarding-store"
 import type { UserRole } from "../../types"
 import type { OnboardingStep } from "../../types/onboarding"
 import { SessionExpirationWarning } from "../session-expiration-warning"
-import { InteractiveTooltip } from "../tutorial/interactive-tooltip"
-import { TutorialIntegration } from "../tutorial/tutorial-integration"
 import { Alert, AlertDescription } from "../ui/alert"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
@@ -129,7 +126,6 @@ export function EnhancedOnboardingFlow({
     description: "",
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [showTutorial, setShowTutorial] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
 
@@ -138,16 +134,29 @@ export function EnhancedOnboardingFlow({
   const { startTimer, resetTimer } = useStepTimer()
 
   // Session management hooks
-  const { saveSession, loadSession, abandonSession, sessionId, timeUntilExpiry, isExpired, extendSession, recoverExpiredSession, isLoading: isSessionLoading } = useOnboardingSession()
+  const {
+    saveSession,
+    loadSession,
+    abandonSession,
+    sessionId,
+    timeUntilExpiry,
+    isExpired,
+    extendSession,
+    recoverExpiredSession,
+    isLoading: isSessionLoading,
+  } = useOnboardingSession()
   // Auto-save session
-  useAutoSaveSession({
-    currentStep,
-    selectedRole,
-    selectedSchool,
-    selectedProgram,
-    schoolName: schoolProfile.name,
-    schoolAddress: schoolProfile.address,
-  }, enableSessionPersistence)
+  useAutoSaveSession(
+    {
+      currentStep,
+      selectedRole,
+      selectedSchool,
+      selectedProgram,
+      schoolName: schoolProfile.name,
+      schoolAddress: schoolProfile.address,
+    },
+    enableSessionPersistence
+  )
 
   // Store hooks
   const { progress, resetState, completeStep, completedSteps } = useOnboardingStore()
@@ -189,7 +198,6 @@ export function EnhancedOnboardingFlow({
     "program-selection",
     "school-profile",
     "profile-completion",
-    "tutorial",
     "completion",
   ]
 
@@ -322,7 +330,9 @@ export function EnhancedOnboardingFlow({
     startTransition(() => {
       try {
         window.location.assign("/dashboard")
-      } catch { }
+      } catch (e) {
+        logger.error(e, "Failed to redirect")
+      }
     })
   }, [])
 
@@ -575,32 +585,6 @@ export function EnhancedOnboardingFlow({
     </Card>
   )
 
-  // Render tutorial step
-  const renderTutorial = () => (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <HelpCircle className="h-5 w-5" />
-          Tutorial
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Would you like to take a quick tutorial to learn how to use the platform?
-        </p>
-
-        <div className="flex gap-2">
-          <Button variant="default" onClick={() => setShowTutorial(true)} className="flex-1">
-            Yes, Show Tutorial
-          </Button>
-          <Button variant="outline" onClick={() => setCurrentStep("completion")} className="flex-1">
-            Skip Tutorial
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  )
-
   // Render completion step
   const renderCompletion = () => (
     <Card className="w-full max-w-md mx-auto">
@@ -635,8 +619,6 @@ export function EnhancedOnboardingFlow({
         return renderSchoolProfile()
       case "profile-completion":
         return renderProfileCompletion()
-      case "tutorial":
-        return renderTutorial()
       case "completion":
         return renderCompletion()
       default:
@@ -691,35 +673,10 @@ export function EnhancedOnboardingFlow({
               Reset
             </Button>
 
-            {currentStep !== "completion" && (
-              <Button onClick={handleNext}>{currentStep === "tutorial" ? "Skip" : "Next"}</Button>
-            )}
+            {currentStep !== "completion" && <Button onClick={handleNext}>Next</Button>}
           </div>
         </div>
       </div>
-
-      {showTutorial && (
-        <TutorialIntegration
-          userRole={user.role}
-          onClose={() => {
-            setShowTutorial(false)
-            setCurrentStep("completion")
-          }}
-        >
-          <></>
-        </TutorialIntegration>
-      )}
-
-      {enableAnalytics && (
-        <InteractiveTooltip
-          content={{ description: "This is an interactive tooltip to help you navigate the onboarding process." }}
-          position="bottom"
-        >
-          <div className="fixed bottom-4 right-4 z-50">
-            <HelpCircle className="h-6 w-6 text-muted-foreground" />
-          </div>
-        </InteractiveTooltip>
-      )}
     </div>
   )
 }

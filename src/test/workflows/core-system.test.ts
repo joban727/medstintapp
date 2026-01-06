@@ -44,7 +44,7 @@ describe('Core System Workflow', () => {
         const schoolId = 'school-123'
         const adminId = 'admin-user'
 
-        await dbMock.insert(schema.schools).values({
+        dbMock.insert(schema.schools).values({
             id: schoolId,
             name: 'Test Medical School',
             adminId: adminId,
@@ -53,7 +53,7 @@ describe('Core System Workflow', () => {
 
         // 2. Setup Program & Cohort
         const programId = 'program-md'
-        await dbMock.insert(schema.programs).values({
+        dbMock.insert(schema.programs).values({
             id: programId,
             schoolId: schoolId,
             name: 'MD Program',
@@ -64,7 +64,7 @@ describe('Core System Workflow', () => {
         }).returning()
 
         const cohortId = 'cohort-2026'
-        await dbMock.insert(schema.cohorts).values({
+        dbMock.insert(schema.cohorts).values({
             id: cohortId,
             programId: programId,
             name: 'Class of 2026',
@@ -75,7 +75,7 @@ describe('Core System Workflow', () => {
 
         // 3. Add Staff (Preceptor)
         const preceptorId = 'dr-smith'
-        await dbMock.insert(schema.users).values({
+        dbMock.insert(schema.users).values({
             id: preceptorId,
             name: 'Dr. Smith',
             email: 'smith@hospital.com',
@@ -85,7 +85,7 @@ describe('Core System Workflow', () => {
 
         // 4. Student Enrollment
         const studentId = 'student-jane'
-        await dbMock.insert(schema.users).values({
+        dbMock.insert(schema.users).values({
             id: studentId,
             name: 'Jane Doe',
             email: 'jane@medschool.edu',
@@ -100,7 +100,7 @@ describe('Core System Workflow', () => {
         const rotationId = 'rot-internal-med'
         const clinicalSiteId = 'site-general-hospital'
 
-        await dbMock.insert(schema.clinicalSites).values({
+        dbMock.insert(schema.clinicalSites).values({
             id: clinicalSiteId,
             schoolId: schoolId,
             name: 'General Hospital',
@@ -111,7 +111,7 @@ describe('Core System Workflow', () => {
             capacity: 10
         }).returning()
 
-        await dbMock.insert(schema.rotations).values({
+        dbMock.insert(schema.rotations).values({
             id: rotationId,
             studentId: studentId,
             programId: programId,
@@ -128,7 +128,7 @@ describe('Core System Workflow', () => {
         const timeRecordId = 'clock-in-1'
         const clockInTime = new Date()
 
-        await dbMock.insert(schema.timeRecords).values({
+        dbMock.insert(schema.timeRecords).values({
             id: timeRecordId,
             studentId: studentId,
             rotationId: rotationId,
@@ -142,7 +142,7 @@ describe('Core System Workflow', () => {
         // 7. Competency Flow
         // 7a. Create Competency (Admin)
         const competencyId = 'comp-physical-exam'
-        await dbMock.insert(schema.competencies).values({
+        dbMock.insert(schema.competencies).values({
             id: competencyId,
             name: 'Physical Exam',
             description: 'Perform a full physical exam',
@@ -154,7 +154,7 @@ describe('Core System Workflow', () => {
 
         // 7b. Assign Competency to Student
         const assignmentId = 'assign-1'
-        await dbMock.insert(schema.competencyAssignments).values({
+        dbMock.insert(schema.competencyAssignments).values({
             id: assignmentId,
             userId: studentId,
             competencyId: competencyId,
@@ -170,7 +170,7 @@ describe('Core System Workflow', () => {
 
         // 7c. Preceptor Assesses Competency
         const assessmentId = 'assess-1'
-        await dbMock.insert(schema.assessments).values({
+        dbMock.insert(schema.assessments).values({
             id: assessmentId,
             studentId: studentId,
             competencyId: competencyId,
@@ -186,7 +186,7 @@ describe('Core System Workflow', () => {
         }).returning()
 
         // 7d. Update Assignment Status
-        await dbMock.update(schema.competencyAssignments).set({
+        dbMock.update(schema.competencyAssignments).set({
             status: 'COMPLETED',
             completionDate: new Date(),
             progressPercentage: 100.0

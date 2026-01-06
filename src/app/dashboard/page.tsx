@@ -3,10 +3,6 @@ import { eq } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
 import { DashboardLoading } from "../../components/dashboard/dashboard-loading"
-import UnifiedErrorBoundary, {
-  ErrorBoundaryConfigs,
-} from "../../components/error-boundary/unified-error-boundary"
-import RoleErrorBoundary from "../../components/error-boundary/role-error-boundary"
 import { db } from "@/database/connection-pool"
 import { users } from "../../database/schema"
 import type { UserRole } from "../../types"
@@ -31,45 +27,21 @@ const VALID_ROLES: UserRole[] = [
   "STUDENT",
 ]
 
-/**
- * Get the appropriate dashboard component based on user role
- */
-function getDashboardComponent(role: UserRole) {
-  switch (role) {
-    case "SUPER_ADMIN":
-      return AdminDashboardPage
-    case "SCHOOL_ADMIN":
-      return SchoolAdminDashboardPage
-    case "CLINICAL_SUPERVISOR":
-      return ClinicalSupervisorDashboardPage
-    case "CLINICAL_PRECEPTOR":
-      return ClinicalPreceptorDashboardPage
-    case "STUDENT":
-      return StudentDashboard
-    default:
-      throw new Error(`Invalid user role: ${role}`)
-  }
-}
-
 interface DashboardPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
 /**
  * Dashboard Page
- * 
+ *
  * Renders the appropriate role-specific dashboard.
  * Middleware guarantees user is authenticated with completed onboarding.
  */
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   return (
-    <RoleErrorBoundary>
-      <UnifiedErrorBoundary config={ErrorBoundaryConfigs.fullscreen}>
-        <Suspense fallback={<DashboardLoading />}>
-          <DashboardRouter searchParams={searchParams} />
-        </Suspense>
-      </UnifiedErrorBoundary>
-    </RoleErrorBoundary>
+    <Suspense fallback={<DashboardLoading />}>
+      <DashboardRouter searchParams={searchParams} />
+    </Suspense>
   )
 }
 
@@ -79,7 +51,7 @@ interface DashboardRouterProps {
 
 /**
  * Dashboard Router
- * 
+ *
  * Fetches user role and renders the appropriate dashboard component.
  */
 async function DashboardRouter(_: DashboardRouterProps) {
@@ -116,7 +88,19 @@ async function DashboardRouter(_: DashboardRouterProps) {
     redirect("/onboarding")
   }
 
-  // Render the appropriate dashboard
-  const DashboardComponent = getDashboardComponent(user.role)
-  return <DashboardComponent />
+  // Render the appropriate dashboard based on role
+  switch (user.role) {
+    case "SUPER_ADMIN":
+      return <AdminDashboardPage />
+    case "SCHOOL_ADMIN":
+      return <SchoolAdminDashboardPage />
+    case "CLINICAL_SUPERVISOR":
+      return <ClinicalSupervisorDashboardPage />
+    case "CLINICAL_PRECEPTOR":
+      return <ClinicalPreceptorDashboardPage />
+    case "STUDENT":
+      return <StudentDashboard />
+    default:
+      throw new Error(`Invalid user role: ${user.role}`)
+  }
 }

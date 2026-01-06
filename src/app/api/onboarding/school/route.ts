@@ -429,4 +429,3 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
     message: "Evaluation deleted successfully",
   })
 })
-

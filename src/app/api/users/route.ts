@@ -48,4 +48,3 @@ export const GET = withErrorHandling(async (_request: NextRequest) => {
 
   return createSuccessResponse(allUsers, "Users retrieved successfully")
 })
-

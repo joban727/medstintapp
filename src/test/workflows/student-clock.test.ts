@@ -50,6 +50,10 @@ vi.mock('@/lib/logger', () => ({
     }
 }));
 
+vi.mock('@/lib/csrf-middleware', () => ({
+    withCSRF: (handler: any) => handler
+}));
+
 describe('Student Clock System', () => {
     const mockStudent = {
         userId: 'student-1',

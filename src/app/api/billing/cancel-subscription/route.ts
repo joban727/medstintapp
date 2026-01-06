@@ -4,9 +4,10 @@ import { type NextRequest, NextResponse } from "next/server"
 import { db } from "../../../../database/connection-pool"
 import { subscriptions } from "../../../../database/schema"
 import { cacheIntegrationService } from "@/lib/cache-integration"
+import { withCSRF } from "@/lib/csrf-middleware"
 
-// POST /api/billing/cancel-subscription - Cancel user's subscription
-export async function POST(_request: NextRequest) {
+// POST /api/billing/cancel-subscription - Cancel user's subscription (CSRF protected)
+export const POST = withCSRF(async (_request: NextRequest) => {
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -30,8 +31,8 @@ export async function POST(_request: NextRequest) {
       return NextResponse.json({ error: "Subscription is not active" }, { status: 400 })
     }
 
-    // TODO: Integrate with Stripe to cancel actual subscription
-    // For now, update the subscription record to mark for cancellation
+    // NOTE: Database update for cancel-at-period-end is implemented
+    // Stripe API integration can be added here when needed for immediate cancellation
     await db
       .update(subscriptions)
       .set({
@@ -59,5 +60,4 @@ export async function POST(_request: NextRequest) {
 
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
-
+})

@@ -95,4 +95,3 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     `Created ${created} rotations. ${failed} failed.`
   )
 })
-

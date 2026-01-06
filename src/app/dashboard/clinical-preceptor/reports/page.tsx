@@ -12,7 +12,13 @@ import {
 import { Progress } from "../../../../components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs"
 import { db } from "@/database/connection-pool"
-import { evaluations, rotations, users, competencyAssignments, competencies } from "../../../../database/schema"
+import {
+  evaluations,
+  rotations,
+  users,
+  competencyAssignments,
+  competencies,
+} from "../../../../database/schema"
 import { requireAnyRole } from "../../../../lib/auth-clerk"
 
 export default async function PreceptorReportsPage() {
@@ -101,9 +107,8 @@ export default async function PreceptorReportsPage() {
     .filter((s) => s.studentId)
     .map((s) => {
       const scores = studentScores.get(s.studentId!) || []
-      const avgScore = scores.length > 0
-        ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 20)
-        : 0
+      const avgScore =
+        scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 20) : 0
 
       return {
         id: s.studentId!,
@@ -133,13 +138,18 @@ export default async function PreceptorReportsPage() {
     typeCount.set(evType, current)
   }
 
-  const competencyBreakdown: CompetencyBreakdown[] = Array.from(typeCount.entries()).map(([area, data]) => ({
-    area,
-    score: data.scores.length > 0 ? Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length) : 0,
-    total: 100,
-    students: data.count,
-    improvement: 10, // Default improvement percentage
-  }))
+  const competencyBreakdown: CompetencyBreakdown[] = Array.from(typeCount.entries()).map(
+    ([area, data]) => ({
+      area,
+      score:
+        data.scores.length > 0
+          ? Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length)
+          : 0,
+      total: 100,
+      students: data.count,
+      improvement: 10, // Default improvement percentage
+    })
+  )
 
   // If no breakdown data, provide defaults
   if (competencyBreakdown.length === 0) {
@@ -154,25 +164,25 @@ export default async function PreceptorReportsPage() {
     avgScore:
       studentProgress.length > 0
         ? Math.round(
-          studentProgress.reduce((sum, s) => sum + s.currentScore, 0) / studentProgress.length
-        )
+            studentProgress.reduce((sum, s) => sum + s.currentScore, 0) / studentProgress.length
+          )
         : 0,
     avgAttendance:
       studentProgress.length > 0
         ? Math.round(
-          studentProgress.reduce((sum, s) => sum + s.attendance, 0) / studentProgress.length
-        )
+            studentProgress.reduce((sum, s) => sum + s.attendance, 0) / studentProgress.length
+          )
         : 0,
     completionRate:
       studentProgress.length > 0
         ? Math.round(
-          (studentProgress.reduce(
-            (sum, s) => sum + s.competenciesCompleted / s.totalCompetencies,
-            0
-          ) /
-            studentProgress.length) *
-          100
-        )
+            (studentProgress.reduce(
+              (sum, s) => sum + s.competenciesCompleted / s.totalCompetencies,
+              0
+            ) /
+              studentProgress.length) *
+              100
+          )
         : 0,
     totalEvaluations: preceptorEvaluations.length,
     totalRotations: preceptorRotations.length,

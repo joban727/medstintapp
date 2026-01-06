@@ -34,7 +34,11 @@ export default async function ClinicalPreceptorDashboardPage() {
   )
 }
 
-async function ClinicalPreceptorDashboardContent({ user }: { user: { id: string; name: string | null } }) {
+async function ClinicalPreceptorDashboardContent({
+  user,
+}: {
+  user: { id: string; name: string | null }
+}) {
   // Fetch real data for clinical preceptor dashboard with comprehensive error handling
   let pendingTimeRecords: Array<{
     id: string
@@ -173,39 +177,54 @@ async function ClinicalPreceptorDashboardContent({ user }: { user: { id: string;
     }).length,
   }
 
-  const assignedStudents = safeActiveRotations
-    .slice(0, 3)
-    .map(
-      (rotation: {
+  // Helper function to calculate rotation progress from dates
+  const calculateRotationProgress = (startDate?: Date | null, endDate?: Date | null): number => {
+    if (!startDate || !endDate) return 0
+    const now = new Date()
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const totalDuration = end.getTime() - start.getTime()
+    const elapsed = now.getTime() - start.getTime()
+    if (totalDuration <= 0) return 100
+    return Math.min(Math.max(Math.round((elapsed / totalDuration) * 100), 0), 100)
+  }
+
+  const assignedStudents = safeActiveRotations.slice(0, 3).map(
+    (
+      rotation: {
         id?: string | null
         studentName?: string | null
         specialty?: string | null
+        startDate?: Date | null
+        endDate?: Date | null
         updatedAt?: string | Date | null
-      }) => {
-        try {
-          return {
-            id: rotation?.id || `rotation-${Math.random()}`,
-            name: rotation?.studentName || "Unknown Student",
-            program: rotation?.specialty || "Unknown Specialty",
-            rotation: rotation?.specialty || "Unknown Rotation",
-            progress: Math.floor(Math.random() * 40) + 60, // Calculate based on time elapsed
-            lastActivity: rotation?.updatedAt
-              ? new Date(rotation.updatedAt).toLocaleDateString()
-              : "Unknown",
-          }
-        } catch (error) {
-          console.error("Error processing rotation data:", rotation, error)
-          return {
-            id: `rotation-${Math.random()}`,
-            name: "Unknown Student",
-            program: "Unknown Specialty",
-            rotation: "Unknown Rotation",
-            progress: 0,
-            lastActivity: "Unknown",
-          }
+      },
+      index: number
+    ) => {
+      try {
+        return {
+          id: rotation?.id || `rotation-fallback-${index}`,
+          name: rotation?.studentName || "Unknown Student",
+          program: rotation?.specialty || "Unknown Specialty",
+          rotation: rotation?.specialty || "Unknown Rotation",
+          progress: calculateRotationProgress(rotation?.startDate, rotation?.endDate),
+          lastActivity: rotation?.updatedAt
+            ? new Date(rotation.updatedAt).toLocaleDateString()
+            : "Unknown",
+        }
+      } catch (error) {
+        console.error("Error processing rotation data:", rotation, error)
+        return {
+          id: `rotation-fallback-${index}`,
+          name: "Unknown Student",
+          program: "Unknown Specialty",
+          rotation: "Unknown Rotation",
+          progress: 0,
+          lastActivity: "Unknown",
         }
       }
-    )
+    }
+  )
 
   const quickActions = [
     {
@@ -302,7 +321,10 @@ async function ClinicalPreceptorDashboardContent({ user }: { user: { id: string;
             Welcome back, {user.name}. Guide your students through their clinical experience.
           </p>
         </div>
-        <Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+        <Badge
+          variant="secondary"
+          className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400"
+        >
           Clinical Preceptor
         </Badge>
       </div>
@@ -370,7 +392,7 @@ async function ClinicalPreceptorDashboardContent({ user }: { user: { id: string;
             count: task.count,
             priority: task.priority,
             href: task.href,
-            actionLabel: task.action || "View"
+            actionLabel: task.action || "View",
           }))}
           emptyMessage="No pending tasks at the moment"
         />
@@ -383,7 +405,7 @@ async function ClinicalPreceptorDashboardContent({ user }: { user: { id: string;
             id: `activity-${index}`,
             message: activity.message,
             time: activity.time,
-            type: activity.type === "time_record" ? "info" : "success"
+            type: activity.type === "time_record" ? "info" : "success",
           }))}
         />
       </div>

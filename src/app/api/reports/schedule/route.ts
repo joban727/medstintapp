@@ -107,4 +107,3 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
     message: "Scheduled report deleted successfully",
   })
 })
-

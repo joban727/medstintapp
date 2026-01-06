@@ -26,7 +26,9 @@ export default function APIKeysSettingsPage() {
       <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle>API Access</CardTitle>
-          <CardDescription>Generate keys to access the MedStint API programmatically.</CardDescription>
+          <CardDescription>
+            Generate keys to access the MedStint API programmatically.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">

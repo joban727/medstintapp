@@ -454,9 +454,9 @@ export class QueryPerformanceLogger {
 
     console.log(
       `${emoji} Query ${status} [${metrics.queryType}] ${metrics.tableName || "unknown"} ` +
-      `${metrics.executionTimeMs}ms` +
-      (metrics.rowsReturned ? ` (${metrics.rowsReturned} rows)` : "") +
-      (metrics.endpoint ? ` - ${metrics.endpoint}` : "")
+        `${metrics.executionTimeMs}ms` +
+        (metrics.rowsReturned ? ` (${metrics.rowsReturned} rows)` : "") +
+        (metrics.endpoint ? ` - ${metrics.endpoint}` : "")
     )
 
     if (error) {
@@ -484,7 +484,7 @@ export class QueryPerformanceLogger {
 
     // Only use unref in Node.js environment to prevent process hanging
     if (typeof process !== "undefined" && process.versions?.node && this.flushTimer) {
-      ; (this.flushTimer as any).unref?.()
+      ;(this.flushTimer as any).unref?.()
     }
   }
 
@@ -614,18 +614,18 @@ export class QueryPerformanceLogger {
         slowQueries: summary ? Number.parseInt(String(summary.slow_queries || 0)) || 0 : 0,
         topSlowQueries: Array.isArray(topSlowQueries)
           ? topSlowQueries.map((row) => ({
-            queryType: String(row.query_type || ""),
-            tableName: String(row.table_name || "unknown"),
-            avgTime: Number.parseFloat(String(row.avg_time || 0)),
-            count: Number.parseInt(String(row.count || 0)),
-          }))
+              queryType: String(row.query_type || ""),
+              tableName: String(row.table_name || "unknown"),
+              avgTime: Number.parseFloat(String(row.avg_time || 0)),
+              count: Number.parseInt(String(row.count || 0)),
+            }))
           : [],
         endpointPerformance: Array.isArray(endpointPerformance)
           ? endpointPerformance.map((row) => ({
-            endpoint: String(row.endpoint || ""),
-            avgTime: Number.parseFloat(String(row.avg_time || 0)),
-            count: Number.parseInt(String(row.count || 0)),
-          }))
+              endpoint: String(row.endpoint || ""),
+              avgTime: Number.parseFloat(String(row.avg_time || 0)),
+              count: Number.parseInt(String(row.count || 0)),
+            }))
           : [],
       }
     } catch (error) {

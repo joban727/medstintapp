@@ -3,13 +3,7 @@ import { redirect } from "next/navigation"
 import { PageContainer } from "@/components/ui/page-container"
 import { requireAnyRole } from "@/lib/auth-clerk"
 import { db } from "@/database/connection-pool"
-import {
-  competencies,
-  competencySubmissions,
-  rotations,
-  users,
-  students,
-} from "@/database/schema"
+import { competencies, competencySubmissions, rotations, users, students } from "@/database/schema"
 import { eq, and, desc } from "drizzle-orm"
 import { SupervisorCompetenciesClient } from "@/components/dashboard/supervisor-competencies-client"
 
@@ -61,11 +55,14 @@ async function CompetenciesDataLoader({ userId }: { userId: string }) {
     .where(eq(rotations.supervisorId, userId))
 
   // Get unique students with their program IDs
-  const studentMap = new Map<string, {
-    studentId: string
-    name: string
-    programId: string | null
-  }>()
+  const studentMap = new Map<
+    string,
+    {
+      studentId: string
+      name: string
+      programId: string | null
+    }
+  >()
 
   for (const s of assignedStudentsData) {
     if (!studentMap.has(s.studentId)) {
@@ -115,20 +112,20 @@ async function CompetenciesDataLoader({ userId }: { userId: string }) {
           submittedAt: competencySubmissions.submittedAt,
         })
         .from(competencySubmissions)
-        .where(and(
-          eq(competencySubmissions.studentId, student.studentId),
-          eq(competencySubmissions.status, "APPROVED")
-        ))
+        .where(
+          and(
+            eq(competencySubmissions.studentId, student.studentId),
+            eq(competencySubmissions.status, "APPROVED")
+          )
+        )
 
-      const completedIds = new Set(completedSubmissions.map(s => s.competencyId))
+      const completedIds = new Set(completedSubmissions.map((s) => s.competencyId))
 
       // Filter out already completed competencies for the modal
-      const availableCompetencies = programCompetencies.filter(
-        c => !completedIds.has(c.id)
-      )
+      const availableCompetencies = programCompetencies.filter((c) => !completedIds.has(c.id))
 
       // Build competency display data
-      const competencyData = programCompetencies.map(comp => ({
+      const competencyData = programCompetencies.map((comp) => ({
         assignmentId: `${student.studentId}-${comp.id}`,
         studentId: student.studentId,
         studentName: student.name,

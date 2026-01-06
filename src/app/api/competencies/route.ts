@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ilike, or } from "drizzle-orm"
+import { and, count, desc, eq, ilike, or, type SQL } from "drizzle-orm"
 import { type NextRequest } from "next/server"
 import { z } from "zod"
 import { db } from "@/database/connection-pool"
@@ -11,6 +11,12 @@ import {
   ERROR_MESSAGES,
 } from "@/lib/api-response"
 import { getSchoolContext } from "@/lib/school-utils"
+import type { UserRole } from "@/types"
+
+// Role check helpers
+const ADMIN_ROLES: UserRole[] = ["SUPER_ADMIN", "SCHOOL_ADMIN"]
+const isAdmin = (role: string): boolean => ADMIN_ROLES.includes(role as UserRole)
+const isSchoolAdmin = (role: string): boolean => role === "SCHOOL_ADMIN"
 
 // Ensure this route is always dynamic
 export const dynamic = "force-dynamic"
@@ -53,7 +59,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   const limit = Number.parseInt(searchParams.get("limit") || "50")
   const offset = Number.parseInt(searchParams.get("offset") || "0")
 
-  const conditions: any[] = []
+  const conditions: SQL<unknown>[] = []
 
   // Filter by school if applicable
   if (context.schoolId) {
@@ -62,7 +68,8 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   if (search) conditions.push(ilike(competencies.name, `%${search}%`))
   if (category) conditions.push(eq(competencies.category, category))
-  if (level) conditions.push(eq(competencies.level, level as any))
+  if (level)
+    conditions.push(eq(competencies.level, level as (typeof competencies.level.enumValues)[number]))
   if (programId) conditions.push(eq(competencies.programId, programId))
 
   const data = await db
@@ -109,7 +116,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 // POST /api/competencies - Create new competency
 export const POST = withErrorHandling(async (request: NextRequest) => {
   const context = await getSchoolContext()
-  if (!["SUPER_ADMIN" as any, "SCHOOL_ADMIN" as any].includes(context.userRole)) {
+  if (!isAdmin(context.userRole)) {
     return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
   }
 
@@ -137,7 +144,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 // PUT /api/competencies - Update competency
 export const PUT = withErrorHandling(async (request: NextRequest) => {
   const context = await getSchoolContext()
-  if (!["SUPER_ADMIN" as any, "SCHOOL_ADMIN" as any].includes(context.userRole)) {
+  if (!isAdmin(context.userRole)) {
     return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
   }
 
@@ -161,10 +168,7 @@ export const PUT = withErrorHandling(async (request: NextRequest) => {
   }
 
   // Ensure school admin can only update their own school's competencies
-  if (
-    context.userRole === ("SCHOOL_ADMIN" as any) &&
-    existingCompetency.schoolId !== context.schoolId
-  ) {
+  if (isSchoolAdmin(context.userRole) && existingCompetency.schoolId !== context.schoolId) {
     return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
   }
 
@@ -191,7 +195,7 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
     return createErrorResponse("Competency ID is required", HTTP_STATUS.BAD_REQUEST)
   }
 
-  if (!["SUPER_ADMIN" as any, "SCHOOL_ADMIN" as any].includes(context.userRole)) {
+  if (!isAdmin(context.userRole)) {
     return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
   }
 
@@ -205,14 +209,10 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
     return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
   }
 
-  if (
-    context.userRole === ("SCHOOL_ADMIN" as any) &&
-    existingCompetency.schoolId !== context.schoolId
-  ) {
+  if (isSchoolAdmin(context.userRole) && existingCompetency.schoolId !== context.schoolId) {
     return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
   }
 
   await db.delete(competencies).where(eq(competencies.id, id))
   return createSuccessResponse(null, "Competency deleted successfully")
 })
-

@@ -15,6 +15,17 @@ import {
   createPaginatedResponse,
 } from "@/lib/api-response"
 import { createValidationMiddleware } from "@/lib/data-validation"
+import { logger } from "@/lib/logger"
+
+// Interface for requests with validated data from middleware
+interface ValidatedRequest<T> extends Request {
+  validatedData?: T
+}
+
+// Role type guards
+const ADMIN_ROLES: UserRole[] = ["SUPER_ADMIN", "SCHOOL_ADMIN"]
+const isAdmin = (role: string): boolean => ADMIN_ROLES.includes(role as UserRole)
+const isSchoolAdmin = (role: string): boolean => role === "SCHOOL_ADMIN"
 
 // Validation schemas
 const createProgramSchema = z.object({
@@ -44,7 +55,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       return createSuccessResponse(cached)
     }
   } catch (cacheError) {
-    console.warn("Cache retrieval error in programs/route.ts:", cacheError)
+    logger.warn({ err: cacheError }, "Cache retrieval error in programs/route.ts")
   }
 
   const context = await getSchoolContext()
@@ -61,7 +72,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   const conditions = []
 
   // Role-based filtering
-  if (context.userRole === ("SCHOOL_ADMIN" as UserRole) && context.schoolId) {
+  if (isSchoolAdmin(context.userRole) && context.schoolId) {
     conditions.push(eq(programs.schoolId, context.schoolId))
   } else if (schoolId) {
     conditions.push(eq(programs.schoolId, schoolId))
@@ -157,7 +168,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   try {
     await cacheIntegrationService.set(cacheKey, responseData, { ttl: 300 }) // 5 minutes
   } catch (cacheError) {
-    console.warn("Cache storage error in programs/route.ts:", cacheError)
+    logger.warn({ err: cacheError }, "Cache storage error in programs/route.ts")
   }
 
   return createSuccessResponse(responseData)
@@ -168,7 +179,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   const context = await getSchoolContext()
 
   // Only admins can create programs
-  if (!["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(context.userRole)) {
+  if (!isAdmin(context.userRole)) {
     return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
   }
 
@@ -178,10 +189,15 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   if (validationResponse) {
     return validationResponse as NextResponse
   }
-  const validatedData = (request as any).validatedData as z.infer<typeof createProgramSchema>
+  const validatedData = (
+    request as unknown as ValidatedRequest<z.infer<typeof createProgramSchema>>
+  ).validatedData
+  if (!validatedData) {
+    return createErrorResponse("Validation failed", HTTP_STATUS.BAD_REQUEST)
+  }
 
   // Validate school access
-  if (context.userRole === ("SCHOOL_ADMIN" as UserRole)) {
+  if (isSchoolAdmin(context.userRole)) {
     if (!context.schoolId || validatedData.schoolId !== context.schoolId) {
       return createErrorResponse("Access denied to this school", HTTP_STATUS.FORBIDDEN)
     }
@@ -248,7 +264,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   try {
     await cacheIntegrationService.clear()
   } catch (cacheError) {
-    console.warn("Cache invalidation error in programs/route.ts:", cacheError)
+    logger.warn({ err: cacheError }, "Cache invalidation error in programs/route.ts")
   }
 
   return createSuccessResponse(
@@ -271,7 +287,7 @@ export const PUT = withErrorHandling(async (request: NextRequest) => {
   }
 
   // Only admins can update programs
-  if (!["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(context.userRole)) {
+  if (!isAdmin(context.userRole)) {
     return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
   }
 
@@ -287,7 +303,12 @@ export const PUT = withErrorHandling(async (request: NextRequest) => {
   if (validationUpdateResponse) {
     return validationUpdateResponse as NextResponse
   }
-  const validatedData = (updateRequest as any).validatedData as z.infer<typeof updateProgramSchema>
+  const validatedData = (
+    updateRequest as unknown as ValidatedRequest<z.infer<typeof updateProgramSchema>>
+  ).validatedData
+  if (!validatedData) {
+    return createErrorResponse("Validation failed", HTTP_STATUS.BAD_REQUEST)
+  }
 
   // Get existing program
   const [existingProgram] = await db.select().from(programs).where(eq(programs.id, id)).limit(1)
@@ -297,7 +318,7 @@ export const PUT = withErrorHandling(async (request: NextRequest) => {
   }
 
   // Validate school access
-  if (context.userRole === ("SCHOOL_ADMIN" as UserRole)) {
+  if (isSchoolAdmin(context.userRole)) {
     if (!context.schoolId || existingProgram.schoolId !== context.schoolId) {
       return createErrorResponse("Access denied to this program", HTTP_STATUS.FORBIDDEN)
     }
@@ -350,7 +371,7 @@ export const PUT = withErrorHandling(async (request: NextRequest) => {
   try {
     await cacheIntegrationService.clear()
   } catch (cacheError) {
-    console.warn("Cache invalidation error in programs/route.ts:", cacheError)
+    logger.warn({ err: cacheError }, "Cache invalidation error in programs/route.ts")
   }
 
   return createSuccessResponse(
@@ -373,7 +394,7 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
   }
 
   // Only super admins and school admins can delete programs
-  if (!["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(context.userRole)) {
+  if (!isAdmin(context.userRole)) {
     return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
   }
 
@@ -385,7 +406,7 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
   }
 
   // Validate school access
-  if (context.userRole === ("SCHOOL_ADMIN" as UserRole)) {
+  if (isSchoolAdmin(context.userRole)) {
     if (!context.schoolId || existingProgram.schoolId !== context.schoolId) {
       return createErrorResponse("Access denied to this program", HTTP_STATUS.FORBIDDEN)
     }
@@ -410,9 +431,8 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
   try {
     await cacheIntegrationService.clear()
   } catch (cacheError) {
-    console.warn("Cache invalidation error in programs/route.ts:", cacheError)
+    logger.warn({ err: cacheError }, "Cache invalidation error in programs/route.ts")
   }
 
   return createSuccessResponse(null, "Program deleted successfully")
 })
-

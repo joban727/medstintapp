@@ -52,11 +52,10 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
 
   // Invalidate related caches
   try {
-    await cacheIntegrationService.invalidateByTags(['user'])
+    await cacheIntegrationService.invalidateByTags(["user"])
   } catch (cacheError) {
     console.warn("Cache invalidation error in users/link-school/route.ts:", cacheError)
   }
 
   return createSuccessResponse({ userId }, "User successfully unlinked from school")
 })
-

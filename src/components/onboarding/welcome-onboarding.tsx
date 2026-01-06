@@ -65,7 +65,7 @@ export function WelcomeOnboarding({ user, clerkUser }: WelcomeOnboardingProps) {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.1, duration: 0.4 }}
-          className="inline-flex items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 px-4 py-2 text-xs font-medium tracking-wider text-slate-600 dark:text-slate-300 mb-6 backdrop-blur-sm shadow-sm uppercase"
+          className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium tracking-wider text-white/80 mb-6 backdrop-blur-md shadow-sm uppercase"
         >
           <Sparkles className="mr-2 h-3.5 w-3.5 text-teal-500" />
           School Administrator
@@ -78,7 +78,7 @@ export function WelcomeOnboarding({ user, clerkUser }: WelcomeOnboardingProps) {
           transition={{ delay: 0.15, duration: 0.4 }}
           className="text-base font-medium text-teal-600 dark:text-teal-400 mb-3"
         >
-          Welcome{user?.name ? `, ${user.name.split(' ')[0]}` : ''}
+          Welcome{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
         </motion.p>
 
         {/* Title */}
@@ -110,7 +110,7 @@ export function WelcomeOnboarding({ user, clerkUser }: WelcomeOnboardingProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.5 }}
-          className="bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-700/50 rounded-2xl p-6 md:p-8 shadow-xl shadow-slate-200/50 dark:shadow-slate-950/50 backdrop-blur-xl mb-8"
+          className="glass-card p-6 md:p-8 shadow-2xl mb-8"
         >
           {/* Steps Preview */}
           <div className="grid grid-cols-3 gap-4 mb-8">
@@ -122,7 +122,7 @@ export function WelcomeOnboarding({ user, clerkUser }: WelcomeOnboardingProps) {
                 transition={{ delay: 0.4 + index * 0.1, duration: 0.4 }}
                 className="flex flex-col items-center text-center group"
               >
-                <div className="h-12 w-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3 group-hover:bg-teal-100 dark:group-hover:bg-teal-900/30 transition-colors duration-300">
+                <div className="h-12 w-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center mb-3 group-hover:bg-teal-500/20 transition-colors duration-300">
                   <step.icon className="h-5 w-5 text-slate-500 dark:text-slate-400 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors duration-300" />
                 </div>
                 <span className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5">
@@ -136,7 +136,7 @@ export function WelcomeOnboarding({ user, clerkUser }: WelcomeOnboardingProps) {
           </div>
 
           {/* Divider */}
-          <div className="h-px bg-slate-200 dark:bg-slate-700 mb-6" />
+          <div className="h-px bg-white/10 mb-6" />
 
           {/* CTA Button */}
           <motion.div

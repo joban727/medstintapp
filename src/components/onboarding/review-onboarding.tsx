@@ -112,12 +112,9 @@ export function ReviewOnboarding({ user, clerkUser }: ReviewOnboardingProps) {
           {steps.map((step, index) => (
             <div key={step.label} className="flex items-center">
               <div
-                className={`h-2 w-2 rounded-full ${step.active
-                  ? "bg-primary"
-                  : step.completed
-                    ? "bg-primary/40"
-                    : "bg-muted"
-                  }`}
+                className={`h-2 w-2 rounded-full ${
+                  step.active ? "bg-primary" : step.completed ? "bg-primary/40" : "bg-muted"
+                }`}
               />
               {index < steps.length - 1 && (
                 <div className={`w-8 h-px ${step.completed ? "bg-primary/40" : "bg-muted"}`} />
@@ -129,12 +126,8 @@ export function ReviewOnboarding({ user, clerkUser }: ReviewOnboardingProps) {
         {/* Header */}
         <div className="text-center mb-8">
           <p className="text-sm font-medium text-primary mb-2">Final Step</p>
-          <h1 className="text-2xl md:text-3xl font-semibold text-foreground mb-2">
-            Ready to go!
-          </h1>
-          <p className="text-muted-foreground">
-            Review your setup and complete onboarding
-          </p>
+          <h1 className="text-2xl md:text-3xl font-semibold text-foreground mb-2">Ready to go!</h1>
+          <p className="text-muted-foreground">Review your setup and complete onboarding</p>
         </div>
 
         {/* Summary Card */}

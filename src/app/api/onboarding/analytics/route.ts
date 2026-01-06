@@ -57,7 +57,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   // Invalidate related caches
   try {
-    await cacheIntegrationService.invalidateByTags(['analytics'])
+    await cacheIntegrationService.invalidateByTags(["analytics"])
   } catch (cacheError) {
     console.warn("Cache invalidation error in onboarding/analytics/route.ts:", cacheError)
   }
@@ -127,4 +127,3 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     },
   })
 })
-

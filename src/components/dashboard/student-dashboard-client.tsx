@@ -1,40 +1,27 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
-import { WelcomeBanner } from "@/components/dashboard/welcome-banner"
-import { PageContainer } from "@/components/ui/page-container"
-import { DashboardCard } from "@/components/dashboard/shared/dashboard-card"
-import { DashboardBackground } from "@/components/dashboard/dashboard-background"
-import { StatCard, StatGrid } from "@/components/ui/stat-card"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import {
   Clock,
   MapPin,
   Calendar,
-  TrendingUp,
-  Award,
   BookOpen,
   Play,
   Square,
-  Target,
-  Users,
-  FileText,
-  CheckCircle,
-  Navigation,
-  Shield,
-  Wifi,
-  WifiOff,
   Loader2,
   AlertCircle,
   CheckCircle2,
   Building2,
-  MessageSquare,
+  Navigation,
+  TrendingUp,
+  FileText,
+  ChevronRight,
 } from "lucide-react"
 import {
   Select,
@@ -45,70 +32,18 @@ import {
 } from "@/components/ui/select"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Label } from "@/components/ui/label"
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
+import { cn } from "@/lib/utils"
 import { useStudentDashboard } from "@/hooks/useStudentDashboard"
 import type { StudentDashboardClientProps } from "@/types/dashboard"
-import {
-  openMapService,
-  LocationCoordinates,
-  FacilityInfo,
-  LocationLookupResult,
-} from "@/lib/openmap-service"
-import { locationNameService } from "@/lib/location-name-service"
-import { debouncedLocationCapture } from "@/lib/location-debouncer"
 import { unifiedLocationService } from "@/services/unified-location-service"
-import { FloatingActionButton } from "@/components/ui/floating-action-button"
-import { SwipeableRotationRow } from "@/components/dashboard/swipeable-rotation-card"
-import { EnhancedLocationDisplay } from "@/components/location/enhanced-location-display"
+import { locationNameService } from "@/lib/location-name-service"
 import { LocationPermissionHandler } from "@/components/location/location-permission-handler"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { safeFetchApi } from "@/lib/safe-fetch"
 import { ClockServiceClient } from "@/lib/clock-service-client"
-
-// Props interface is imported from types file
-const validateEmail = (email: string): boolean => {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-}
-
-interface Site {
-  id: string
-  name: string
-  address: string
-  type: "hospital" | "clinic" | "research" | "other"
-  coordinates?: {
-    lat: number
-    lng: number
-  }
-}
-
-interface TimeRecord {
-  id: string
-  date: string
-  clockIn: string
-  clockOut: string
-  site: string
-  totalHours: number
-  location?: {
-    lat: number
-    lng: number
-    accuracy?: number
-  }
-}
-
-interface StudentData {
-  id: string
-  name: string
-  email: string
-  totalHours: number
-  requiredHours: number
-  currentRotation: string
-  completedRotations: number
-  totalRotations: number
-  gpa: number
-  schoolName: string
-  upcomingRotations: string[]
-}
+import { DashboardBackground } from "@/components/dashboard/dashboard-background"
+import { SpotlightCard } from "@/components/ui/spotlight-card"
 
 interface LocationState {
   coordinates: { lat: number; lng: number } | null
@@ -121,33 +56,6 @@ interface LocationState {
   lastUpdated: Date | null
   hasPermission: boolean | null
   isTracking: boolean
-}
-
-interface LocationCacheEntry {
-  location: LocationState
-  timestamp: number
-}
-
-// Location cache with 2-minute duration and accuracy validation
-const locationCache = {
-  data: null as LocationCacheEntry | null,
-  get(): LocationState | null {
-    if (!this.data) return null
-    const now = Date.now()
-    const isExpired = now - this.data.timestamp > 120000 // 2 minutes
-    const isAccurate = this.data.location.accuracy !== null && this.data.location.accuracy <= 100
-    if (isExpired || !isAccurate) {
-      this.data = null
-      return null
-    }
-    return this.data.location
-  },
-  set(location: LocationState) {
-    this.data = { location, timestamp: Date.now() }
-  },
-  clear() {
-    this.data = null
-  },
 }
 
 export default function StudentDashboardClient({ userId }: StudentDashboardClientProps) {
@@ -171,23 +79,14 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
     isLoading: false,
     error: null,
     lastUpdated: null,
-    hasPermission: null, // Changed from true to null to properly check permission
+    hasPermission: null,
     isTracking: false,
   })
-  const [showLocationDetails, setShowLocationDetails] = useState(false)
-  const [autoLocationEnabled, setAutoLocationEnabled] = useState(true)
+  const [showLocationPermissionUI, setShowLocationPermissionUI] = useState(false)
   const [locationPermissionStatus, setLocationPermissionStatus] = useState<
     "unknown" | "granted" | "denied" | "prompt"
   >("unknown")
-  const [showLocationPermissionUI, setShowLocationPermissionUI] = useState(false)
-  const prefersReducedMotion = typeof window !== "undefined" ? useReducedMotion() : false
-
-  const sitesForLabel = availableSites.length > 0 ? availableSites : (data?.assignedSites ?? [])
-  const selectedSiteName =
-    sitesForLabel.find((s) => s.id === selectedSite)?.name ?? data?.currentRotation?.siteName ?? ""
-
-  // Check if we're in development environment
-  const isDevelopment = process.env.NODE_ENV === "development"
+  const [autoLocationEnabled, setAutoLocationEnabled] = useState(false) // Deferred until clock-in
 
   // Update clock status from real data
   useEffect(() => {
@@ -205,7 +104,7 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
     }
   }, [data?.currentRotation])
 
-  // Populate available sites from dashboard or fallback to API filtered by student
+  // Populate available sites from main dashboard API response (no redundant fetch)
   useEffect(() => {
     if (data?.assignedSites && data.assignedSites.length > 0) {
       setAvailableSites(
@@ -217,81 +116,22 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
         }))
       )
       setSitesLoadError(null)
-      console.info("[StudentDashboard] assignedSites loaded:", data.assignedSites.length)
-      return
+    } else if (data && !data.assignedSites?.length) {
+      setSitesLoadError("No active clinical site assignments found for your account.")
     }
+  }, [data?.assignedSites, data])
 
-    // Fallback: fetch available sites linked to the student's school assignments
-    const controller = new AbortController()
-    const fetchAvailableSites = async () => {
-      try {
-        const response = await safeFetchApi("/api/sites/available", {
-          signal: controller.signal,
-        })
-
-        if (!response.success) {
-          setSitesLoadError(
-            response.error === "Unauthorized"
-              ? "You are signed out or lack access. Please sign in."
-              : `Failed to load available sites: ${response.error || "Unknown error"}`
-          )
-          return
-        }
-
-        const sitesPayload = (response.data?.sites || []) as Array<any>
-        const sites = sitesPayload.map((s) => ({
-          id: String(s.id ?? s.siteId),
-          name: s.name ?? s.siteName,
-          type: s.type ?? s.siteType,
-          address: s.address ?? s.siteAddress,
-        }))
-
-        if (!controller.signal.aborted) {
-          setAvailableSites(sites)
-        }
-
-        if (sites.length === 0) {
-          setSitesLoadError("No active clinical site assignments found for your account.")
-          console.info("[StudentDashboard] fallback availableSites returned empty for user")
-        } else {
-          setSitesLoadError(null)
-        }
-        console.info("[StudentDashboard] fallback availableSites loaded:", sites.length)
-      } catch (_err: any) {
-        if (controller.signal.aborted) return
-        if (_err?.name === "AbortError") return
-        setSitesLoadError("Unexpected error while loading available sites.")
-      }
-    }
-
-    fetchAvailableSites()
-    return () => {
-      controller.abort()
-    }
-  }, [data?.assignedSites])
-
-  // If no current rotation, preselect first available site
+  // Preselect first available site
   useEffect(() => {
     if (!data?.currentRotation?.clinicalSiteId && !selectedSite && availableSites.length > 0) {
       setSelectedSite(availableSites[0].id)
     }
   }, [availableSites, data?.currentRotation?.clinicalSiteId, selectedSite])
 
-  // Log permission UI state changes for verification
-  useEffect(() => {
-    console.info("[StudentDashboard] location permission state:", {
-      hasPermission: location.hasPermission,
-      permissionStatus: locationPermissionStatus,
-      showPermissionUI: showLocationPermissionUI,
-    })
-  }, [location.hasPermission, locationPermissionStatus, showLocationPermissionUI])
-
-  // Check location permission on component mount
+  // Check location permission on mount
   useEffect(() => {
     const checkLocationPermission = async () => {
-      console.log("🔐 [StudentDashboard] Checking location permission status...")
       if (!navigator.geolocation) {
-        console.log("❌ [StudentDashboard] Geolocation not supported")
         setLocation((prev) => ({
           ...prev,
           hasPermission: false,
@@ -304,12 +144,10 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
       try {
         if ("permissions" in navigator) {
           const permission = await navigator.permissions.query({ name: "geolocation" })
-          console.log("🔐 [StudentDashboard] Permission status:", permission.state)
           setLocationPermissionStatus(permission.state as PermissionState)
 
           if (permission.state === "granted") {
             setLocation((prev) => ({ ...prev, hasPermission: true }))
-            // Auto-capture location if permission is already granted
             if (autoLocationEnabled) {
               captureLocationWithPermission()
             }
@@ -325,9 +163,7 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
             setShowLocationPermissionUI(true)
           }
 
-          // Listen for permission changes
           permission.addEventListener("change", () => {
-            console.log("🔐 [StudentDashboard] Permission changed to:", permission.state)
             setLocationPermissionStatus(permission.state as PermissionState)
             if (permission.state === "granted") {
               setLocation((prev) => ({ ...prev, hasPermission: true }))
@@ -339,55 +175,41 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
               setLocation((prev) => ({
                 ...prev,
                 hasPermission: false,
-                error:
-                  "Location access denied. Please enable location permissions in your browser settings.",
+                error: "Location access denied.",
               }))
               setShowLocationPermissionUI(false)
             }
           })
         } else {
-          // Fallback for browsers without permissions API
-          console.log(
-            "⚠️ [StudentDashboard] Permissions API not available, showing permission request UI"
-          )
           setShowLocationPermissionUI(true)
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
-        console.error("[StudentDashboardClient] Operation failed:", error)
-        toast.error(errorMessage)
+        console.error("[StudentDashboard] Permission check failed:", error)
       }
     }
 
     checkLocationPermission()
   }, [autoLocationEnabled])
 
-  // Enhanced location capture with permission handling
+  // Enhanced location capture
   const captureLocationWithPermission = useCallback(async () => {
-    if (location.hasPermission === false) {
-      console.log("❌ [StudentDashboard] Location permission denied, cannot capture location")
-      return
-    }
+    if (location.hasPermission === false) return
 
-    console.log("🌍 [StudentDashboard] Starting location capture using unified service")
     setLocation((prev) => ({ ...prev, isLoading: true, error: null }))
 
     try {
       const locationState = await unifiedLocationService.captureLocation({
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 60000,
+        timeout: 5000, // Reduced from 15s for faster perceived load
+        maximumAge: 120000, // Increased cache age to reduce GPS calls
         requireFacilityLookup: true,
         cacheKey: "student-dashboard-location",
       })
 
-      console.log("✅ [StudentDashboard] Location capture completed:", locationState)
-      // Normalize coordinates to local shape { lat, lng }
       const normalizedCoords = locationState.coordinates
         ? { lat: locationState.coordinates.latitude, lng: locationState.coordinates.longitude }
         : null
 
-      // Resolve display-friendly facility name/address
       let facilityName: string | null = null
       let facilityAddress: string | null = null
 
@@ -403,7 +225,7 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
           facilityName = displayInfo.displayName
           facilityAddress = displayInfo.details?.fullAddress || null
         } catch (_err) {
-          // Non-blocking: ignore name service errors
+          /* ignore */
         }
       }
 
@@ -421,7 +243,6 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
       }))
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to capture location"
-      console.error("❌ [StudentDashboard] Location capture failed:", errorMessage)
       setLocation((prev) => ({
         ...prev,
         isLoading: false,
@@ -429,28 +250,12 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
         lastUpdated: new Date(),
         hasPermission: !errorMessage.includes("denied"),
       }))
-
-      // Show user-friendly error messages
-      if (errorMessage.includes("denied")) {
-        toast.error(
-          "Location access denied. Please enable location permissions to use location features."
-        )
-      } else if (errorMessage.includes("timeout")) {
-        toast.warning("Location request timed out. You can still use manual clock-in/out.")
-      }
     }
   }, [location.hasPermission])
 
-  // Original captureLocation function for backward compatibility
-  const captureLocation = useCallback(async () => {
-    return captureLocationWithPermission()
-  }, [captureLocationWithPermission])
-
-  // Handle location permission granted
   const handleLocationPermissionGranted = useCallback(
     (granted?: boolean) => {
       const isGranted = granted === undefined ? true : Boolean(granted)
-      console.log(`✅ [StudentDashboard] Location permission ${isGranted ? "granted" : "denied"}`)
       setLocation((prev) => ({ ...prev, hasPermission: isGranted }))
       setLocationPermissionStatus(isGranted ? "granted" : "denied")
       setShowLocationPermissionUI(!isGranted)
@@ -460,44 +265,27 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
       const notify = isGranted ? toast.success : toast.warning
       notify(
         isGranted
-          ? "Location access granted! Location features are now available."
+          ? "Location access granted!"
           : "Location access denied. You can still use manual clock-in/out."
       )
     },
     [autoLocationEnabled, captureLocationWithPermission]
   )
 
-  // Handle location permission denied
-  const handleLocationPermissionDenied = useCallback(() => {
-    console.log("❌ [StudentDashboard] Location permission denied")
-    setLocation((prev) => ({
-      ...prev,
-      hasPermission: false,
-      error: "Location access denied. You can still use manual clock-in/out.",
-    }))
-    setLocationPermissionStatus("denied")
-    setShowLocationPermissionUI(false)
-    toast.warning("Location access denied. You can still use manual clock-in/out features.")
-  }, [])
-
-  // Manual location refresh
   const refreshLocation = useCallback(() => {
     if (location.hasPermission === true) {
       captureLocationWithPermission()
     } else if (location.hasPermission === null || locationPermissionStatus === "prompt") {
       setShowLocationPermissionUI(true)
     } else {
-      toast.error(
-        "Location permission is required. Please enable location access in your browser settings."
-      )
+      toast.error("Location permission is required.")
     }
   }, [location.hasPermission, locationPermissionStatus, captureLocationWithPermission])
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date())
-    }, 30000) // Update every 30 seconds instead of every second to reduce performance impact
-
+    }, 30000)
     return () => clearInterval(timer)
   }, [])
 
@@ -507,7 +295,6 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
       return
     }
 
-    // Location is optional - allow manual clock-in if location is not available
     if (!location.coordinates) {
       toast.warning("Location not available - using manual clock-in")
     }
@@ -540,11 +327,9 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
       const result = await ClockServiceClient.clockIn(requestData)
 
       setIsClockedIn(true)
-      // Refresh dashboard data
       await refetch()
 
-      // Check if it was an offline operation (optimistic)
-      if (result.recordId && result.recordId.startsWith('offline-')) {
+      if (result.recordId && result.recordId.startsWith("offline-")) {
         toast.success("Clock-in queued (Offline)", {
           description: "Your clock-in has been saved and will sync when you are back online.",
         })
@@ -555,15 +340,12 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
             : "Manual clock-in (location not available)",
         })
       }
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to clock in"
-
-      // Handle specific error messages if needed, similar to before
       let friendly = errorMessage
       if (errorMessage.includes("already clocked in")) friendly = "You are already clocked in."
-      else if (errorMessage.includes("Too far")) friendly = "You appear too far from the clinical site."
-
+      else if (errorMessage.includes("Too far"))
+        friendly = "You appear too far from the clinical site."
       toast.error(friendly)
     } finally {
       setIsClockingIn(false)
@@ -571,7 +353,6 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
   }
 
   const handleClockOut = async () => {
-    // Location is optional - allow manual clock-out if location is not available
     if (!location.coordinates) {
       toast.warning("Location not available - using manual clock-out")
     }
@@ -580,7 +361,7 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
       setIsClockingOut(true)
 
       const requestData: any = {
-        studentId: userId, // ClockServiceClient might need this or infer it, but passing it is safe if we have it
+        studentId: userId,
         timestamp: new Date().toISOString(),
         clientTimestamp: new Date().toISOString(),
         locationSource: location.coordinates ? "gps" : "manual",
@@ -598,19 +379,17 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
       const result = await ClockServiceClient.clockOut(requestData)
 
       setIsClockedIn(false)
-      // Refresh dashboard data
       await refetch()
 
-      if (result.recordId && result.recordId.startsWith('offline-')) {
+      if (result.recordId && result.recordId.startsWith("offline-")) {
         toast.success("Clock-out queued (Offline)", {
           description: "Your clock-out has been saved and will sync when you are back online.",
         })
       } else {
         toast.success("Clocked out successfully!", {
-          description: `Total hours: ${result.totalHours || '0.00'} hours`,
+          description: `Total hours: ${result.totalHours || "0.00"} hours`,
         })
       }
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to clock out"
       toast.error(errorMessage)
@@ -626,438 +405,355 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
     return "Good evening"
   }
 
-  // Location Display Component removed to resolve continuous loading issues
-  // The component was causing performance problems and stuck loading states
-
-  // Calculate progress percentages from real data
+  // Calculate progress
   const hoursProgress = data?.statistics.progressPercentage || 0
   const rotationProgress = data?.statistics.rotationProgress || 0
 
   // Loading state
   if (isLoading) {
     return (
-      <div className="gap-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-muted rounded-md w-1/4 mb-4" />
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-card rounded-lg border p-6">
-                <div className="h-4 bg-muted rounded-md w-3/4 mb-2" />
-                <div className="h-8 bg-muted rounded-md w-1/2 mb-2" />
-                <div className="h-2 bg-muted rounded-md w-full" />
-              </div>
-            ))}
-          </div>
+      <div className="space-y-6 animate-pulse">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="glass-card p-6 rounded-xl">
+              <div className="h-4 bg-white/10 rounded w-1/2 mb-2" />
+              <div className="h-8 bg-white/10 rounded w-3/4" />
+            </div>
+          ))}
+        </div>
+        <div className="glass-card p-8 rounded-xl">
+          <div className="h-32 bg-white/10 rounded" />
         </div>
       </div>
     )
   }
 
-  // Error state
-  // Render through error with non-blocking alert to allow fallbacks
-  const renderErrorAlert = error ? (
-    <div className="gap-6 mb-4">
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Error Loading Dashboard</AlertTitle>
-        <AlertDescription>
-          {error}. Some features may be limited; fallback data will be used where possible.
-        </AlertDescription>
-      </Alert>
-    </div>
-  ) : null
-
   return (
-    <PageContainer className="gap-6" maxWidth="2xl">
-      <h1 id="student-dashboard-title" className="sr-only">
-        Student Dashboard
-      </h1>
-      <a
-        href="#clock-controls"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-background focus:border focus:rounded-md focus:px-3 focus:py-1"
-      >
-        Skip to clock controls
-      </a>
+    <div className="relative min-h-[calc(100vh-10rem)] overflow-hidden pb-8">
+      {/* Animated Background */}
+      <DashboardBackground theme={isClockedIn ? "green" : "blue"} />
 
-      <div className="relative min-h-screen w-full">
-        <DashboardBackground />
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive" className="mb-6 border-white/10 bg-white/5 backdrop-blur-xl">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-        <div className="relative z-10 space-y-6">
-          {/* Welcome Banner */}
-          <WelcomeBanner userRole="STUDENT" userName={data?.student.name || "Student"} />
-
-          {/* Swipeable Rotations (Courses) */}
-          <div className="md:hidden gap-3">
-            <h3 className="text-lg font-semibold text-foreground">Your Rotations</h3>
-            <SwipeableRotationRow
-              sites={(data?.assignedSites || []).map((s) => ({
-                id: s.id,
-                name: s.name,
-                facilityName: s.name,
-              }))}
+      {/* Main Content */}
+      <div className="flex flex-col lg:flex-row gap-6 h-full">
+        {/* Left: Clock Hero Panel */}
+        <div className="flex-1 flex flex-col">
+          {/* Clock Card - Spotlight Style */}
+          <SpotlightCard
+            className="flex-1 rounded-2xl border-white/10 bg-white/5"
+            spotlightColor={isClockedIn ? "rgba(34, 197, 94, 0.1)" : "rgba(59, 130, 246, 0.1)"}
+          >
+            {/* Status Bar */}
+            <div
+              className={cn(
+                "h-1 w-full",
+                isClockedIn
+                  ? "bg-gradient-to-r from-green-500/50 via-green-400 to-green-500/50"
+                  : "bg-gradient-to-r from-white/5 via-white/10 to-white/5"
+              )}
             />
-          </div>
 
-          {/* Location Permission Handler */}
-          {(!location.hasPermission || showLocationPermissionUI) && (
-            <LocationPermissionHandler
-              onLocationGranted={handleLocationPermissionGranted}
-              onLocationData={(locationData) => {
-                if (locationData) {
-                  setLocation((prev) => ({
-                    ...prev,
-                    coordinates: { lat: locationData.latitude, lng: locationData.longitude },
-                    accuracy: locationData.accuracy,
-                    lastUpdated: new Date(locationData.timestamp),
-                    isLoading: false,
-                    error: null,
-                  }))
+            {/* Clock Content */}
+            <div className="relative z-10 flex flex-col items-center justify-center p-8 lg:p-12 h-full">
+              {/* Greeting */}
+              <div className="text-white/50 text-sm font-light mb-2 tracking-wider">
+                {getGreeting()}, ready to track your clinical hours
+              </div>
+
+              {/* Giant Clock */}
+              <div className="relative mb-4">
+                <div
+                  className="text-7xl lg:text-8xl font-bold text-white font-mono tracking-tight"
+                  style={{ textShadow: "0 0 60px rgba(255,255,255,0.1)" }}
+                >
+                  {format(currentTime, "HH")}
+                  <span className="text-white/40 animate-pulse">:</span>
+                  {format(currentTime, "mm")}
+                </div>
+                <div className="text-center text-xs text-white/30 font-mono mt-1">
+                  {format(currentTime, "ss")}s
+                </div>
+              </div>
+
+              {/* Date */}
+              <div className="text-white/40 text-sm mb-8">
+                {format(currentTime, "EEEE, MMMM d, yyyy")}
+              </div>
+
+              {/* Info Row - Simplified Text */}
+              <div className="flex items-center justify-center gap-6 mb-8 text-sm">
+                {(data?.currentRotation?.siteName || selectedSite) && (
+                  <div className="flex items-center gap-2 text-white/60">
+                    <Building2 className="h-4 w-4" />
+                    <span>
+                      {data?.currentRotation?.siteName ||
+                        availableSites.find((s) => s.id === selectedSite)?.name ||
+                        "Select Site"}
+                    </span>
+                  </div>
+                )}
+                {location.hasPermission && location.coordinates && (
+                  <div className="flex items-center gap-2 text-green-400/70">
+                    <MapPin className="h-4 w-4" />
+                    <span>GPS Verified</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Site Selector */}
+              {!data?.currentRotation && availableSites.length > 0 && (
+                <div className="w-full max-w-sm mb-6">
+                  <Select value={selectedSite} onValueChange={setSelectedSite}>
+                    <SelectTrigger className="h-12 rounded-full border-white/10 bg-white/5 backdrop-blur-xl text-white/80">
+                      <SelectValue placeholder="Select your clinical site..." />
+                    </SelectTrigger>
+                    <SelectContent className="glass-dropdown">
+                      {availableSites.map((site) => (
+                        <SelectItem key={site.id} value={site.id}>
+                          <span>{site.name}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Clock Button - Magnetic Style */}
+              <button
+                onClick={isClockedIn ? handleClockOut : handleClockIn}
+                disabled={
+                  (!data?.currentRotation?.id && !selectedSite) || isClockingIn || isClockingOut
                 }
-              }}
-              showPermissionUI={showLocationPermissionUI || !location.hasPermission}
-              className="mb-6"
-            />
-          )}
-
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 stagger-children">
-            {/* Enhanced Primary Clock Card - Takes prominence */}
-            <DashboardCard
-              variant="premium"
-              className="md:col-span-2 lg:col-span-2 shadow-lg rounded-xl w-full relative overflow-hidden gradient-overlay-blue"
-              role="region"
-              aria-labelledby="clock-title"
-            >
-              <CardHeader className="pb-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="icon-container icon-container-blue">
-                      <Clock className="h-7 w-7" aria-hidden="true" />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-bold text-foreground">
-                        {isClockedIn ? "Clocked In" : "Clocked Out"}
-                      </h3>
-                      <p className="text-muted-foreground text-base">
-                        {isClockedIn
-                          ? "Currently tracking clinical hours"
-                          : "Ready to start your session"}
-                      </p>
-                    </div>
-                  </div>
-                  <span role="status" aria-live="polite" className="inline-flex">
-                    <Badge
-                      variant={isClockedIn ? "default" : "secondary"}
-                      className="px-4 py-2 text-base font-semibold"
-                    >
-                      {isClockedIn ? "Active" : "Inactive"}
-                    </Badge>
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="gap-8">
-                {/* Enhanced Time Display */}
-                <motion.div
-                  initial={prefersReducedMotion ? false : { scale: 0.95, opacity: 0 }}
-                  animate={prefersReducedMotion ? {} : { scale: 1, opacity: 1 }}
-                  className="clock-hero text-center py-12 bg-gradient-to-br from-card/60 to-card/30 rounded-xl border border-border/60 backdrop-blur-sm"
-                >
-                  <motion.div
-                    key={currentTime.getSeconds()}
-                    initial={prefersReducedMotion ? false : { opacity: 0, y: -10 }}
-                    animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
-                    className="text-6xl sm:text-7xl md:text-8xl font-bold text-foreground mb-6 font-mono tracking-tight"
-                  >
-                    {format(currentTime, "HH:mm")}
-                  </motion.div>
-                  <motion.div
-                    className="text-xl text-muted-foreground font-medium mb-6"
-                    initial={prefersReducedMotion ? false : { opacity: 0 }}
-                    animate={prefersReducedMotion ? {} : { opacity: 1 }}
-                    transition={{ delay: 0.2 }}
-                  >
-                    {format(currentTime, "EEEE, MMMM d, yyyy")}
-                  </motion.div>
-                  <div className="flex justify-center" aria-live="polite" aria-atomic="true">
-                    <div className="flex items-center gap-3 text-lg text-muted-foreground">
-                      <span>
-                        {getGreeting()}, {data?.student.name || "Student"}
-                      </span>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Clock Controls */}
-                <div id="clock-controls" className="gap-6">
-                  {/* Site Selection */}
-                  {availableSites.length > 0 && (
-                    <div className="gap-3">
-                      <Label htmlFor="site-select" className="text-base font-semibold text-foreground">
-                        Select Clinical Site
-                      </Label>
-                      <Select value={selectedSite} onValueChange={setSelectedSite}>
-                        <SelectTrigger
-                          id="site-select"
-                          className="w-full text-base"
-                          aria-describedby="site-select-description"
-                        >
-                          <SelectValue placeholder="Choose your clinical site" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableSites.map((site) => (
-                            <SelectItem key={site.id} value={site.id} className="text-base">
-                              <div className="flex flex-col">
-                                <span className="font-medium">{site.name}</span>
-                                <span className="text-sm text-muted-foreground">{site.type}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p id="site-select-description" className="text-sm text-muted-foreground">
-                        Select the clinical site where you'll be working today
-                      </p>
-                    </div>
+                className={cn(
+                  "relative px-10 py-4 rounded-full text-lg font-medium",
+                  "border backdrop-blur-xl transition-all duration-300 ease-out",
+                  "transform hover:scale-[1.03] active:scale-[0.98]",
+                  "disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none",
+                  "group overflow-hidden",
+                  isClockedIn
+                    ? "border-white/10 bg-white/5 text-white hover:bg-white/10"
+                    : "border-white/10 bg-white/5 text-white hover:bg-white/10"
+                )}
+              >
+                {/* Hover glow */}
+                <div
+                  className={cn(
+                    "absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300",
+                    isClockedIn
+                      ? "bg-gradient-to-r from-red-500/20 via-transparent to-red-500/20"
+                      : "bg-gradient-to-r from-emerald-500/20 via-transparent to-emerald-500/20"
                   )}
+                />
 
-                  {availableSites.length === 0 && !isLoading && (
-                    <Alert className="mt-2">
-                      <AlertTitle>No Clinical Sites Available</AlertTitle>
-                      <AlertDescription>
-                        {sitesLoadError ||
-                          (error
-                            ? `Failed to load dashboard data: ${error}`
-                            : data?.student?.school?.id
-                              ? "We couldn’t find any active site assignments. Check assignment status and start/end dates in the School Admin system."
-                              : "Your account has no school assigned. Please contact your School Admin to link your school.")}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Current Rotation Display */}
-                  {data?.currentRotation && (
-                    <div className="gap-3 p-4 bg-muted/50 rounded-lg border">
-                      <div className="flex items-center gap-3">
-                        <Building2 className="h-5 w-5 text-medical-primary" />
-                        <div>
-                          <h4 className="font-semibold text-foreground">Current Rotation</h4>
-                          <p className="text-muted-foreground">{data.currentRotation.siteName}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Clock Action Buttons */}
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <Button
-                      onClick={isClockedIn ? handleClockOut : handleClockIn}
-                      size="lg"
-                      variant={isClockedIn ? "destructive" : "default"}
-                      className="flex-1 text-lg py-6 font-semibold"
-                      disabled={
-                        (!data?.currentRotation?.id && !selectedSite) || isClockingIn || isClockingOut
-                      }
-                    >
-                      {isClockedIn ? (
-                        <>
-                          <Square className="mr-3 h-6 w-6" />
-                          Clock Out
-                        </>
-                      ) : (
-                        <>
-                          <Play className="mr-3 h-6 w-6" />
-                          Clock In
-                        </>
-                      )}
-                    </Button>
-
-                    {location.hasPermission && (
-                      <Button
-                        onClick={refreshLocation}
-                        variant="outline"
-                        size="lg"
-                        className="text-lg py-6"
-                        disabled={location.isLoading}
-                      >
-                        {location.isLoading ? (
-                          <Loader2 className="mr-3 h-6 w-6 animate-spin" />
-                        ) : (
-                          <Navigation className="mr-3 h-6 w-6" />
-                        )}
-                        Refresh Location
-                      </Button>
+                <span className="relative flex items-center gap-3">
+                  <span
+                    className={cn(
+                      "flex items-center justify-center w-10 h-10 rounded-full border",
+                      isClockedIn
+                        ? "bg-red-500/20 border-red-500/30 text-red-400"
+                        : "bg-emerald-500/20 border-emerald-500/30 text-emerald-400"
                     )}
-                  </div>
+                  >
+                    {isClockingIn || isClockingOut ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : isClockedIn ? (
+                      <Square className="h-5 w-5" />
+                    ) : (
+                      <Play className="h-5 w-5" />
+                    )}
+                  </span>
+                  <span>{isClockedIn ? "Clock Out" : "Clock In"}</span>
+                </span>
+              </button>
 
-                  {/* Location Status */}
-                  {location.hasPermission && (
-                    <div className="gap-3 p-4 bg-muted/30 rounded-lg border">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <MapPin className="h-5 w-5 text-medical-primary" />
-                          <div>
-                            <h4 className="font-semibold text-foreground">Location Status</h4>
-                            <p className="text-sm text-muted-foreground">
-                              {location.coordinates
-                                ? `${location.facility || "Unknown Facility"} • ${location.accuracyLevel} accuracy`
-                                : location.error || "Location not available"}
-                            </p>
-                          </div>
-                        </div>
-                        <Badge variant={location.coordinates ? "default" : "secondary"}>
-                          {location.coordinates ? "Located" : "Unavailable"}
-                        </Badge>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </DashboardCard>
+              {/* Session Info */}
+              {isClockedIn && data?.clockStatus && (
+                <p className="mt-4 text-xs text-green-300/60">
+                  Session started at {format(new Date(data.clockStatus.clockIn), "h:mm a")}
+                </p>
+              )}
+            </div>
+          </SpotlightCard>
+        </div>
 
-            {/* Progress Cards */}
-            <div className="gap-6">
-              {/* Hours Progress */}
-              <DashboardCard variant="glass" className="card-hover-lift rounded-xl relative overflow-hidden gradient-overlay-blue">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="icon-container icon-container-blue">
-                      <Clock className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">Clinical Hours</CardTitle>
-                      <CardDescription>Progress toward requirement</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="gap-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-3xl font-bold text-foreground animate-stat-value">
-                        {data?.student.totalClinicalHours || 0}
-                      </span>
-                      <span className="text-muted-foreground">
-                        / {data?.statistics.totalRequiredHours || 0} hours
-                      </span>
-                    </div>
-                    <Progress value={hoursProgress} className="h-3" />
-                    <p className="text-sm text-muted-foreground">
-                      {Math.round(hoursProgress)}% complete
-                    </p>
-                  </div>
-                </CardContent>
-              </DashboardCard>
-
-              {/* Rotation Progress */}
-              <DashboardCard variant="glass" className="card-hover-lift rounded-xl relative overflow-hidden gradient-overlay-green">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="icon-container icon-container-green">
-                      <BookOpen className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">Rotations</CardTitle>
-                      <CardDescription>Completed rotations</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="gap-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-3xl font-bold text-foreground animate-stat-value">
-                        {data?.student.completedRotations || 0}
-                      </span>
-                      <span className="text-muted-foreground">
-                        / {data?.statistics.totalRotations || 0} rotations
-                      </span>
-                    </div>
-                    <Progress value={rotationProgress} className="h-3" />
-                    <p className="text-sm text-muted-foreground">
-                      {Math.round(rotationProgress)}% complete
-                    </p>
-                  </div>
-                </CardContent>
-              </DashboardCard>
-
-              {/* Time Records Link */}
-              <div className="flex justify-end">
-                <Link href="/dashboard/student/time-records" className="underline text-sm">
-                  View all time records
-                </Link>
-                <Button
-                  variant="link"
-                  aria-label="Open time records"
-                  className="ml-2 text-sm"
-                  onClick={() => router.push("/dashboard/student/time-records")}
-                >
-                  Open
-                </Button>
+        {/* Right: Stats Panel */}
+        <div className="lg:w-80 flex flex-col gap-4">
+          {/* Hours Card */}
+          <SpotlightCard className="rounded-2xl border-white/10 bg-white/5 p-5 hover:-translate-y-1 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <Clock className="w-6 h-6 text-blue-400" />
+              </div>
+              <div>
+                <div className="text-xs text-white/40 font-mono">01</div>
+                <div className="text-sm font-medium text-white">Clinical Hours</div>
               </div>
             </div>
-          </div>
+            <div className="flex items-baseline gap-2 mb-3">
+              <span className="text-3xl font-bold text-white">
+                {data?.student.totalClinicalHours || 0}
+              </span>
+              <span className="text-white/40 text-sm">
+                / {data?.statistics.totalRequiredHours || 0} hrs
+              </span>
+            </div>
+            <Progress value={hoursProgress} className="h-1.5" />
+            <div className="text-right text-xs text-white/40 mt-1">
+              {Math.round(hoursProgress)}%
+            </div>
+          </SpotlightCard>
 
-          {/* Recent Time Records */}
-          {data?.recentTimeRecords && data.recentTimeRecords.length > 0 && (
-            <DashboardCard variant="glass" className="rounded-xl">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-3">
-                  <FileText className="h-5 w-5" />
-                  Recent Time Records
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="gap-4">
-                  {data.recentTimeRecords.slice(0, 5).map((record, index) => (
-                    <div
-                      key={index}
-                      className="list-item-interactive flex items-center gap-4 p-3 rounded-lg border"
-                    >
-                      <div className="p-2 bg-muted rounded-full">
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-foreground">
-                          {record.clockOut
-                            ? `Clocked out${record.siteName ? ` from ${record.siteName}` : ""}`
-                            : `Clocked in${record.siteName ? ` at ${record.siteName}` : ""}`}
-                          {typeof record.totalHours === "number" ? ` • ${record.totalHours}h` : ""}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {format(
-                            new Date(record.clockOut || record.clockIn || record.date),
-                            "MMM d, yyyy 'at' h:mm a"
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </DashboardCard>
-          )}
+          {/* Rotations Card */}
+          <SpotlightCard
+            className="rounded-2xl border-white/10 bg-white/5 p-5 hover:-translate-y-1 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)]"
+            spotlightColor="rgba(34, 197, 94, 0.1)"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <BookOpen className="w-6 h-6 text-green-400" />
+              </div>
+              <div>
+                <div className="text-xs text-white/40 font-mono">02</div>
+                <div className="text-sm font-medium text-white">Rotations</div>
+              </div>
+            </div>
+            <div className="flex items-baseline gap-2 mb-3">
+              <span className="text-3xl font-bold text-white">
+                {data?.student.completedRotations || 0}
+              </span>
+              <span className="text-white/40 text-sm">
+                / {data?.statistics.totalRotations || 0}
+              </span>
+            </div>
+            <Progress value={rotationProgress} className="h-1.5" />
+            <div className="text-right text-xs text-white/40 mt-1">
+              {Math.round(rotationProgress)}%
+            </div>
+          </SpotlightCard>
 
-          {/* Floating Action Button for Quick Actions */}
-          <FloatingActionButton
-            actions={[
-              {
-                icon: isClockedIn ? Square : Play,
-                label: isClockedIn ? "Clock Out" : "Clock In",
-                onClick: isClockedIn ? handleClockOut : handleClockIn,
-                variant: isClockedIn ? "destructive" : "default",
-              },
-              {
-                icon: Navigation,
-                label: "Refresh Location",
-                onClick: refreshLocation,
-                disabled: location.isLoading || !location.hasPermission,
-              },
-              {
-                icon: MessageSquare,
-                label: "Support",
-                onClick: () => router.push("/support"),
-              },
-            ]}
-          />
+          {/* Quick Links Card */}
+          <SpotlightCard
+            className="rounded-2xl border-white/10 bg-white/5 p-5 hover:-translate-y-1 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)]"
+            spotlightColor="rgba(168, 85, 247, 0.1)"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <FileText className="w-6 h-6 text-purple-400" />
+              </div>
+              <div>
+                <div className="text-xs text-white/40 font-mono">03</div>
+                <div className="text-sm font-medium text-white">Quick Links</div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Link
+                href="/dashboard/student/time-records"
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 transition-all text-sm text-white/70 hover:text-white group/link"
+              >
+                <span>View Time Records</span>
+                <ChevronRight className="h-4 w-4 group-hover/link:translate-x-1 transition-transform" />
+              </Link>
+              <Link
+                href="/dashboard/student/rotations"
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 transition-all text-sm text-white/70 hover:text-white group/link"
+              >
+                <span>All Rotations</span>
+                <ChevronRight className="h-4 w-4 group-hover/link:translate-x-1 transition-transform" />
+              </Link>
+            </div>
+          </SpotlightCard>
         </div>
       </div>
-    </PageContainer>
+
+      {/* Recent Activity - Polished List */}
+      {data?.recentTimeRecords && data.recentTimeRecords.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2 pl-1">
+            <TrendingUp className="h-5 w-5 text-blue-400" />
+            Recent Activity
+          </h3>
+
+          <div className="grid gap-3">
+            {data.recentTimeRecords.slice(0, 5).map((record, index) => (
+              <div
+                key={index}
+                className="group relative overflow-hidden rounded-xl border border-white/5 bg-white/5 p-4 transition-all hover:bg-white/10 hover:border-white/10"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                <div className="relative flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    {/* Icon Box */}
+                    <div
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-full border",
+                        record.clockOut
+                          ? "border-green-500/20 bg-green-500/10 text-green-400"
+                          : "border-blue-500/20 bg-blue-500/10 text-blue-400"
+                      )}
+                    >
+                      {record.clockOut ? (
+                        <CheckCircle2 className="h-5 w-5" />
+                      ) : (
+                        <Play className="h-5 w-5 ml-0.5" />
+                      )}
+                    </div>
+
+                    {/* Details */}
+                    <div>
+                      <div className="font-medium text-white">
+                        {record.clockOut ? "Completed Shift" : "Clocked In"}
+                      </div>
+                      <div className="text-sm text-white/40 flex items-center gap-2">
+                        <span>
+                          {format(new Date(record.clockIn || record.date), "MMMM d, yyyy")}
+                        </span>
+                        {record.siteName && (
+                          <>
+                            <span className="w-1 h-1 rounded-full bg-white/20" />
+                            <span>{record.siteName}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Side Stats */}
+                  <div className="text-right">
+                    {record.totalHours ? (
+                      <>
+                        <div className="text-lg font-bold text-white">
+                          {record.totalHours}{" "}
+                          <span className="text-sm font-normal text-white/40">hrs</span>
+                        </div>
+                        <div className="text-xs text-white/40">
+                          {format(new Date(record.clockIn), "h:mm a")} -{" "}
+                          {record.clockOut ? format(new Date(record.clockOut), "h:mm a") : "N/A"}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-blue-300 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                        </span>
+                        In Progress
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

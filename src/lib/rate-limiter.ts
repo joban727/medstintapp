@@ -3,13 +3,13 @@ import type { NextRequest } from "next/server"
 // Ensure singletons across hot reloads and avoid duplicate intervals
 declare global {
   // Global store for rate limiter entries
-   
+
   var __rateLimitStore: Map<string, RateLimitEntry> | undefined
   // Global cleanup interval handle
-   
+
   var __rateLimiterCleanupInterval: NodeJS.Timeout | undefined
   // Guard to attach shutdown hooks once
-   
+
   var __rateLimiterShutdownHookSetup: boolean | undefined
 }
 
@@ -142,7 +142,10 @@ export const clockOperationLimiter = new RateLimiter({
     if (userId) {
       return `clock:${userId}`
     }
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown"
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown"
     return `clock:ip:${ip}`
   },
 })
@@ -158,7 +161,10 @@ export const adminApiLimiter = new RateLimiter({
   keyGenerator: (request) => {
     const userId = request.headers.get("x-user-id")
     if (userId) return `admin:${userId}`
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown"
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown"
     return `admin:ip:${ip}`
   },
 })

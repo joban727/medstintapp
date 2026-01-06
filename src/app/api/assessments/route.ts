@@ -430,8 +430,8 @@ export const PUT = withErrorHandling(async (request: NextRequest) => {
         percentage:
           Number(updatedAssessment.maxScore) > 0
             ? Math.round(
-              (Number(updatedAssessment.score) / Number(updatedAssessment.maxScore)) * 100
-            )
+                (Number(updatedAssessment.score) / Number(updatedAssessment.maxScore)) * 100
+              )
             : 0,
       },
       message: "Assessment updated successfully",
@@ -520,4 +520,3 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
     return createErrorResponse("Failed to delete assessment", HTTP_STATUS.INTERNAL_SERVER_ERROR)
   }
 })
-

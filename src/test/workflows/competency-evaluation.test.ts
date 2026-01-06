@@ -31,6 +31,11 @@ vi.mock('@/lib/competency-utils', () => ({
     createAuditLog: vi.fn().mockResolvedValue(undefined),
 }))
 
+// Mock CSRF middleware
+vi.mock('@/lib/csrf-middleware', () => ({
+    withCSRF: (handler: any) => handler,
+}))
+
 describe('Competency Evaluation Workflow', () => {
     let dbMock: any
     let preceptorUser: any
@@ -173,6 +178,15 @@ describe('Competency Evaluation Workflow', () => {
         // I'll check `stateful-db.ts` again. It has `insert`, `select`, `update`. No `delete`.
         // So I can't delete the rotation.
         // I will create a NEW student and assignment who has NO rotation.
+
+        // Re-insert preceptor user since reset() cleared it
+        await dbMock.insert(users).values({
+            id: preceptorUser.id,
+            email: preceptorUser.email,
+            role: preceptorUser.role,
+            schoolId: school.id,
+            name: preceptorUser.name
+        })
 
         const studentNoRotResult = await dbMock.insert(users).values({
             id: 'student-no-rot',

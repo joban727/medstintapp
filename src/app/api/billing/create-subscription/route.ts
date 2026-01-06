@@ -6,6 +6,23 @@ import { z } from "zod"
 import { db } from "../../../../database/connection-pool"
 import { subscriptions, users } from "../../../../database/schema"
 import { cacheIntegrationService } from "@/lib/cache-integration"
+import { withCSRF } from "@/lib/csrf-middleware"
+
+// Helper types for Stripe data (handles SDK type constraints)
+type InvoiceWithPaymentIntent = {
+  payment_intent?: { client_secret: string | null } | string | null
+}
+
+type SubscriptionData = {
+  id: string
+  status: string
+  current_period_start: number
+  current_period_end: number
+  cancel_at_period_end: boolean
+  trial_start: number | null
+  trial_end: number | null
+  latest_invoice: InvoiceWithPaymentIntent | null
+}
 
 // Validation schema for subscription creation
 const createSubscriptionSchema = z.object({
@@ -14,8 +31,8 @@ const createSubscriptionSchema = z.object({
   paymentMethodId: z.string().optional(),
 })
 
-// POST /api/billing/create-subscription - Create a new subscription
-export async function POST(request: NextRequest) {
+// POST /api/billing/create-subscription - Create a new subscription (CSRF protected)
+export const POST = withCSRF(async (request: NextRequest) => {
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -87,28 +104,38 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Cast to helper type for proper property access
+    const subData = subscription as unknown as SubscriptionData
+
     // Create subscription record in database
     const newSubscription = {
       id: crypto.randomUUID(),
       plan: body.planId,
       referenceId: user[0].id,
       stripeCustomerId: stripeCustomerId,
-      stripeSubscriptionId: subscription.id,
-      status: subscription.status.toUpperCase(),
-      periodStart: new Date((subscription as any).current_period_start * 1000),
-      periodEnd: new Date((subscription as any).current_period_end * 1000),
-      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      stripeSubscriptionId: subData.id,
+      status: subData.status.toUpperCase(),
+      periodStart: new Date(subData.current_period_start * 1000),
+      periodEnd: new Date(subData.current_period_end * 1000),
+      cancelAtPeriodEnd: subData.cancel_at_period_end,
       seats: 1,
-      trialStart: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
-      trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+      trialStart: subData.trial_start ? new Date(subData.trial_start * 1000) : null,
+      trialEnd: subData.trial_end ? new Date(subData.trial_end * 1000) : null,
     }
 
     await db.insert(subscriptions).values([newSubscription])
 
+    // Extract client secret from expanded invoice
+    const latestInvoice = subData.latest_invoice
+    let clientSecret: string | null = null
+    if (latestInvoice?.payment_intent && typeof latestInvoice.payment_intent === "object") {
+      clientSecret = latestInvoice.payment_intent.client_secret ?? null
+    }
+
     return NextResponse.json({
       success: true,
       subscription: newSubscription,
-      clientSecret: (subscription.latest_invoice as any)?.payment_intent?.client_secret,
+      clientSecret,
       message: "Subscription created successfully",
     })
   } catch (error) {
@@ -129,5 +156,4 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
-
+})

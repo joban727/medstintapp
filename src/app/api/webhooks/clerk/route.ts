@@ -5,6 +5,7 @@ import { Webhook } from "svix"
 import { db } from "../../../../database/connection-pool"
 import { users } from "../../../../database/schema"
 import { cacheIntegrationService } from "@/lib/cache-integration"
+import { logger } from "@/lib/logger"
 
 import type { UserRole } from "@/types"
 type ClerkWebhookEvent = {
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
   // Validate webhook secret is configured
   const webhookSecret = process.env.CLERK_WEBHOOK_SECRET
   if (!webhookSecret) {
-    console.error("CLERK_WEBHOOK_SECRET is not configured")
+    logger.error({}, "CLERK_WEBHOOK_SECRET is not configured")
     return new Response("Webhook not configured", { status: 500 })
   }
 
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
       "svix-signature": svix_signature,
     }) as ClerkWebhookEvent
   } catch (err) {
-    console.error("Error verifying webhook:", err)
+    logger.error({ err }, "Error verifying webhook")
     return new Response("Error occured", {
       status: 400,
     })
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
 
   try {
     if (!email) {
-      console.error("No email address found in webhook data")
+      logger.error({}, "No email address found in webhook data")
       return new Response("Invalid webhook data - missing email", { status: 400 })
     }
 
@@ -135,10 +136,10 @@ export async function POST(req: NextRequest) {
                 "Content-Type": "application/json",
               },
             })
-            console.log(`Revoked sessions for deleted user ${userId}`)
+            logger.info({ userId }, "Revoked sessions for deleted user")
           }
         } catch (sessionError) {
-          console.error(`Failed to revoke sessions for user ${userId}:`, sessionError)
+          logger.error({ userId, sessionError }, "Failed to revoke sessions for user")
           // Continue - user is already soft-deleted, session revocation is best-effort
         }
         break
@@ -147,10 +148,9 @@ export async function POST(req: NextRequest) {
       // Unhandled webhook type
     }
   } catch (error) {
-    console.error(`Error handling webhook ${type}:`, error)
+    logger.error({ type, error }, "Error handling webhook")
     return new Response("Error processing webhook", { status: 500 })
   }
 
   return new Response("Webhook processed successfully", { status: 200 })
 }
-

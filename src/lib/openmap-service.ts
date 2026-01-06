@@ -966,7 +966,6 @@ export { OpenMapService }
 
 // Ensure singleton across hot reloads
 declare global {
-
   var __openMapService: OpenMapService | undefined
 }
 

@@ -4,6 +4,97 @@ import postgres from "postgres"
 import * as schema from "../database/schema"
 import { LRUCache } from "lru-cache"
 import { performance } from "perf_hooks"
+import { logger } from "./logger"
+
+// ============================================================================
+// SQL Injection Prevention: Table/Index Name Validation
+// ============================================================================
+
+// Whitelist of valid table names from schema (snake_case database names)
+const VALID_TABLE_NAMES = new Set([
+  "users",
+  "sessions",
+  "accounts",
+  "verifications",
+  "subscriptions",
+  "accreditation_options",
+  "schools",
+  "programs",
+  "cohorts",
+  "clinical_sites",
+  "program_clinical_sites",
+  "rotation_templates",
+  "cohort_rotation_assignments",
+  "rotations",
+  "time_records",
+  "competency_templates",
+  "rubric_criteria",
+  "competency_deployments",
+  "notification_templates",
+  "competency_assignments",
+  "competency_versions",
+  "import_export_logs",
+  "competencies",
+  "competency_submissions",
+  "assessments",
+  "evaluations",
+  "audit_logs",
+  "timecard_corrections",
+  "jobs",
+  "progress_snapshots",
+  "learning_analytics",
+  "notification_queue",
+  "report_cache",
+  "invitations",
+  "competency_rubrics",
+  "site_assignments",
+  "scheduled_reports",
+  "onboarding_sessions",
+  "onboarding_analytics",
+  "time_sync_sessions",
+  "sync_events",
+  "connection_logs",
+  "synchronized_clock_records",
+  "clinical_site_locations",
+  "location_verifications",
+  "location_permissions",
+  "location_accuracy_logs",
+  "facility_management",
+  "notifications",
+  "rate_limits",
+  "cache_entries",
+])
+
+/**
+ * Validates a table name against the schema whitelist
+ * @throws Error if the table name is not in the whitelist
+ */
+function validateTableName(tableName: string): void {
+  const normalizedName = tableName.toLowerCase().trim()
+  if (!VALID_TABLE_NAMES.has(normalizedName)) {
+    logger.warn({ tableName }, "Attempted operation on invalid table name")
+    throw new Error(`Invalid table name: ${tableName}. Table must be in the schema whitelist.`)
+  }
+}
+
+/**
+ * Validates an index name format (alphanumeric with underscores, must start with idx_)
+ * @throws Error if the index name format is invalid
+ */
+function validateIndexName(indexName: string): void {
+  // Index names should start with idx_ and contain only alphanumeric characters and underscores
+  const validIndexPattern = /^idx_[a-z][a-z0-9_]*$/i
+  if (!validIndexPattern.test(indexName)) {
+    logger.warn({ indexName }, "Attempted operation on invalid index name")
+    throw new Error(
+      `Invalid index name: ${indexName}. Index name must match pattern idx_[a-z][a-z0-9_]*`
+    )
+  }
+}
+
+// ============================================================================
+// Connection Pool Configuration
+// ============================================================================
 
 // Connection pool configuration
 const connectionPool = postgres({
@@ -23,6 +114,7 @@ const connectionPool = postgres({
 export const db = drizzle(connectionPool, { schema })
 
 // Query cache configuration
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const queryCache = new LRUCache<string, any>({
   max: 500, // Maximum number of items in cache
   ttl: 1000 * 60 * 5, // Cache items for 5 minutes
@@ -97,7 +189,7 @@ export async function cachedQuery<T>(
   // Check cache first
   const cachedResult = queryCache.get(key)
   if (cachedResult !== undefined) {
-    return cachedResult
+    return cachedResult as T
   }
 
   // Execute query if not in cache
@@ -229,7 +321,7 @@ export async function performDatabaseHealthCheck() {
     const stats = getQueryStats()
     const avgQueryTime =
       Object.values(stats).reduce((sum, stat) => sum + stat.average, 0) /
-      Object.keys(stats).length || 0
+        Object.keys(stats).length || 0
 
     // Determine health status
     let status: "healthy" | "degraded" | "unhealthy"
@@ -284,9 +376,9 @@ export async function applyRecommendedIndexes() {
   for (const indexSql of indexes) {
     try {
       await db.execute(indexSql)
-      console.log(`Applied database index: ${indexSql}`)
+      logger.info({ indexSql }, "Applied database index")
     } catch (error) {
-      console.error(`Failed to apply database index: ${indexSql}`, error)
+      logger.error({ indexSql, error }, "Failed to apply database index")
     }
   }
 }
@@ -517,52 +609,75 @@ export async function getOptimizationRecommendations() {
   }
 }
 
-// Run vacuum on a table
+/**
+ * Runs VACUUM on a specific table to reclaim storage and update statistics
+ */
 export async function runVacuum(tableName: string) {
+  // Validate table name before executing to prevent SQL injection
+  validateTableName(tableName)
+
   const endTimer = startQueryTimer("vacuum")
 
   try {
-    // Use raw SQL for dynamic table name - tableName should be validated before calling
-    await db.execute(sql.raw(`VACUUM ANALYZE "${tableName.replace(/"/g, '""')}"`))
+    // Safe to use after validation - table name is in whitelist
+    await db.execute(sql.raw(`VACUUM ANALYZE ${tableName}`))
     endTimer()
+    logger.info({ tableName }, "VACUUM ANALYZE completed")
     return { success: true, message: `VACUUM ANALYZE completed for table ${tableName}` }
   } catch (error) {
     endTimer()
+    logger.error({ tableName, error }, "VACUUM ANALYZE failed")
     throw error
   }
 }
 
-// Analyze a table
+/**
+ * Runs ANALYZE on a specific table to update query planner statistics
+ */
 export async function analyzeTable(tableName: string) {
+  // Validate table name before executing to prevent SQL injection
+  validateTableName(tableName)
+
   const endTimer = startQueryTimer("analyze")
 
   try {
-    // Use raw SQL for dynamic table name - tableName should be validated before calling
-    await db.execute(sql.raw(`ANALYZE "${tableName.replace(/"/g, '""')}"`))
+    // Safe to use after validation - table name is in whitelist
+    await db.execute(sql.raw(`ANALYZE ${tableName}`))
     endTimer()
+    logger.info({ tableName }, "ANALYZE completed")
     return { success: true, message: `ANALYZE completed for table ${tableName}` }
   } catch (error) {
     endTimer()
+    logger.error({ tableName, error }, "ANALYZE failed")
     throw error
   }
 }
 
-// Rebuild index
+/**
+ * Rebuilds an index to improve performance and reduce bloat
+ */
 export async function rebuildIndex(indexName: string) {
+  // Validate index name format before executing to prevent SQL injection
+  validateIndexName(indexName)
+
   const endTimer = startQueryTimer("reindex")
 
   try {
-    // Use raw SQL for dynamic index name - indexName should be validated before calling
-    await db.execute(sql.raw(`REINDEX INDEX "${indexName.replace(/"/g, '""')}"`))
+    // Safe to use after validation - index name matches allowed pattern
+    await db.execute(sql.raw(`REINDEX INDEX ${indexName}`))
     endTimer()
+    logger.info({ indexName }, "REINDEX completed")
     return { success: true, message: `REINDEX completed for index ${indexName}` }
   } catch (error) {
     endTimer()
+    logger.error({ indexName, error }, "REINDEX failed")
     throw error
   }
 }
 
-// Close database connections
+/**
+ * Close database connections
+ */
 export async function closeDatabaseConnections(): Promise<void> {
   await connectionPool.end()
 }

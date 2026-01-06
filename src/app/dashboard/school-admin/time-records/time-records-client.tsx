@@ -146,7 +146,7 @@ export function TimeRecordsClient({
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="glass-card card-hover-lift spotlight-card rounded-xl relative overflow-hidden border-l-4 border-l-blue-500">
+        <Card className="glass-card-stats card-hover-lift spotlight-card relative overflow-hidden border-l-4 border-l-blue-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="font-medium text-sm">Total Records</CardTitle>
             <div className="icon-container icon-container-blue">
@@ -160,7 +160,7 @@ export function TimeRecordsClient({
             </p>
           </CardContent>
         </Card>
-        <Card className="glass-card card-hover-lift spotlight-card rounded-xl relative overflow-hidden border-l-4 border-l-yellow-500">
+        <Card className="glass-card-stats card-hover-lift spotlight-card relative overflow-hidden border-l-4 border-l-yellow-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="font-medium text-sm">Pending Review</CardTitle>
             <div className="icon-container icon-container-yellow">
@@ -172,7 +172,8 @@ export function TimeRecordsClient({
             <p className="text-muted-foreground text-xs">Awaiting approval</p>
           </CardContent>
         </Card>
-        <Card className="glass-card card-hover-lift spotlight-card rounded-xl relative overflow-hidden border-l-4 border-l-green-500">
+
+        <Card className="glass-card-stats card-hover-lift spotlight-card relative overflow-hidden border-l-4 border-l-green-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="font-medium text-sm">Approved</CardTitle>
             <div className="icon-container icon-container-green">
@@ -184,7 +185,7 @@ export function TimeRecordsClient({
             <p className="text-muted-foreground text-xs">{rejectedRecords} rejected</p>
           </CardContent>
         </Card>
-        <Card className="glass-card card-hover-lift spotlight-card rounded-xl relative overflow-hidden border-l-4 border-l-purple-500">
+        <Card className="glass-card-stats card-hover-lift spotlight-card relative overflow-hidden border-l-4 border-l-purple-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="font-medium text-sm">Corrections</CardTitle>
             <div className="icon-container icon-container-purple">
@@ -199,7 +200,7 @@ export function TimeRecordsClient({
       </div>
 
       {/* Filters */}
-      <div className="glass-card-subtle p-4 rounded-lg">
+      <div className="glass-card p-4">
         <TimeRecordsFilterForm
           defaultValues={{
             search: searchParams.search,
@@ -211,7 +212,7 @@ export function TimeRecordsClient({
       </div>
 
       {/* Time Records Table */}
-      <Card className="glass-card overflow-hidden">
+      <Card className="glass-card overflow-hidden border-0">
         <CardHeader>
           <CardTitle>Student Time Records</CardTitle>
           <CardDescription>
@@ -228,14 +229,19 @@ export function TimeRecordsClient({
                   <div className="flex items-start justify-between gap-2 pb-2 border-b border-border/30">
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{record.student.name}</div>
-                      <div className="text-muted-foreground text-xs truncate">{record.student.email}</div>
+                      <div className="text-muted-foreground text-xs truncate">
+                        {record.student.email}
+                      </div>
                     </div>
                     <Badge
                       className={cn(
                         "shrink-0",
-                        record.status === "APPROVED" && "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-                        record.status === "REJECTED" && "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-                        record.status === "PENDING" && "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+                        record.status === "APPROVED" &&
+                          "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+                        record.status === "REJECTED" &&
+                          "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+                        record.status === "PENDING" &&
+                          "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
                       )}
                     >
                       {record.status}
@@ -245,16 +251,21 @@ export function TimeRecordsClient({
                     <span className="truncate">{record.rotation.name}</span>
                   </MobileDataField>
                   <MobileDataField label="Date">
-                    <span>{record.clockIn ? format(new Date(record.clockIn), "MMM dd, yyyy") : "--"}</span>
+                    <span>
+                      {record.clockIn ? format(new Date(record.clockIn), "MMM dd, yyyy") : "--"}
+                    </span>
                   </MobileDataField>
                   <MobileDataField label="Time">
                     <span>
-                      {record.clockIn ? format(new Date(record.clockIn), "HH:mm") : "--"} - {record.clockOut ? format(new Date(record.clockOut), "HH:mm") : "Active"}
+                      {record.clockIn ? format(new Date(record.clockIn), "HH:mm") : "--"} -{" "}
+                      {record.clockOut ? format(new Date(record.clockOut), "HH:mm") : "Active"}
                     </span>
                   </MobileDataField>
                   <MobileDataField label="Hours">
                     <span className="font-semibold">
-                      {record.totalHours != null ? `${Number(record.totalHours).toFixed(1)}h` : "--"}
+                      {record.totalHours != null
+                        ? `${Number(record.totalHours).toFixed(1)}h`
+                        : "--"}
                     </span>
                   </MobileDataField>
                   {record.status === "PENDING" && (
@@ -358,11 +369,11 @@ export function TimeRecordsClient({
                               }
                               className={cn(
                                 record.status === "APPROVED" &&
-                                "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200",
+                                  "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200",
                                 record.status === "REJECTED" &&
-                                "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-200",
+                                  "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-200",
                                 record.status === "PENDING" &&
-                                "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 hover:bg-yellow-200"
+                                  "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 hover:bg-yellow-200"
                               )}
                             >
                               {record.status}
@@ -448,7 +459,10 @@ export function TimeRecordsClient({
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="glass-card-subtle">
+                            <DropdownMenuContent
+                              align="end"
+                              className="glass-dropdown border-white/10"
+                            >
                               <DropdownMenuItem className="cursor-pointer focus:bg-primary/10 focus:text-primary">
                                 <Eye className="mr-2 h-4 w-4" />
                                 View Details

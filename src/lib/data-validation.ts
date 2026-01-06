@@ -18,6 +18,8 @@ export const userSchema = z.object({
   updatedAt: z.date(),
 })
 
+export type User = z.infer<typeof userSchema>
+
 export const rotationSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(200).trim(),
@@ -30,6 +32,8 @@ export const rotationSchema = z.object({
   createdAt: z.date(),
   updatedAt: z.date(),
 })
+
+export type Rotation = z.infer<typeof rotationSchema>
 
 export const timeRecordSchema = z.object({
   id: z.string().uuid(),
@@ -64,6 +68,8 @@ export const timeRecordSchema = z.object({
   createdAt: z.date(),
   updatedAt: z.date(),
 })
+
+export type TimeRecord = z.infer<typeof timeRecordSchema>
 
 export const auditLogSchema = z.object({
   id: z.string().uuid(),
@@ -175,7 +181,7 @@ export class InputSanitizer {
     return phone.replace(/[^\d+\-\s()]/g, "").substring(0, 20)
   }
 
-  static sanitizeJson(input: any): any {
+  static sanitizeJson(input: unknown): any {
     if (typeof input === "string") {
       return InputSanitizer.sanitizeString(input)
     }
@@ -198,7 +204,7 @@ export class InputSanitizer {
   }
 
   static validateAndSanitize<T>(
-    input: any,
+    input: unknown,
     schema: z.ZodSchema<T>,
     options: {
       stripUnknown?: boolean
@@ -233,29 +239,29 @@ export class InputSanitizer {
 
 // Data integrity validation
 export class DataIntegrityValidator {
-  static validateChecksum(data: any, expectedChecksum: string): boolean {
+  static validateChecksum(data: unknown, expectedChecksum: string): boolean {
     const calculatedChecksum = DataIntegrityValidator.calculateChecksum(data)
     return calculatedChecksum === expectedChecksum
   }
 
-  static calculateChecksum(data: any): string {
+  static calculateChecksum(data: unknown): string {
     const dataString = JSON.stringify(data, DataIntegrityValidator.sortObjectKeys)
     return crypto.createHash("sha256").update(dataString).digest("hex")
   }
 
-  private static sortObjectKeys(_key: string, value: any): any {
+  private static sortObjectKeys(_key: string, value: unknown): unknown {
     if (value && typeof value === "object" && !Array.isArray(value)) {
       return Object.keys(value)
         .sort()
         .reduce((sorted, key) => {
-          sorted[key] = value[key]
+          sorted[key] = (value as Record<string, unknown>)[key]
           return sorted
         }, {} as any)
     }
     return value
   }
 
-  static validateRequiredFields(data: any, requiredFields: string[]): string[] {
+  static validateRequiredFields(data: Record<string, any>, requiredFields: string[]): string[] {
     const missingFields: string[] = []
     for (const field of requiredFields) {
       if (data[field] === undefined || data[field] === null || data[field] === "") {
@@ -265,7 +271,10 @@ export class DataIntegrityValidator {
     return missingFields
   }
 
-  static validateFieldTypes(data: any, fieldTypes: Record<string, string>): string[] {
+  static validateFieldTypes(
+    data: Record<string, any>,
+    fieldTypes: Record<string, string>
+  ): string[] {
     const typeErrors: string[] = []
     for (const [field, expectedType] of Object.entries(fieldTypes)) {
       if (data[field] !== undefined && data[field] !== null) {
@@ -279,7 +288,7 @@ export class DataIntegrityValidator {
   }
 
   static validateRangeConstraints(
-    data: any,
+    data: Record<string, any>,
     constraints: Record<string, { min?: number; max?: number }>
   ): string[] {
     const rangeErrors: string[] = []
@@ -300,7 +309,7 @@ export class DataIntegrityValidator {
 
 // Business rule validation
 export class BusinessRuleValidator {
-  static validateTimeRecordBusinessRules(record: any): string[] {
+  static validateTimeRecordBusinessRules(record: Partial<TimeRecord>): string[] {
     const errors: string[] = []
 
     // Clock out must be after clock in
@@ -336,7 +345,7 @@ export class BusinessRuleValidator {
     return errors
   }
 
-  static validateRotationBusinessRules(rotation: any): string[] {
+  static validateRotationBusinessRules(rotation: Partial<Rotation>): string[] {
     const errors: string[] = []
 
     // Start date must be before end date
@@ -356,15 +365,14 @@ export class BusinessRuleValidator {
     return errors
   }
 
-  static validateUserBusinessRules(user: any): string[] {
+  static validateUserBusinessRules(user: Partial<User>): string[] {
     const errors: string[] = []
 
     // Email domain validation for educational institutions
     if (user.email) {
+      const email = user.email
       const validDomains = [".edu", ".edu.", ".ac.", ".edu."]
-      const hasValidDomain = validDomains.some((domain) =>
-        user.email.toLowerCase().includes(domain)
-      )
+      const hasValidDomain = validDomains.some((domain) => email.toLowerCase().includes(domain))
       if (!hasValidDomain) {
         errors.push("Email must be from an educational institution")
       }
@@ -434,7 +442,11 @@ export class SecurityValidator {
 
 // Comprehensive validation service
 export class ValidationService {
-  static validateUserInput(data: any): { isValid: boolean; errors: string[]; sanitizedData?: any } {
+  static validateUserInput(data: unknown): {
+    isValid: boolean
+    errors: string[]
+    sanitizedData?: any
+  } {
     const errors: string[] = []
 
     // Sanitize input
@@ -476,7 +488,7 @@ export class ValidationService {
     }
   }
 
-  static validateTimeRecordInput(data: any): {
+  static validateTimeRecordInput(data: unknown): {
     isValid: boolean
     errors: string[]
     sanitizedData?: any
@@ -523,7 +535,7 @@ export class ValidationService {
   }
 
   static validateApiRequest(
-    data: any,
+    data: unknown,
     schema: z.ZodSchema
   ): { isValid: boolean; errors: string[]; sanitizedData?: any } {
     const result = InputSanitizer.validateAndSanitize(data, schema, {
@@ -605,7 +617,7 @@ export function createValidationMiddleware(schema: z.ZodSchema) {
       }
       // Attach sanitized data to request for use in route handlers
 
-      ; (req as any).validatedData = validation.sanitizedData
+      ;(req as any).validatedData = validation.sanitizedData
       return null // Continue to next middleware/handler
     } catch (error) {
       return new Response(

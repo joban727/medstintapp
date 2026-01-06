@@ -13,6 +13,7 @@ import {
   Shield,
   Users,
 } from "lucide-react"
+import { logger } from "@/lib/client-logger"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
@@ -53,7 +54,9 @@ export function OnboardingComplete({ user, clerkUser }: OnboardingCompleteProps)
     if (autoRedirect && countdown === 0) {
       try {
         window.location.assign("/dashboard")
-      } catch { }
+      } catch (e) {
+        logger.error(e, "Failed to redirect")
+      }
     }
   }, [countdown, autoRedirect, router])
 
@@ -202,7 +205,9 @@ export function OnboardingComplete({ user, clerkUser }: OnboardingCompleteProps)
             onClick={() => {
               try {
                 window.location.assign("/dashboard")
-              } catch { }
+              } catch (e) {
+                logger.error(e, "Failed to redirect")
+              }
             }}
             className="flex-1 bg-healthcare-green hover:bg-green transition-color duration-200s duration-200-700"
           >

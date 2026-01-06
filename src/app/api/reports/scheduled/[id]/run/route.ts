@@ -27,6 +27,7 @@ import {
 } from "../../../../../../database/schema"
 import { getCurrentUser } from "../../../../../../lib/auth-clerk"
 import { cacheIntegrationService } from "@/lib/cache-integration"
+import { withCSRF } from "@/lib/csrf-middleware"
 
 function checkRunPermissions(userRole: string): boolean {
   const allowedRoles = ["SCHOOL_ADMIN", "CLINICAL_SUPERVISOR"]
@@ -211,79 +212,81 @@ async function updateScheduledReport(id: string, updates: Record<string, unknown
   }
 }
 
-export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const user = await getCurrentUser()
-    const { id } = await params
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    if (!checkRunPermissions(user.role)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
-    const report = await getScheduledReport(id)
-
-    if (!report) {
-      return NextResponse.json({ error: "Report not found" }, { status: 404 })
-    }
-
-    // Check if user can run this report
-    if (
-      user.role !== ("SCHOOL_ADMIN" as UserRole as UserRole as UserRole) &&
-      report.createdBy !== user.id
-    ) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 })
-    }
-
-    if (!report.isActive) {
-      return NextResponse.json({ error: "Report is not active" }, { status: 400 })
-    }
-
-    // Generate the report
-    const reportData = await generateReportData(report.type, report.filters)
-
-    // Send the report via email
-    const emailSent = await sendReportEmail(
-      report.recipients,
-      reportData,
-      report.format,
-      report.name || "Scheduled Report",
-      user.schoolId ? `School ${user.schoolId}` : undefined
-    )
-
-    if (!emailSent) {
-      return NextResponse.json({ error: "Failed to send report email" }, { status: 500 })
-    }
-
-    // Update the report's last run time and next run time
-    const now = new Date()
-    const nextRun = calculateNextRun(report.frequency)
-
-    await updateScheduledReport(id, {
-      lastRun: now.toISOString(),
-      nextRun: nextRun.toISOString(),
-      runCount: (report.runCount || 0) + 1,
-    })
-
-    return NextResponse.json({
-      message: "Report executed successfully",
-      executedAt: now.toISOString(),
-      nextRun: nextRun.toISOString(),
-      recipients: report.recipients,
-    })
-  } catch (error) {
-    console.error("Error running scheduled report:", error)
-
-    // Invalidate related caches
+export const POST = withCSRF(
+  async (_request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     try {
-      await cacheIntegrationService.invalidateByTags(["reports"])
-    } catch (cacheError) {
-      console.warn("Cache invalidation error in reports/scheduled/[id]/run/route.ts:", cacheError)
-    }
+      const user = await getCurrentUser()
+      const { id } = await params
 
-    return NextResponse.json({ error: "Failed to run scheduled report" }, { status: 500 })
+      if (!user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
+
+      if (!checkRunPermissions(user.role)) {
+        return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+      }
+
+      const report = await getScheduledReport(id)
+
+      if (!report) {
+        return NextResponse.json({ error: "Report not found" }, { status: 404 })
+      }
+
+      // Check if user can run this report
+      if (
+        user.role !== ("SCHOOL_ADMIN" as UserRole as UserRole as UserRole) &&
+        report.createdBy !== user.id
+      ) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 })
+      }
+
+      if (!report.isActive) {
+        return NextResponse.json({ error: "Report is not active" }, { status: 400 })
+      }
+
+      // Generate the report
+      const reportData = await generateReportData(report.type, report.filters)
+
+      // Send the report via email
+      const emailSent = await sendReportEmail(
+        report.recipients,
+        reportData,
+        report.format,
+        report.name || "Scheduled Report",
+        user.schoolId ? `School ${user.schoolId}` : undefined
+      )
+
+      if (!emailSent) {
+        return NextResponse.json({ error: "Failed to send report email" }, { status: 500 })
+      }
+
+      // Update the report's last run time and next run time
+      const now = new Date()
+      const nextRun = calculateNextRun(report.frequency)
+
+      await updateScheduledReport(id, {
+        lastRun: now.toISOString(),
+        nextRun: nextRun.toISOString(),
+        runCount: (report.runCount || 0) + 1,
+      })
+
+      return NextResponse.json({
+        message: "Report executed successfully",
+        executedAt: now.toISOString(),
+        nextRun: nextRun.toISOString(),
+        recipients: report.recipients,
+      })
+    } catch (error) {
+      console.error("Error running scheduled report:", error)
+
+      // Invalidate related caches
+      try {
+        await cacheIntegrationService.invalidateByTags(["reports"])
+      } catch (cacheError) {
+        console.warn("Cache invalidation error in reports/scheduled/[id]/run/route.ts:", cacheError)
+      }
+
+      return NextResponse.json({ error: "Failed to run scheduled report" }, { status: 500 })
+    }
   }
-}
+)

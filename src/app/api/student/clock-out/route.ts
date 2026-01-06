@@ -5,6 +5,7 @@ import { ClockService } from "@/lib/clock-service"
 import { ClockError, formatErrorResponse } from "@/lib/enhanced-error-handling"
 import { logger } from "@/lib/logger"
 import { TimingPerformanceMonitor } from "@/lib/high-precision-timing"
+import { withCSRF } from "@/lib/csrf-middleware"
 
 // Role validation utilities
 const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
@@ -31,7 +32,8 @@ import {
   ERROR_MESSAGES,
 } from "@/lib/api-response"
 
-export async function POST(request: NextRequest) {
+// CSRF-protected POST handler for clock-out
+export const POST = withCSRF(async (request: NextRequest) => {
   return withErrorHandlingAsync(
     async () => {
       return TimingPerformanceMonitor.measure("student-clock-out", async () => {
@@ -49,10 +51,13 @@ export async function POST(request: NextRequest) {
 
         // Only allow students to clock out
         if (user.role !== ("STUDENT" as UserRole as UserRole as UserRole)) {
-          logger.warn({
-            requestId,
-            role: user.role,
-          }, "Non-student clock-out attempt")
+          logger.warn(
+            {
+              requestId,
+              role: user.role,
+            },
+            "Non-student clock-out attempt"
+          )
           return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
         }
 
@@ -72,11 +77,14 @@ export async function POST(request: NextRequest) {
         // Execute atomic clock-out operation
         const result = await ClockService.clockOut(clockOutRequest)
 
-        logger.info({
-          requestId,
-          recordId: result.recordId,
-          totalHours: result.totalHours,
-        }, "Clock-out API request completed successfully")
+        logger.info(
+          {
+            requestId,
+            recordId: result.recordId,
+            totalHours: result.totalHours,
+          },
+          "Clock-out API request completed successfully"
+        )
 
         // Return success response with enhanced clock status
         return createSuccessResponse(
@@ -101,17 +109,23 @@ export async function POST(request: NextRequest) {
         const requestId = Math.random().toString(36).substring(2)
 
         if (error instanceof ClockError) {
-          logger.error({
-            requestId,
-            type: error.type,
-            code: error.code,
-            retryable: error.retryable,
-          }, "Clock-out API request failed")
+          logger.error(
+            {
+              requestId,
+              type: error.type,
+              code: error.code,
+              retryable: error.retryable,
+            },
+            "Clock-out API request failed"
+          )
         } else {
-          logger.error({
-            requestId,
-            error: error instanceof Error ? error.message : "Unknown error",
-          }, "Clock-out API request failed")
+          logger.error(
+            {
+              requestId,
+              error: error instanceof Error ? error.message : "Unknown error",
+            },
+            "Clock-out API request failed"
+          )
         }
 
         // Handle ClockError instances with proper error formatting
@@ -133,5 +147,4 @@ export async function POST(request: NextRequest) {
       },
     }
   )
-}
-
+})

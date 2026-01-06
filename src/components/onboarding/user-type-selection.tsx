@@ -3,6 +3,7 @@
 
 import { useAuth } from "@clerk/nextjs"
 import { CheckCircle, Database, Settings, Shield, User as UserIcon } from "lucide-react"
+import { logger } from "@/lib/client-logger"
 import { useRouter } from "next/navigation"
 import { useId, useState, useTransition } from "react"
 import { toast } from "sonner"
@@ -101,11 +102,14 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
             throw new Error("Invalid response format")
           })
           message = data?.error || data?.message || message
-        } catch {
+        } catch (e) {
+          logger.error(e, "Failed to parse error response")
           try {
             const text = await response.text()
             if (text) message = text
-          } catch { }
+          } catch (e) {
+            logger.error(e, "Failed to read error text")
+          }
         }
         throw new Error(message)
       }
@@ -147,11 +151,14 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
             throw new Error("Invalid response format")
           })
           message = data?.error || data?.message || message
-        } catch {
+        } catch (e) {
+          logger.error(e, "Failed to parse error response")
           try {
             const text = await response.text()
             if (text) message = text
-          } catch { }
+          } catch (e) {
+            logger.error(e, "Failed to read error text")
+          }
         }
         throw new Error(message)
       }
@@ -166,12 +173,14 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
         method: "POST",
       })
       if (!completeRes.ok) {
-        // Failed to mark onboarding complete
+        logger.error("Failed to mark onboarding complete")
       }
 
       try {
         window.location.assign("/dashboard")
-      } catch { }
+      } catch (e) {
+        logger.error(e, "Failed to redirect")
+      }
     } catch (error) {
       // Error during onboarding completion
       const errorMessage =
@@ -230,12 +239,14 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
             toast.success("Super Admin account created successfully!")
             try {
               window.location.assign("/dashboard")
-            } catch { }
+            } catch (e) {
+              logger.error(e, "Failed to redirect")
+            }
             break
           }
         }
-      } catch (_error) {
-        // Onboarding error
+      } catch (error) {
+        logger.error(error, "Onboarding error")
       }
     })
   }
@@ -256,8 +267,8 @@ export function SuperAdminOnboarding({ user, clerkUser }: SuperAdminOnboardingPr
               <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-900/20">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
                   <strong>Important:</strong> Super administrators have unrestricted access to all
-                  MedStint platform features, including user management, system configuration, and sensitive
-                  data.
+                  MedStint platform features, including user management, system configuration, and
+                  sensitive data.
                 </p>
               </div>
             </div>

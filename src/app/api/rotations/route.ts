@@ -14,6 +14,8 @@ import {
   HTTP_STATUS,
   ERROR_MESSAGES,
 } from "@/lib/api-response"
+import { cacheIntegrationService } from "@/lib/cache-integration"
+import { logger } from "@/lib/logger"
 
 // Validation schemas
 const createRotationSchema = z.object({
@@ -252,6 +254,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     )
   } catch (error) {
     throw error
+  } finally {
+    // Invalidate cache
+    try {
+      await cacheIntegrationService.invalidateByTags(["rotations", "student-dashboard"])
+    } catch (error) {
+      logger.warn("Failed to invalidate cache:", String(error))
+    }
   }
 })
 
@@ -363,6 +372,13 @@ export const PUT = withErrorHandling(async (request: NextRequest) => {
     )
   } catch (error) {
     throw error
+  } finally {
+    // Invalidate cache
+    try {
+      await cacheIntegrationService.invalidateByTags(["rotations", "student-dashboard"])
+    } catch (error) {
+      logger.warn("Failed to invalidate cache:", String(error))
+    }
   }
 })
 
@@ -398,6 +414,12 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
 
   await db.delete(rotations).where(eq(rotations.id, id))
 
+  // Invalidate cache
+  try {
+    await cacheIntegrationService.invalidateByTags(["rotations", "student-dashboard"])
+  } catch (error) {
+    console.warn("Failed to invalidate cache:", error)
+  }
+
   return createSuccessResponse(null, "Rotation deleted successfully")
 })
-

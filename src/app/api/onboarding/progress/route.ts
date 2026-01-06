@@ -107,8 +107,8 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   // If onboarding is completed, persist data and update user
   if (isCompleted) {
     const fullFormData = {
-      ...(existingSession?.formData as Record<string, any> || {}),
-      ...(formData || {})
+      ...((existingSession?.formData as Record<string, any>) || {}),
+      ...(formData || {}),
     }
 
     const schoolData = fullFormData.schoolProfile
@@ -144,10 +144,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       }
 
       // Update User
-      await db.update(users).set({
-        onboardingCompleted: true,
-        schoolId: schoolId
-      }).where(eq(users.id, clerkUser.id))
+      await db
+        .update(users)
+        .set({
+          onboardingCompleted: true,
+          schoolId: schoolId,
+        })
+        .where(eq(users.id, clerkUser.id))
     } else {
       // Fallback if no school data (shouldn't happen if flow is followed)
       await db.update(users).set({ onboardingCompleted: true }).where(eq(users.id, clerkUser.id))
@@ -159,11 +162,10 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   // Invalidate related caches
   try {
-    await cacheIntegrationService.invalidateByTags(['onboarding'])
+    await cacheIntegrationService.invalidateByTags(["onboarding"])
   } catch (cacheError) {
     console.warn("Cache invalidation error in onboarding/progress/route.ts:", cacheError)
   }
 
   return createSuccessResponse({ success: true })
 })
-

@@ -12,10 +12,11 @@ import {
 } from "../../../components/ui/card"
 import { Label } from "../../../components/ui/label"
 import { RadioGroup, RadioGroupItem } from "../../../components/ui/radio-group"
-import { plans } from "../../../lib/payments/plans"
+import type { Plan } from "../../../lib/payments/plans-service"
 import SubscriptionButton from "./subscription-button"
 
 interface PlanSelectorProps {
+  plans: Plan[]
   activeSub: {
     id?: string
     status?: string
@@ -33,11 +34,11 @@ interface PlanSelectorProps {
   } | null
 }
 
-export default function PlanSelector({ activeSub }: PlanSelectorProps) {
+export default function PlanSelector({ activeSub, plans }: PlanSelectorProps) {
   const [selectedPlan, setSelectedPlan] = useState(
     activeSub?.plan
-      ? plans.find((p) => p.name === activeSub.plan)?.id.toString() || plans[0].id.toString()
-      : plans[0].id.toString()
+      ? plans.find((p) => p.name === activeSub.plan)?.id.toString() || plans[0]?.id.toString()
+      : plans[0]?.id.toString()
   )
   const id = useId()
 

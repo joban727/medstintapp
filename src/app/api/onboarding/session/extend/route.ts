@@ -28,12 +28,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   const existingSession = await db
     .select()
     .from(onboardingSessions)
-    .where(
-      and(
-        eq(onboardingSessions.id, sessionId),
-        eq(onboardingSessions.userId, userId)
-      )
-    )
+    .where(and(eq(onboardingSessions.id, sessionId), eq(onboardingSessions.userId, userId)))
     .limit(1)
 
   if (existingSession.length === 0) {
@@ -64,4 +59,3 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     expiresAt: newExpiresAt.toISOString(),
   })
 })
-

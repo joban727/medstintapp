@@ -3,6 +3,21 @@ import { locationVerifications, locationPermissions, locationAccuracyLogs, timeR
 import { eq, and, desc, lt } from 'drizzle-orm'
 import type { OpenMapService } from '@/lib/openmap-service'
 import { openMapService } from '@/lib/openmap-service'
+import {
+  encryptLocationForStorage,
+  decryptLocationFromStorage,
+  isEncrypted,
+  isEncryptionConfigured
+} from '@/lib/encryption'
+import { logger } from '@/lib/logger'
+
+interface LocationVerificationMetadata {
+  timezone?: string
+  timezoneOffset?: number
+  deviceInfo?: any
+  encrypted?: boolean
+  encryptionVersion?: number
+}
 
 export interface LocationData {
   latitude: number
@@ -53,12 +68,16 @@ export interface LocationPrivacySettings {
  */
 export class LocationStorageService {
   private openMapService: OpenMapService
-  private readonly ENCRYPTION_KEY = process.env.LOCATION_ENCRYPTION_KEY || 'default-key-change-in-production'
   private readonly DEFAULT_RETENTION_DAYS = 90
 
   constructor() {
     // Use singleton to avoid multiple interval owners and memory leaks
     this.openMapService = openMapService
+
+    // Log encryption status on initialization (only in development)
+    if (process.env.NODE_ENV === 'development' && !isEncryptionConfigured()) {
+      logger.warn('Using development encryption key. Set LOCATION_ENCRYPTION_KEY in production.')
+    }
   }
 
   /**
@@ -82,24 +101,31 @@ export class LocationStorageService {
         }
       }
 
-      // Encrypt sensitive location data
-      const encryptedLocation = await this.encryptLocationData(locationData)
+      // Encrypt sensitive location data using AES-256-GCM
+      const encryptedLocationString = encryptLocationForStorage(
+        locationData.latitude,
+        locationData.longitude
+      )
 
-      // Store location verification
+      // Store location verification with encrypted coordinates
+      // The encrypted string contains both lat/long encrypted together
+      // We store the encrypted string in userLatitude and a marker in userLongitude
       const [verification] = await db.insert(locationVerifications).values({
         timeRecordId: options.timeRecordId,
         verificationType: options.action,
-        userLatitude: encryptedLocation.latitude.toString(),
-        userLongitude: encryptedLocation.longitude.toString(),
+        userLatitude: encryptedLocationString,
+        userLongitude: 'ENCRYPTED_V1', // Marker indicating encrypted data
         userAccuracy: locationData.accuracy.toString(),
-        clinicalSiteLocationId: options.clinicalSiteId, // Using clinicalSiteId as locationId for now
+        clinicalSiteLocationId: options.clinicalSiteId,
         isWithinGeofence: false, // Will be calculated by geofence service
         locationSource: options.isManual ? 'manual' : 'gps',
         verificationTime: locationData.timestamp,
         metadata: {
           timezone: validation.timezone,
           timezoneOffset: validation.timezoneOffset,
-          deviceInfo: options.deviceInfo
+          deviceInfo: options.deviceInfo,
+          encrypted: true,
+          encryptionVersion: 1
         }
       }).returning({ id: locationVerifications.id })
 
@@ -111,7 +137,7 @@ export class LocationStorageService {
         verificationId: verification.id
       }
     } catch (error) {
-      console.error('Error storing location data:', error)
+      logger.error({ error }, 'Error storing location data')
       return {
         success: false,
         error: 'Failed to store location data'
@@ -131,13 +157,14 @@ export class LocationStorageService {
         permissionType: permissionData.permissionType,
         permissionStatus: permissionData.permissionStatus,
         deviceInfo: permissionData.deviceInfo ? JSON.stringify(permissionData.deviceInfo) : null,
+        locationSource: "gps", // Default to gps
         respondedAt: new Date(),
         lastUsedAt: new Date()
       })
 
       return { success: true }
     } catch (error) {
-      console.error('Error storing location permission:', error)
+      logger.error({ error }, 'Error storing location permission')
       return {
         success: false,
         error: 'Failed to store location permission'
@@ -184,10 +211,10 @@ export class LocationStorageService {
         accuracy: parseFloat(record.accuracy ?? '0'),
         isWithinGeofence: record.isWithinGeofence,
         isManual: record.isManual === 'manual',
-        timezone: (record.metadata as any)?.timezone
+        timezone: (record.metadata as unknown as LocationVerificationMetadata)?.timezone
       }))
     } catch (error) {
-      console.error('Error fetching location history:', error)
+      logger.error({ error }, 'Error fetching location history')
       return []
     }
   }
@@ -223,7 +250,7 @@ export class LocationStorageService {
         lastChecked: permission[0].lastUsedAt || undefined
       }
     } catch (error) {
-      console.error('Error fetching location permission:', error)
+      logger.error({ error }, 'Error fetching location permission')
       return { hasPermission: false }
     }
   }
@@ -244,11 +271,13 @@ export class LocationStorageService {
       // Delete old accuracy logs
       await db
         .delete(locationAccuracyLogs)
-        .where(lt(locationAccuracyLogs.timestamp, cutoffDate))
+        .where(lt(locationAccuracyLogs.createdAt, cutoffDate))
 
-      console.log(`Cleaned up location data older than ${retentionDays} days`)
+
+
+      logger.info({ retentionDays }, 'Cleaned up old location data')
     } catch (error) {
-      console.error('Error cleaning up location data:', error)
+      logger.error({ error }, 'Error cleaning up location data')
     }
   }
 
@@ -261,51 +290,50 @@ export class LocationStorageService {
     source: 'gps' | 'network' | 'manual'
   ): Promise<void> {
     try {
+      // Encrypt location coordinates
+      const encryptedLocation = encryptLocationForStorage(
+        locationData.latitude,
+        locationData.longitude
+      )
+
       await db.insert(locationAccuracyLogs).values({
         userId,
-        latitude: locationData.latitude.toString(),
-        longitude: locationData.longitude.toString(),
+        latitude: encryptedLocation,
+        longitude: 'ENCRYPTED_V1', // Marker indicating encrypted data
         accuracy: locationData.accuracy.toString(),
-        altitude: locationData.altitude?.toString(),
-        altitudeAccuracy: locationData.altitudeAccuracy?.toString(),
-        heading: locationData.heading?.toString(),
-        speed: locationData.speed?.toString(),
         locationSource: source,
-        batteryLevel: null, // Will be populated from device info if available
-        timestamp: locationData.timestamp
       })
     } catch (error) {
-      console.error('Error storing accuracy log:', error)
+      logger.error({ error }, 'Error storing accuracy log')
     }
   }
 
   /**
-   * Encrypt sensitive location data
-   * Note: This is a basic implementation. For production, use proper encryption libraries
+   * Decrypt location data from storage
+   * Handles both encrypted (v1+) and legacy unencrypted data
    */
-  private async encryptLocationData(locationData: LocationData): Promise<{
-    latitude: number
-    longitude: number
-  }> {
-    // For now, return the original data
-    // In production, implement proper encryption using crypto libraries
+  async decryptStoredLocation(
+    storedLatitude: string,
+    storedLongitude: string
+  ): Promise<{ latitude: number; longitude: number }> {
+    // Check if data is encrypted (v1 marker)
+    if (storedLongitude === 'ENCRYPTED_V1') {
+      // Data is encrypted, decrypt using the encryption module
+      return decryptLocationFromStorage(storedLatitude)
+    }
+
+    // Legacy unencrypted data - parse as raw coordinates
     return {
-      latitude: locationData.latitude,
-      longitude: locationData.longitude
+      latitude: parseFloat(storedLatitude),
+      longitude: parseFloat(storedLongitude)
     }
   }
 
   /**
-   * Decrypt location data
-   * Note: This is a basic implementation. For production, use proper decryption libraries
+   * Check if stored location data is encrypted
    */
-  private async decryptLocationData(encryptedData: {
-    latitude: number
-    longitude: number
-  }): Promise<{ latitude: number; longitude: number }> {
-    // For now, return the original data
-    // In production, implement proper decryption using crypto libraries
-    return encryptedData
+  isLocationEncrypted(storedLongitude: string): boolean {
+    return storedLongitude === 'ENCRYPTED_V1' || storedLongitude.startsWith('ENCRYPTED_V')
   }
 }
 

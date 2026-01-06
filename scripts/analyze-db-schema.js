@@ -70,19 +70,65 @@ async function analyzeSchema() {
                 columnsRes = await client.query(attQuery, [table]);
             }
 
-            schema[table] = columnsRes.rows.map(col => ({
-                name: col.column_name,
-                type: col.data_type,
-                nullable: col.is_nullable === 'YES',
-                default: col.column_default
-            }));
+            // Get foreign keys
+            const fkQuery = `
+                SELECT
+                    tc.constraint_name,
+                    kcu.column_name, 
+                    ccu.table_name AS foreign_table_name,
+                    ccu.column_name AS foreign_column_name,
+                    rc.delete_rule as on_delete
+                FROM 
+                    information_schema.table_constraints AS tc 
+                    JOIN information_schema.key_column_usage AS kcu
+                      ON tc.constraint_name = kcu.constraint_name
+                      AND tc.table_schema = kcu.table_schema
+                    JOIN information_schema.constraint_column_usage AS ccu
+                      ON ccu.constraint_name = tc.constraint_name
+                      AND ccu.table_schema = tc.table_schema
+                    JOIN information_schema.referential_constraints AS rc
+                      ON rc.constraint_name = tc.constraint_name
+                      AND rc.constraint_schema = tc.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name=$1;
+            `;
+            const fkRes = await client.query(fkQuery, [table]);
+
+            // Get indexes
+            const indexQuery = `
+                SELECT
+                    t.relname as table_name,
+                    i.relname as index_name,
+                    a.attname as column_name
+                FROM
+                    pg_class t,
+                    pg_class i,
+                    pg_index ix,
+                    pg_attribute a
+                WHERE
+                    t.oid = ix.indrelid
+                    AND i.oid = ix.indexrelid
+                    AND a.attrelid = t.oid
+                    AND a.attnum = ANY(ix.indkey)
+                    AND t.relkind = 'r'
+                    AND t.relname = $1;
+            `;
+            const indexRes = await client.query(indexQuery, [table]);
+
+            schema[table] = {
+                columns: columnsRes.rows.map(col => ({
+                    name: col.column_name,
+                    type: col.data_type,
+                    nullable: col.is_nullable === 'YES',
+                    default: col.column_default
+                })),
+                foreignKeys: fkRes.rows,
+                indexes: indexRes.rows.map(idx => idx.index_name)
+            };
         }
 
-        console.log(JSON.stringify(schema, null, 2));
-
         // Save to file
-        fs.writeFileSync(path.resolve(__dirname, '../neon-schema.json'), JSON.stringify(schema, null, 2));
-        console.log('Schema saved to neon-schema.json');
+        fs.writeFileSync(path.resolve(__dirname, '../neon-schema-detailed.json'), JSON.stringify(schema, null, 2));
+        console.log('Detailed schema saved to neon-schema-detailed.json');
 
     } catch (err) {
         console.error('Error analyzing schema:', err);

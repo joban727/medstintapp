@@ -66,12 +66,12 @@ interface QueryMetrics {
 
 interface AlertEvent {
   type:
-  | "high_utilization"
-  | "long_wait_time"
-  | "high_error_rate"
-  | "slow_query"
-  | "connection_leak"
-  | "neon_termination"
+    | "high_utilization"
+    | "long_wait_time"
+    | "high_error_rate"
+    | "slow_query"
+    | "connection_leak"
+    | "neon_termination"
   severity: "warning" | "critical"
   message: string
   timestamp: Date

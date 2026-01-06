@@ -10,10 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, Send, AlertCircle, X, Mail, Plus } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { GlassCard } from "@/components/ui/glass-card"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
@@ -141,7 +140,7 @@ export function StudentInviteForm({
   }
 
   return (
-    <GlassCard className="w-full max-w-4xl mx-auto">
+    <Card className="w-full max-w-4xl mx-auto rounded-xl border border-white/10 bg-white/5 backdrop-blur-md shadow-sm">
       <CardHeader>
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10 text-primary">
@@ -167,7 +166,10 @@ export function StudentInviteForm({
                 setSelectedCohort("")
               }}
             >
-              <SelectTrigger id="program" className="bg-muted/50 dark:bg-white/5 border-border dark:border-white/10">
+              <SelectTrigger
+                id="program"
+                className="bg-muted/50 dark:bg-white/5 border-border dark:border-white/10"
+              >
                 <SelectValue placeholder="Select a program" />
               </SelectTrigger>
               <SelectContent>
@@ -187,7 +189,10 @@ export function StudentInviteForm({
                 onValueChange={setSelectedCohort}
                 disabled={!selectedProgram}
               >
-                <SelectTrigger id="cohort" className="bg-muted/50 dark:bg-white/5 border-border dark:border-white/10 flex-1">
+                <SelectTrigger
+                  id="cohort"
+                  className="bg-muted/50 dark:bg-white/5 border-border dark:border-white/10 flex-1"
+                >
                   <SelectValue placeholder="Select a cohort" />
                 </SelectTrigger>
                 <SelectContent>
@@ -282,7 +287,11 @@ export function StudentInviteForm({
         )}
 
         <div className="flex justify-end gap-3 pt-4 border-t border-border dark:border-white/10">
-          <Button variant="ghost" onClick={onSkip} className="hover:bg-muted/50 dark:hover:bg-white/5">
+          <Button
+            variant="ghost"
+            onClick={onSkip}
+            className="hover:bg-muted/50 dark:hover:bg-white/5"
+          >
             Skip for now
           </Button>
           <Button
@@ -304,6 +313,6 @@ export function StudentInviteForm({
           </Button>
         </div>
       </CardContent>
-    </GlassCard>
+    </Card>
   )
 }

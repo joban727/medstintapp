@@ -6,6 +6,7 @@ import { programs, schools } from "../../../database/schema"
 import { getCurrentUser } from "../../../lib/auth-clerk"
 import { cacheIntegrationService } from "@/lib/cache-integration"
 import type { UserRole } from "@/types"
+import { withCSRF } from "@/lib/csrf-middleware"
 import {
   createSuccessResponse,
   createErrorResponse,
@@ -136,8 +137,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST endpoint for creating new schools (admin only)
-export async function POST(request: NextRequest) {
+// POST endpoint for creating new schools (admin only) - CSRF protected
+export const POST = withCSRF(async (request: NextRequest) => {
   return withErrorHandlingAsync(async () => {
     // Only super admins can create schools
     const user = await getCurrentUser()
@@ -174,7 +175,11 @@ export async function POST(request: NextRequest) {
         console.warn("Cache invalidation failed:", cacheError)
       }
 
-      return createSuccessResponse({ school: (newSchool as typeof schools.$inferSelect[])[0] }, undefined, HTTP_STATUS.CREATED)
+      return createSuccessResponse(
+        { school: (newSchool as (typeof schools.$inferSelect)[])[0] },
+        undefined,
+        HTTP_STATUS.CREATED
+      )
     } catch (error: any) {
       if (error.code === "23505") {
         // Unique constraint violation
@@ -183,5 +188,4 @@ export async function POST(request: NextRequest) {
       throw error
     }
   })
-}
-
+})

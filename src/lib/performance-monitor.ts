@@ -116,11 +116,14 @@ export class CircuitBreaker {
 
     if (this.shouldOpenCircuit()) {
       this.state = CircuitBreakerState.OPEN
-      logger.error({
-        failureCount: this.failureCount,
-        requestCount: this.requestCount,
-        errorRate: this.getErrorRate(),
-      }, `Circuit breaker ${this.name} moved to OPEN state`)
+      logger.error(
+        {
+          failureCount: this.failureCount,
+          requestCount: this.requestCount,
+          errorRate: this.getErrorRate(),
+        },
+        `Circuit breaker ${this.name} moved to OPEN state`
+      )
     }
   }
 
@@ -501,14 +504,17 @@ export class PerformanceMonitor {
     }
 
     if (alerts.length > 0) {
-      logger.warn({
-        alerts: JSON.stringify(alerts),
-        metrics: JSON.stringify({
-          responseTime: metrics.averageResponseTime,
-          errorRate: metrics.errorRate,
-          throughput: metrics.throughput,
-        }),
-      }, `Performance alerts for operation ${operation}`)
+      logger.warn(
+        {
+          alerts: JSON.stringify(alerts),
+          metrics: JSON.stringify({
+            responseTime: metrics.averageResponseTime,
+            errorRate: metrics.errorRate,
+            throughput: metrics.throughput,
+          }),
+        },
+        `Performance alerts for operation ${operation}`
+      )
     }
   }
 

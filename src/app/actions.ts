@@ -208,5 +208,3 @@ export async function getAccessibleSchools() {
     }
   })
 }
-
-

@@ -4,7 +4,6 @@
 
 // Error types and interfaces
 
-
 export interface ValidationResult {
   isValid: boolean
   errors: string[]

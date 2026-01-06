@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 import { Button } from "../../../components/ui/button"
+import { cancelSubscription } from "../../../lib/payments/actions"
 
 export default function CancelSubscription() {
   const router = useRouter()
@@ -14,11 +15,11 @@ export default function CancelSubscription() {
       setIsPending(true)
       const loadingToast = toast.loading("Canceling subscription...")
 
-      // TODO: Implement subscription cancellation with your payment provider
-      // This would typically involve calling your API endpoint
-      await fetch("/api/billing/cancel-subscription", {
-        method: "POST",
-      })
+      const result = await cancelSubscription()
+
+      if (!result.status) {
+        throw new Error(result.message)
+      }
 
       toast.dismiss(loadingToast)
       toast.success("Subscription canceled successfully")

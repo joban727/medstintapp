@@ -1,9 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/database/connection-pool"
-import { facilityManagement, schools, users, clinicalSites, clinicalSiteLocations } from "@/database/schema"
+import {
+  facilityManagement,
+  schools,
+  users,
+  clinicalSites,
+  clinicalSiteLocations,
+} from "@/database/schema"
 import { getSchoolContext } from "@/lib/school-utils"
 import { eq, and, desc, sql } from "drizzle-orm"
 import { z } from "zod"
+import { withCSRF } from "@/lib/csrf-middleware"
+import { logger } from "@/lib/logger"
 
 // Request validation schemas
 const facilityManagementSchema = z.object({
@@ -27,8 +35,14 @@ const facilityManagementSchema = z.object({
   isCustom: z.boolean().optional().default(false),
   osmId: z.string().optional(),
   priority: z.number().min(0).max(100).optional().default(0),
-  contactInfo: z.record(z.string(), z.any()).optional().default({}),
-  operatingHours: z.record(z.string(), z.any()).optional().default({}),
+  contactInfo: z
+    .record(z.string(), z.union([z.string(), z.null()]))
+    .optional()
+    .default({}),
+  operatingHours: z
+    .record(z.string(), z.union([z.string(), z.null()]))
+    .optional()
+    .default({}),
   specialties: z.array(z.string()).optional().default([]),
   notes: z.string().optional(),
   clinicalSiteId: z.string().optional(),
@@ -68,7 +82,20 @@ export async function GET(request: NextRequest) {
     }
 
     if (facilityType) {
-      conditions.push(eq(facilityManagement.facilityType, facilityType as "hospital" | "clinic" | "nursing_home" | "outpatient" | "emergency" | "pharmacy" | "laboratory" | "other"))
+      conditions.push(
+        eq(
+          facilityManagement.facilityType,
+          facilityType as
+            | "hospital"
+            | "clinic"
+            | "nursing_home"
+            | "outpatient"
+            | "emergency"
+            | "pharmacy"
+            | "laboratory"
+            | "other"
+        )
+      )
     }
 
     // Get facilities
@@ -126,7 +153,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/facility-management - Create new managed facility
-export async function POST(request: NextRequest) {
+export const POST = withCSRF(async (request: NextRequest) => {
   try {
     // Try to get school context, but handle authentication errors gracefully
     let context
@@ -146,6 +173,7 @@ export async function POST(request: NextRequest) {
 
     // Require a school context for facility creation
     if (!schoolId) {
+      console.log("Error: User must be associated with a school")
       return NextResponse.json({ error: "User must be associated with a school" }, { status: 400 })
     }
 
@@ -157,6 +185,7 @@ export async function POST(request: NextRequest) {
       .limit(1)
 
     if (!school) {
+      console.log("Error: Associated school not found")
       return NextResponse.json({ error: "Associated school not found" }, { status: 400 })
     }
 
@@ -171,21 +200,26 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json()
     } catch (parseErr) {
-      console.error("Invalid JSON in request body:", parseErr)
+      console.log("Invalid JSON in request body:", parseErr)
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
     }
 
     // Normalize potential coordinate wrapper to latitude/longitude
-    const raw = body as any
+    const raw = body as Record<string, unknown>
     const normalizedBody =
       raw && raw.coordinates
-        ? { ...raw, latitude: raw.coordinates.latitude, longitude: raw.coordinates.longitude }
+        ? {
+            ...raw,
+            latitude: (raw.coordinates as Record<string, number>).latitude,
+            longitude: (raw.coordinates as Record<string, number>).longitude,
+          }
         : raw
 
     // Simple validation
     const validationResult = facilityManagementSchema.safeParse(normalizedBody)
 
     if (!validationResult.success) {
+      console.log("Validation error:", JSON.stringify(validationResult.error.issues, null, 2))
       return NextResponse.json(
         { error: "Invalid request body", details: validationResult.error.issues },
         { status: 400 }
@@ -193,6 +227,7 @@ export async function POST(request: NextRequest) {
     }
 
     const facilityData = validationResult.data
+    console.error("Facility Data (stderr):", JSON.stringify(facilityData, null, 2))
 
     // Validate clinical site if provided
     if (facilityData.clinicalSiteId) {
@@ -203,18 +238,20 @@ export async function POST(request: NextRequest) {
         .limit(1)
 
       if (!site) {
+        console.log("Error: Selected clinical site not found")
         return NextResponse.json({ error: "Selected clinical site not found" }, { status: 400 })
       }
     }
     // Create new facility
     const sanitizedValues = {
       schoolId: schoolId,
-      createdBy: creator ? userId : undefined,
+      createdBy: userId,
+      updatedBy: userId,
       facilityName: facilityData.facilityName,
       facilityType: facilityData.facilityType,
       address: facilityData.address,
-      latitude: facilityData.latitude.toFixed(8),
-      longitude: facilityData.longitude.toFixed(8),
+      latitude: facilityData.latitude.toString(),
+      longitude: facilityData.longitude.toString(),
       geofenceRadius: facilityData.geofenceRadius,
       strictGeofence: facilityData.strictGeofence,
       isActive: facilityData.isActive ?? true,
@@ -242,17 +279,40 @@ export async function POST(request: NextRequest) {
       const [created] = await tx.insert(facilityManagement).values(sanitizedValues).returning()
 
       // Sync to clinical site location if linked
-      if (sanitizedValues.clinicalSiteId) {
+      if (sanitizedValues.clinicalSiteId && sanitizedValues.strictGeofence) {
         // Find primary location or just update all locations for this site?
         // For now, let's update all locations for this site to match the facility settings
         // This assumes 1:1 or 1:many where all share the same policy
-        await tx
-          .update(clinicalSiteLocations)
-          .set({
-            radius: sanitizedValues.geofenceRadius,
-            strictGeofence: sanitizedValues.strictGeofence,
-          })
+
+        // Check if location exists
+        const [existingLocation] = await tx
+          .select()
+          .from(clinicalSiteLocations)
           .where(eq(clinicalSiteLocations.clinicalSiteId, sanitizedValues.clinicalSiteId))
+          .limit(1)
+
+        if (!existingLocation) {
+          logger.info(
+            { facilityId: sanitizedValues.facilityName },
+            "Creating new location for facility"
+          )
+          await tx.insert(clinicalSiteLocations).values({
+            clinicalSiteId: sanitizedValues.clinicalSiteId,
+            name: sanitizedValues.facilityName, // Use facility name as location name
+            latitude: sanitizedValues.latitude,
+            longitude: sanitizedValues.longitude,
+            radius: sanitizedValues.geofenceRadius,
+            strictGeofence: true,
+          })
+        } else {
+          await tx
+            .update(clinicalSiteLocations)
+            .set({
+              radius: sanitizedValues.geofenceRadius,
+              strictGeofence: sanitizedValues.strictGeofence,
+            })
+            .where(eq(clinicalSiteLocations.clinicalSiteId, sanitizedValues.clinicalSiteId))
+        }
       }
 
       return created
@@ -287,9 +347,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Facility management POST error:", error)
-    console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace")
-    console.error("Error message:", error instanceof Error ? error.message : String(error))
+    logger.error({ error }, "Facility management POST error")
 
     const isDevelopment = process.env.NODE_ENV === "development"
     const isTransactionError = error instanceof Error && /transaction/i.test(error.message)
@@ -301,17 +359,17 @@ export async function POST(request: NextRequest) {
         // Only include verbose details for non-transaction errors in development
         ...(isDevelopment &&
           !isTransactionError && {
-          details: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        }),
+            details: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          }),
       },
       { status: 500 }
     )
   }
-}
+})
 
 // PUT /api/facility-management/[id] - Update managed facility
-export async function PUT(request: NextRequest) {
+export const PUT = withCSRF(async (request: NextRequest) => {
   try {
     // Get school context
     const context = await getSchoolContext()
@@ -418,13 +476,13 @@ export async function PUT(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Facility management PUT error:", error)
+    logger.error({ error }, "Facility management PUT error")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
+})
 
 // DELETE /api/facility-management/[id] - Delete managed facility
-export async function DELETE(request: NextRequest) {
+export const DELETE = withCSRF(async (request: NextRequest) => {
   try {
     // Get school context
     const context = await getSchoolContext()
@@ -465,8 +523,7 @@ export async function DELETE(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Facility management DELETE error:", error)
+    logger.error({ error }, "Facility management DELETE error")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
-
+})

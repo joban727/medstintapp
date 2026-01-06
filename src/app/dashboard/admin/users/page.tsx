@@ -1,55 +1,9 @@
-import { Edit, MoreHorizontal, Search, Trash2, UserPlus } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "../../../../components/ui/avatar"
-import { Badge } from "../../../../components/ui/badge"
-import { Button } from "../../../../components/ui/button"
+import { UserPlus, Users, GraduationCap, Stethoscope, Activity, Shield } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { StatCard } from "@/components/ui/stat-card"
+import { UsersTableClient } from "@/components/users/users-table-client"
+import { requireAnyRole } from "@/lib/auth-clerk"
 import type { UserRole } from "@/types"
-
-// Role validation utilities
-const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
-  return allowedRoles.includes(userRole)
-}
-
-const isAdmin = (userRole: UserRole): boolean => {
-  return hasRole(userRole, ["ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
-}
-
-const isSchoolAdmin = (userRole: UserRole): boolean => {
-  return hasRole(userRole, [
-    "SCHOOL_ADMIN" as UserRole,
-    "ADMIN" as UserRole,
-    "SUPER_ADMIN" as UserRole,
-  ])
-}
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../../../../components/ui/card"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../../../../components/ui/dropdown-menu"
-import { Input } from "../../../../components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../../../components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../../../components/ui/table"
-import { requireAnyRole } from "../../../../lib/auth-clerk"
 
 export default async function UsersManagementPage() {
   const _user = await requireAnyRole(["SUPER_ADMIN"], "/dashboard")
@@ -59,31 +13,24 @@ export default async function UsersManagementPage() {
   const allUsers = await getAllUsers()
   const accessibleSchools = await getAccessibleSchools()
 
-  const roleColors = {
-    SUPER_ADMIN: "bg-purple-100 text-purple-800",
-    SCHOOL_ADMIN: "bg-blue-100 text-blue-800",
-    CLINICAL_PRECEPTOR: "bg-green-100 text-green-800",
-    CLINICAL_SUPERVISOR: "bg-orange-100 text-orange-800",
-    STUDENT: "bg-gray-100 text-gray-800",
-  }
-
-  const roleDisplayNames = {
-    SUPER_ADMIN: "Super Admin",
-    SCHOOL_ADMIN: "School Admin",
-    CLINICAL_PRECEPTOR: "Clinical Preceptor",
-    CLINICAL_SUPERVISOR: "Clinical Supervisor",
-    STUDENT: "Student",
-  }
+  // Calculate stats
+  const totalUsers = allUsers.length
+  const students = allUsers.filter((u) => u.role === ("STUDENT" as UserRole)).length
+  const preceptors = allUsers.filter((u) => u.role === ("CLINICAL_PRECEPTOR" as UserRole)).length
+  const supervisors = allUsers.filter((u) => u.role === ("CLINICAL_SUPERVISOR" as UserRole)).length
+  const admins = allUsers.filter(
+    (u) => u.role === ("SCHOOL_ADMIN" as UserRole) || u.role === ("SUPER_ADMIN" as UserRole)
+  ).length
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-bold text-3xl tracking-tight">User Management</h1>
-          <p className="text-muted-foreground">Manage all users across the platform</p>
+          <h1 className="font-bold text-3xl tracking-tight text-white">User Management</h1>
+          <p className="text-[var(--text-secondary)]">Manage all users across the platform</p>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-blue-600 hover:bg-blue-700 text-white border-none">
           <UserPlus className="mr-2 h-4 w-4" />
           Add User
         </Button>
@@ -91,171 +38,24 @@ export default async function UsersManagementPage() {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Total Users</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">{allUsers.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Students</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">
-              {allUsers.filter((u) => u.role === ("STUDENT" as UserRole)).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Preceptors</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">
-              {allUsers.filter((u) => u.role === ("CLINICAL_PRECEPTOR" as UserRole)).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Supervisors</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">
-              {allUsers.filter((u) => u.role === ("CLINICAL_SUPERVISOR" as UserRole)).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="font-medium text-sm">Admins</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="font-bold text-2xl">
-              {
-                allUsers.filter(
-                  (u) =>
-                    u.role === ("SCHOOL_ADMIN" as UserRole) ||
-                    u.role === ("SUPER_ADMIN" as UserRole)
-                ).length
-              }
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Total Users"
+          value={totalUsers}
+          trend={{ value: 12, label: "vs last month" }}
+          icon={<Users className="h-5 w-5" />}
+        />
+        <StatCard title="Students" value={students} icon={<GraduationCap className="h-5 w-5" />} />
+        <StatCard
+          title="Preceptors"
+          value={preceptors}
+          icon={<Stethoscope className="h-5 w-5" />}
+        />
+        <StatCard title="Supervisors" value={supervisors} icon={<Activity className="h-5 w-5" />} />
+        <StatCard title="Admins" value={admins} icon={<Shield className="h-5 w-5" />} />
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute top-2.5 left-2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search users..." className="pl-8" />
-              </div>
-            </div>
-            <Select>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
-                <SelectItem value="SCHOOL_ADMIN">School Admin</SelectItem>
-                <SelectItem value="CLINICAL_PRECEPTOR">Clinical Preceptor</SelectItem>
-                <SelectItem value="CLINICAL_SUPERVISOR">Clinical Supervisor</SelectItem>
-                <SelectItem value="STUDENT">Student</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by school" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Schools</SelectItem>
-                {accessibleSchools.map((school) => (
-                  <SelectItem key={school.id} value={school.id}>
-                    {school.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Users Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Users</CardTitle>
-          <CardDescription>Manage user accounts and permissions</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>School</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {allUsers.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <div className="flex items-center space-x-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={`https://avatar.vercel.sh/${user.email}`} />
-                        <AvatarFallback>
-                          {user.name?.charAt(0)?.toUpperCase() || "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="font-medium">{user.name}</div>
-                        <div className="text-muted-foreground text-sm">{user.email}</div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={roleColors[user.role as keyof typeof roleColors]}>
-                      {roleDisplayNames[user.role as keyof typeof roleDisplayNames]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{user.schoolName || "No School"}</TableCell>
-                  <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Edit className="mr-2 h-4 w-4" />
-                          Edit User
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600">
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete User
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* Users Table Client Component */}
+      <UsersTableClient initialUsers={allUsers} accessibleSchools={accessibleSchools} />
     </div>
   )
 }

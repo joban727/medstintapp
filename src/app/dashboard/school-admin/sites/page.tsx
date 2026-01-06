@@ -219,7 +219,7 @@ export default async function ClinicalSitesPage() {
       />
 
       {/* Sites Management */}
-      <Card className="glass-card overflow-hidden">
+      <Card className="overflow-hidden bg-white/5 backdrop-blur-md border-white/10 rounded-xl border">
         <CardHeader>
           <CardTitle>Clinical Sites Directory</CardTitle>
           <CardDescription>Manage your clinical rotation sites and partnerships</CardDescription>

@@ -20,11 +20,14 @@ import {
   CalendarDays,
   Sparkles,
   ArrowRight,
+  Loader2,
 } from "lucide-react"
+import { logger } from "@/lib/client-logger"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { useFieldIds } from "../../hooks/use-unique-id"
+import { SubscriptionStep } from "./subscription-step"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../ui/card"
@@ -56,6 +59,7 @@ type Step =
   | "program-selection"
   | "cohort-selection"
   | "enrollment-confirmation"
+  | "subscription"
   | "complete"
 
 interface SchoolInfo {
@@ -149,6 +153,7 @@ export default function StudentOnboarding({
     "program-selection": { title: "Program", description: "Academic Program", progress: 55 },
     "cohort-selection": { title: "Cohort", description: "Your Class", progress: 70 },
     "enrollment-confirmation": { title: "Review", description: "Confirm Details", progress: 85 },
+    subscription: { title: "Subscription", description: "Payment", progress: 95 },
     complete: { title: "Complete", description: "You're Done!", progress: 100 },
   }
 
@@ -187,11 +192,14 @@ export default function StudentOnboarding({
             throw new Error("Invalid response format")
           })
           message = data?.error || data?.message || data?.details || message
-        } catch {
+        } catch (e) {
+          logger.error(e, "Failed to parse error response")
           try {
             const text = await response.text()
             if (text) message = text
-          } catch { }
+          } catch (e) {
+            logger.error(e, "Failed to read error text")
+          }
         }
         throw new Error(message)
       }
@@ -278,9 +286,13 @@ export default function StudentOnboarding({
               role: "STUDENT",
             })
 
-            setCurrentStep("complete")
+            setCurrentStep("subscription")
             break
           }
+
+          case "subscription":
+            setCurrentStep("complete")
+            break
 
           case "complete": {
             const token = await getToken()
@@ -297,11 +309,14 @@ export default function StudentOnboarding({
               try {
                 const data = await completeResponse.json()
                 message = data?.error || data?.message || message
-              } catch {
+              } catch (e) {
+                logger.error(e, "Failed to parse completion error")
                 try {
                   const text = await completeResponse.text()
                   if (text) message = text
-                } catch { }
+                } catch (e) {
+                  logger.error(e, "Failed to read completion error text")
+                }
               }
               toast.error(message)
               return
@@ -311,12 +326,14 @@ export default function StudentOnboarding({
             try {
               router.push("/dashboard")
               router.refresh()
-            } catch { }
+            } catch (e) {
+              logger.error(e, "Failed to redirect after onboarding")
+            }
             break
           }
         }
-      } catch (_error) {
-        // Onboarding error
+      } catch (error) {
+        logger.error(error, "Onboarding error")
       }
     })
   }
@@ -338,8 +355,14 @@ export default function StudentOnboarding({
       case "cohort-selection":
         setCurrentStep("program-selection")
         break
+      case "cohort-selection":
+        setCurrentStep("program-selection")
+        break
       case "enrollment-confirmation":
         setCurrentStep("cohort-selection")
+        break
+      case "subscription":
+        setCurrentStep("enrollment-confirmation")
         break
     }
   }
@@ -526,9 +549,7 @@ export default function StudentOnboarding({
                     <School className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h4 className="font-semibold text-foreground">
-                      Pre-assigned School
-                    </h4>
+                    <h4 className="font-semibold text-foreground">Pre-assigned School</h4>
                     <p className="text-muted-foreground">
                       You have been assigned to <strong>{selectedSchool.name}</strong>
                     </p>
@@ -636,9 +657,7 @@ export default function StudentOnboarding({
                     <GraduationCap className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h4 className="font-semibold text-foreground">
-                      Pre-assigned Program
-                    </h4>
+                    <h4 className="font-semibold text-foreground">Pre-assigned Program</h4>
                     <p className="text-muted-foreground">
                       You have been assigned to <strong>{selectedProgram.name}</strong>
                     </p>
@@ -731,9 +750,7 @@ export default function StudentOnboarding({
                     <CalendarDays className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h4 className="font-semibold text-foreground">
-                      Pre-assigned Cohort
-                    </h4>
+                    <h4 className="font-semibold text-foreground">Pre-assigned Cohort</h4>
                     <p className="text-muted-foreground">
                       You have been assigned to <strong>{selectedCohort.name}</strong>
                     </p>
@@ -789,11 +806,7 @@ export default function StudentOnboarding({
                             </span>
                           )}
                           <span className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-md">
-                            <Calendar className="h-3 w-3" />
-                            {new Date(cohort.startDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })} - {new Date(cohort.endDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
-                          </span>
-                          <span className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-md">
-                            <User className="h-3 w-3" /> {cohort.capacity} capacity
+                            <User className="h-3 w-3" /> {cohort.capacity} Seats
                           </span>
                         </div>
                       </div>
@@ -820,127 +833,100 @@ export default function StudentOnboarding({
             className="space-y-6"
           >
             <div className="space-y-1">
-              <h3 className="text-2xl font-semibold tracking-tight">Confirm Enrollment</h3>
-              <p className="text-muted-foreground">Please review your details before finishing.</p>
+              <h3 className="text-2xl font-semibold tracking-tight">Review & Confirm</h3>
+              <p className="text-muted-foreground">
+                Please review your information before proceeding.
+              </p>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6">
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-medium flex items-center gap-2">
-                    <User className="h-4 w-4 text-primary" /> Personal Details
-                  </CardTitle>
+                <CardHeader>
+                  <CardTitle>Personal Information</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="grid grid-cols-[100px_1fr] gap-1">
-                    <span className="text-muted-foreground">Name:</span>
-                    <span className="font-medium">{personalData.name}</span>
+                <CardContent className="grid gap-4 text-sm">
+                  <div className="grid grid-cols-2 gap-1">
+                    <span className="text-muted-foreground">Full Name:</span>
+                    <span className="font-medium text-right">{personalData.name}</span>
                   </div>
-                  <div className="grid grid-cols-[100px_1fr] gap-1">
+                  <div className="grid grid-cols-2 gap-1">
                     <span className="text-muted-foreground">Email:</span>
-                    <span className="font-medium">{personalData.email}</span>
+                    <span className="font-medium text-right">{personalData.email}</span>
                   </div>
-                  {personalData.phone && (
-                    <div className="grid grid-cols-[100px_1fr] gap-1">
-                      <span className="text-muted-foreground">Phone:</span>
-                      <span className="font-medium">{personalData.phone}</span>
-                    </div>
-                  )}
-                  {personalData.studentId && (
-                    <div className="grid grid-cols-[100px_1fr] gap-1">
-                      <span className="text-muted-foreground">Student ID:</span>
-                      <span className="font-medium">{personalData.studentId}</span>
-                    </div>
-                  )}
+                  <div className="grid grid-cols-2 gap-1">
+                    <span className="text-muted-foreground">Phone:</span>
+                    <span className="font-medium text-right">{personalData.phone}</span>
+                  </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-medium flex items-center gap-2">
-                    <GraduationCap className="h-4 w-4 text-primary" /> Academic Info
-                  </CardTitle>
+                <CardHeader>
+                  <CardTitle>Academic Information</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="grid grid-cols-[100px_1fr] gap-1">
+                <CardContent className="grid gap-4 text-sm">
+                  <div className="grid grid-cols-2 gap-1">
                     <span className="text-muted-foreground">School:</span>
-                    <span className="font-medium">{selectedSchool?.name}</span>
+                    <span className="font-medium text-right">{selectedSchool?.name}</span>
                   </div>
-                  <div className="grid grid-cols-[100px_1fr] gap-1">
+                  <div className="grid grid-cols-2 gap-1">
                     <span className="text-muted-foreground">Program:</span>
-                    <span className="font-medium">{selectedProgram?.name}</span>
+                    <span className="font-medium text-right">{selectedProgram?.name}</span>
                   </div>
-                  <div className="grid grid-cols-[100px_1fr] gap-1">
+                  <div className="grid grid-cols-2 gap-1">
                     <span className="text-muted-foreground">Cohort:</span>
-                    <span className="font-medium">{selectedCohort?.name}</span>
+                    <span className="font-medium text-right">{selectedCohort?.name}</span>
                   </div>
-                  {selectedCohort?.graduationYear && (
-                    <div className="grid grid-cols-[100px_1fr] gap-1">
-                      <span className="text-muted-foreground">Graduating:</span>
-                      <span className="font-medium">{selectedCohort.graduationYear}</span>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
-            </div>
 
-            <div className="space-y-3 pt-2">
-              <Label htmlFor={fieldIds.enrollmentDate} className="text-base font-medium">
-                When did you start?
-              </Label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <div className="space-y-2">
+                <Label htmlFor={fieldIds.enrollmentDate} className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-primary" /> Enrollment Date
+                </Label>
                 <Input
                   id={fieldIds.enrollmentDate}
                   type="date"
                   value={enrollmentDate}
                   onChange={(e) => setEnrollmentDate(e.target.value)}
-                  className="pl-10 h-12"
-                  min={
-                    new Date(new Date().setFullYear(new Date().getFullYear() - 5))
-                      .toISOString()
-                      .split("T")[0]
-                  }
+                  className="h-12"
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                This helps us track your progress accurately.
-              </p>
             </div>
           </motion.div>
+        )
+
+      case "subscription":
+        if (!selectedSchool || !user) return null
+        return (
+          <SubscriptionStep
+            schoolId={selectedSchool.id}
+            studentId={user.id}
+            onComplete={() => handleNext()}
+            onBack={handleBack}
+          />
         )
 
       case "complete":
         return (
           <motion.div
             key="complete"
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center text-center space-y-8 py-12"
+            className="flex flex-col items-center text-center space-y-6 py-12"
           >
-            <div className="relative">
-              <div className="absolute -inset-4 rounded-full bg-green-500 opacity-20 blur-xl animate-pulse"></div>
-              <div className="relative rounded-full bg-green-100 p-8 dark:bg-green-900/30">
-                <CheckCircle className="h-20 w-20 text-green-600 dark:text-green-400" />
-              </div>
+            <div className="h-24 w-24 rounded-full bg-green-100 flex items-center justify-center">
+              <CheckCircle className="h-12 w-12 text-green-600" />
             </div>
-            <div className="space-y-4 max-w-md">
-              <h3 className="text-4xl font-bold tracking-tight">You're All Set!</h3>
-              <p className="text-muted-foreground text-lg">
-                Welcome to {selectedSchool?.name}. Your dashboard is ready and waiting for you.
+            <div className="space-y-2">
+              <h3 className="text-2xl font-bold">Registration Complete!</h3>
+              <p className="text-muted-foreground max-w-md">
+                You have successfully registered. You will now be redirected to your dashboard.
               </p>
             </div>
-            <Card className="w-full max-w-md bg-muted/50 border-dashed">
-              <CardContent className="p-6 text-base text-muted-foreground">
-                You can now log clinical hours, view your rotation schedule, and track your
-                competencies.
-              </CardContent>
-            </Card>
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </motion.div>
         )
-
-      default:
-        return null
     }
   }
 

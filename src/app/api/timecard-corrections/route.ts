@@ -27,9 +27,21 @@ const createCorrectionSchema = z.object({
     "DATE",
     "MULTIPLE",
   ]),
-  requestedChanges: z.record(z.string(), z.any()).refine((data) => Object.keys(data).length > 0, {
-    message: "At least one change must be requested",
-  }),
+  requestedChanges: z
+    .record(
+      z.string(),
+      z.union([
+        z.string(),
+        z.number(),
+        z.boolean(),
+        z.null(),
+        z.date(),
+        z.record(z.string(), z.unknown()), // Allow nested objects
+      ])
+    )
+    .refine((data) => Object.keys(data).length > 0, {
+      message: "At least one change must be requested",
+    }),
   reason: z.string().min(10, "Reason must be at least 10 characters"),
   studentNotes: z.string().optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
@@ -83,7 +95,10 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     })
 
     if (!authResult.success) {
-      return createErrorResponse(authResult.error || ERROR_MESSAGES.UNAUTHORIZED, authResult.status || HTTP_STATUS.UNAUTHORIZED)
+      return createErrorResponse(
+        authResult.error || ERROR_MESSAGES.UNAUTHORIZED,
+        authResult.status || HTTP_STATUS.UNAUTHORIZED
+      )
     }
 
     const { user } = authResult
@@ -131,8 +146,11 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
           pagination: { page, limit, total: 0, totalPages: 0 },
         })
       }
-    } else if (user?.role === ("SCHOOL_ADMIN" as UserRole)) {
-      // School admins can see all corrections for their school
+    } else if (
+      user?.role === ("CLINICAL_SUPERVISOR" as UserRole) ||
+      user?.role === ("SCHOOL_ADMIN" as UserRole)
+    ) {
+      // School admins and clinical supervisors can see all corrections for their school
       if (user?.schoolId) {
         const schoolStudents = await db
           .select({ id: users.id })
@@ -145,6 +163,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         }
       }
     }
+    // SUPER_ADMIN: no filter added = access to all corrections
 
     // Apply additional filters
     if (studentId) {
@@ -246,7 +265,10 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   })
 
   if (!authResult.success) {
-    return createErrorResponse(authResult.error || ERROR_MESSAGES.UNAUTHORIZED, authResult.status || HTTP_STATUS.UNAUTHORIZED)
+    return createErrorResponse(
+      authResult.error || ERROR_MESSAGES.UNAUTHORIZED,
+      authResult.status || HTTP_STATUS.UNAUTHORIZED
+    )
   }
 
   const { user } = authResult
@@ -384,4 +406,3 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     HTTP_STATUS.CREATED
   )
 })
-

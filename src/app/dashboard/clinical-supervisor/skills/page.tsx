@@ -34,7 +34,10 @@ export default async function SkillsPage() {
   // Map database results to SkillValidation interface
   const skillsValidations: SkillValidation[] = assignments.map((a) => {
     // Map database status to UI status
-    const statusMap: Record<string, "validated" | "pending" | "in_progress" | "requires_improvement"> = {
+    const statusMap: Record<
+      string,
+      "validated" | "pending" | "in_progress" | "requires_improvement"
+    > = {
       COMPLETED: "validated",
       ASSIGNED: "pending",
       IN_PROGRESS: "in_progress",
@@ -67,16 +70,16 @@ export default async function SkillsPage() {
 
   const competencyList = schoolId
     ? await db
-      .select({
-        id: competencies.id,
-        name: competencies.name,
-        category: competencies.category,
-        description: competencies.description,
-        isRequired: competencies.isRequired,
-      })
-      .from(competencies)
-      .where(eq(competencies.schoolId, schoolId))
-      .limit(50)
+        .select({
+          id: competencies.id,
+          name: competencies.name,
+          category: competencies.category,
+          description: competencies.description,
+          isRequired: competencies.isRequired,
+        })
+        .from(competencies)
+        .where(eq(competencies.schoolId, schoolId))
+        .limit(50)
     : []
 
   // Map to SkillLibraryItem interface
@@ -84,7 +87,7 @@ export default async function SkillsPage() {
     id: c.id,
     name: c.name || "Unnamed Competency",
     category: c.category || "General",
-    level: c.isRequired ? "Advanced" as const : "Intermediate" as const,
+    level: c.isRequired ? ("Advanced" as const) : ("Intermediate" as const),
     description: c.description || "No description available",
     requirements: [],
     validationMethod: "Direct observation",

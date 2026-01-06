@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { dbMock } from '@/test/mocks/stateful-db'
-import { facilityManagement, clinicalSiteLocations, clinicalSites, schools } from '@/database/schema'
+import { facilityManagement, clinicalSiteLocations, clinicalSites, schools, users } from '@/database/schema'
 import { NextRequest } from 'next/server'
 
 // Mock database
@@ -29,6 +29,11 @@ vi.mock('@/lib/auth-clerk', () => ({
     getRoleDashboardRoute: vi.fn((role: string) => `/dashboard/${role.toLowerCase()}`)
 }))
 
+// Mock CSRF middleware
+vi.mock('@/lib/csrf-middleware', () => ({
+    withCSRF: (handler: any) => handler,
+}))
+
 describe('Facility Management Workflow', () => {
     let POST: any
     let PUT: any
@@ -39,10 +44,15 @@ describe('Facility Management Workflow', () => {
         dbMock.reset()
         vi.clearAllMocks()
 
+        // Dynamically import schema to ensure we have the same instances as the route (due to resetModules)
+        const schema = await import('@/database/schema')
+
         // Register tables
-        dbMock.registerTable(facilityManagement, 'facility_management')
-        dbMock.registerTable(clinicalSiteLocations, 'clinical_site_locations')
-        dbMock.registerTable(clinicalSites, 'clinical_sites')
+        dbMock.registerTable(schema.facilityManagement, 'facility_management')
+        dbMock.registerTable(schema.clinicalSiteLocations, 'clinical_site_locations')
+        dbMock.registerTable(schema.clinicalSites, 'clinical_sites')
+        dbMock.registerTable(schema.schools, 'schools')
+        dbMock.registerTable(schema.users, 'users')
 
         // Import mocked auth-clerk
         const authClerk = await import('@/lib/auth-clerk')
@@ -56,6 +66,13 @@ describe('Facility Management Workflow', () => {
 
     it('should create a new facility with strict geofencing', async () => {
         const userId = 'admin_123'
+        const schoolId = 'school_123'
+        const clinicalSiteId = 'site_123'
+
+        // Seed DB
+        dbMock.insert(schools).values({ id: schoolId, name: 'Test School' })
+        dbMock.insert(users).values({ id: userId, role: 'SCHOOL_ADMIN', schoolId, name: 'Admin User' })
+        dbMock.insert(clinicalSites).values({ id: clinicalSiteId, schoolId, name: 'Test Site', type: 'HOSPITAL', address: '123 Main St', phone: '555-0123', email: 'site@test.com', capacity: 10 })
 
         // Mock getCurrentUser
         vi.mocked(getCurrentUserMock).mockResolvedValue({
@@ -69,16 +86,19 @@ describe('Facility Management Workflow', () => {
         })
 
         const newFacility = {
-            name: 'Test Clinic',
-            type: 'Hospital',
+            facilityName: 'Test Clinic',
+            facilityType: 'hospital',
+            clinicalSiteId: clinicalSiteId,
             address: '123 Medical Dr',
             latitude: 34.0522,
             longitude: -118.2437,
             geofenceRadius: 300,
             strictGeofence: true,
-            contactName: 'Dr. Smith',
-            contactEmail: 'smith@test.com',
-            contactPhone: '555-0199',
+            contactInfo: {
+                name: 'Dr. Smith',
+                email: 'smith@test.com',
+                phone: '555-0199'
+            },
             notes: 'Test notes'
         }
 
@@ -91,14 +111,14 @@ describe('Facility Management Workflow', () => {
         const data = await response.json()
 
         expect(response.status).toBe(200)
-        expect(data.data.name).toBe(newFacility.name)
-        expect(data.data.strictGeofence).toBe(true)
-        expect(data.data.clinicalSiteId).toBeDefined()
+        expect(data.data.facility.facilityName).toBe(newFacility.facilityName)
+        expect(data.data.facility.strictGeofence).toBe(true)
+        expect(data.data.facility.clinicalSiteId).toBeDefined()
 
         // Verify syncing to clinical_site_locations
         const siteLocations = dbMock.getAll('clinical_site_locations')
         expect(siteLocations.length).toBeGreaterThan(0)
-        const location = siteLocations.find(l => l.clinicalSiteId === data.data.clinicalSiteId)
+        const location = siteLocations.find(l => l.clinicalSiteId === data.data.facility.clinicalSiteId)
         expect(location).toBeDefined()
         expect(location.strictGeofence).toBe(true)
         expect(location.radius).toBe(300)
@@ -112,7 +132,7 @@ describe('Facility Management Workflow', () => {
 
         const initialFacility = {
             id: facilityId,
-            name: 'Old Clinic',
+            facilityName: 'Old Clinic',
             schoolId: schoolId,
             clinicalSiteId: clinicalSiteId,
             geofenceRadius: 100,
@@ -135,13 +155,13 @@ describe('Facility Management Workflow', () => {
         console.log('dbMock.insert is:', dbMock.insert)
 
         try {
-            await dbMock.insert(schools).values({ id: schoolId, name: 'Test School' })
+            dbMock.insert(schools).values({ id: schoolId, name: 'Test School' })
             console.log('Schools seeded successfully.')
         } catch (e) {
             console.error('Insert failed:', e)
         }
-        await dbMock.insert(facilityManagement).values(initialFacility)
-        await dbMock.insert(clinicalSiteLocations).values(initialLocation)
+        dbMock.insert(facilityManagement).values(initialFacility)
+        dbMock.insert(clinicalSiteLocations).values(initialLocation)
 
         // Mock getCurrentUser
         vi.mocked(getCurrentUserMock).mockResolvedValue({
@@ -156,7 +176,7 @@ describe('Facility Management Workflow', () => {
 
         const updateData = {
             id: facilityId,
-            name: 'Updated Clinic',
+            facilityName: 'Updated Clinic',
             geofenceRadius: 500,
             strictGeofence: true
         }
@@ -169,9 +189,13 @@ describe('Facility Management Workflow', () => {
         const response = await PUT(req)
         const data = await response.json()
 
+        if (response.status !== 200) {
+            console.log('Facility Management PUT Error:', JSON.stringify(data, null, 2));
+        }
+
         expect(response.status).toBe(200)
-        expect(data.data.name).toBe('Updated Clinic')
-        expect(data.data.strictGeofence).toBe(true)
+        expect(data.data.facility.facilityName).toBe('Updated Clinic')
+        expect(data.data.facility.strictGeofence).toBe(true)
 
         // Verify syncing
         const location = dbMock.getAll('clinical_site_locations').find(l => l.clinicalSiteId === clinicalSiteId)

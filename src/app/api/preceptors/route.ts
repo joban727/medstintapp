@@ -4,6 +4,7 @@ import { and, asc, eq } from "drizzle-orm"
 import { type NextRequest } from "next/server"
 import { z } from "zod"
 import { db } from "@/database/connection-pool"
+import { cacheIntegrationService } from "@/lib/cache-integration"
 import type { UserRole } from "@/types"
 import { clinicalPreceptors, users } from "@/database/schema"
 import {
@@ -23,6 +24,10 @@ const createPreceptorSchema = z.object({
   maxCapacity: z.number().min(1, "Maximum student capacity is required"),
   department: z.string().optional(),
   bio: z.string().optional(),
+  licenseNumber: z.string().min(1, "License number is required"),
+  licenseType: z.string().min(1, "License type is required"),
+  licenseState: z.string().min(2, "License state is required"),
+  licenseExpirationDate: z.string().transform((str) => new Date(str)),
 })
 
 export const POST = withErrorHandling(async (request: NextRequest) => {
@@ -91,10 +96,10 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
     await tx.insert(clinicalPreceptors).values({
       userId: newUser.id,
-      licenseNumber: "PENDING", // TODO: Add field to form
-      licenseType: "MD", // TODO: Add field to form
-      licenseState: "CA", // TODO: Add field to form
-      licenseExpirationDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)), // Default 1 year
+      licenseNumber: validatedData.licenseNumber,
+      licenseType: validatedData.licenseType,
+      licenseState: validatedData.licenseState,
+      licenseExpirationDate: validatedData.licenseExpirationDate,
       specialty: validatedData.specialty,
       yearsOfExperience: validatedData.yearsExperience,
       clinicalSiteId: validatedData.clinicalSite,
@@ -105,6 +110,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
     return newUser
   })
+
+  // Invalidate cache
+  try {
+    await cacheIntegrationService.invalidateByTags(["preceptors", "users"])
+  } catch (error) {
+    console.warn("Failed to invalidate cache:", error)
+  }
 
   return createSuccessResponse(
     {
@@ -138,7 +150,10 @@ export const GET = withErrorHandling(async (_request: NextRequest) => {
   const user = currentUser[0]
 
   // Only school admins and supervisors can view all preceptors
-  if (user.role === null || !["SCHOOL_ADMIN" as UserRole, "CLINICAL_SUPERVISOR" as UserRole].includes(user.role as UserRole)) {
+  if (
+    user.role === null ||
+    !["SCHOOL_ADMIN" as UserRole, "CLINICAL_SUPERVISOR" as UserRole].includes(user.role as UserRole)
+  ) {
     return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
   }
 
@@ -172,4 +187,3 @@ export const GET = withErrorHandling(async (_request: NextRequest) => {
 
   return createSuccessResponse({ preceptors })
 })
-

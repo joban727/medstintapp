@@ -218,7 +218,7 @@ export class CircuitBreaker {
     private readonly failureThreshold: number = 5,
     private readonly recoveryTimeout: number = 60000, // 1 minute
     private readonly successThreshold: number = 2
-  ) { }
+  ) {}
 
   async execute<T>(operation: () => Promise<T>): Promise<T> {
     if (this.state === "OPEN") {

@@ -1,19 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 50" fill="none">
-  <defs>
-    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="hsl(var(--primary))" />
-      <stop offset="50%" stop-color="#2563eb" /> <!-- blue-600 -->
-      <stop offset="100%" stop-color="#9333ea" /> <!-- purple-600 -->
-    </linearGradient>
-    <linearGradient id="fallbackGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#3b82f6" /> <!-- blue-500 -->
-      <stop offset="50%" stop-color="#2563eb" /> <!-- blue-600 -->
-      <stop offset="100%" stop-color="#9333ea" /> <!-- purple-600 -->
-    </linearGradient>
-  </defs>
-  
-  <!-- MedStint Text Logo -->
-  <text x="0" y="36" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="600" font-size="38" fill="url(#fallbackGrad)" letter-spacing="-1">
-    MedStint
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 40" fill="none">
+  <!-- MedStint Text Logo - Med in neutral, Stint in theme color -->
+  <text x="0" y="30" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="32" letter-spacing="-1">
+    <tspan fill="currentColor">Med</tspan><tspan fill="hsl(var(--primary))">Stint</tspan>
   </text>
 </svg>

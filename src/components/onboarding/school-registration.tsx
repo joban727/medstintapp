@@ -19,7 +19,6 @@ const validateEmail = (email: string): boolean => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
-
 interface SchoolRegistrationProps {
   onBack: () => void
   onComplete: (schoolData: SchoolFormData) => void

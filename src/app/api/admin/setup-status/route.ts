@@ -53,4 +53,3 @@ export const GET = withErrorHandling(async () => {
   // Fallback to original logic if cache miss
   return await executeOriginalLogic()
 })
-

@@ -13,10 +13,7 @@ const isAdmin = (userRole: UserRole): boolean => {
 }
 
 const isSchoolAdmin = (userRole: UserRole): boolean => {
-  return hasRole(userRole, [
-    "SCHOOL_ADMIN" as UserRole,
-    "SUPER_ADMIN" as UserRole,
-  ])
+  return hasRole(userRole, ["SCHOOL_ADMIN" as UserRole, "SUPER_ADMIN" as UserRole])
 }
 import {
   createSuccessResponse,
@@ -25,6 +22,7 @@ import {
   ERROR_MESSAGES,
   withErrorHandling,
 } from "../../../../lib/api-response"
+import { cacheIntegrationService } from "@/lib/cache-integration"
 import {
   accounts,
   assessments,
@@ -44,14 +42,18 @@ interface DatabaseError extends Error {
   detail?: string
 }
 
+import { generalApiLimiter } from "@/lib/rate-limiter"
+
 export const POST = withErrorHandling(async (request: NextRequest) => {
-  console.log("[API] /api/user/update - Starting request")
+  // Rate limiting check
+  const limitResult = await generalApiLimiter.checkLimit(request)
+  if (!limitResult.allowed) {
+    return createErrorResponse("Too many requests", HTTP_STATUS.TOO_MANY_REQUESTS)
+  }
 
   // Test database connection
   try {
-    console.log("[API] Testing database connection...")
-    const testResult = await db.execute(sql`SELECT 1 as test`)
-    console.log("[API] Database connection test successful:", testResult)
+    await db.execute(sql`SELECT 1 as test`)
   } catch (dbError) {
     console.error("[API] Database connection test failed:", dbError)
     return createErrorResponse(
@@ -62,7 +64,6 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   }
 
   const { userId, getToken } = await auth()
-  console.log("[API] Clerk auth:", { userId })
 
   if (!userId) {
     console.error("[API] No authenticated user found")
@@ -87,7 +88,6 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   let body: Record<string, unknown>
   try {
     body = await request.json()
-    console.log("[API] Request body:", body)
   } catch (jsonError) {
     console.error("[API] JSON parsing error:", jsonError)
     return createErrorResponse("Invalid JSON in request body", HTTP_STATUS.BAD_REQUEST)
@@ -111,14 +111,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     updatedAt: new Date(),
     ...processedUpdates,
   }
-  console.log("[API] Database updates:", dbUpdates)
 
   // Execute all database operations in a transaction for consistency
   let user: typeof users.$inferSelect
   try {
     user = await db.transaction(async (tx) => {
       // Check if user exists
-      console.log("[API] Checking if user exists with ID:", userId)
+
       const [existingUser] = await tx
         .select({
           id: users.id,
@@ -128,21 +127,20 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
         .from(users)
         .where(eq(users.id, userId))
         .limit(1)
-      console.log("[API] Existing user found:", !!existingUser)
 
       if (existingUser) {
         // Update existing user
-        console.log("[API] Updating existing user")
+
         const [updatedUser] = await tx
           .update(users)
           .set(dbUpdates)
           .where(eq(users.id, userId))
           .returning()
-        console.log("[API] User updated successfully")
+
         return updatedUser
       }
       // For new users, we need to get user info from Clerk
-      console.log("[API] Creating new user - fetching user info from Clerk")
+
       const clerkResponse = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
         headers: {
           Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
@@ -288,7 +286,6 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
               await tx.delete(users).where(eq(users.id, oldId))
             })
             linkedExisting = true
-            console.log("[API] Successfully migrated existing DB user to current Clerk user id")
           } catch (linkErr) {
             console.error(
               "[API] Failed to migrate existing DB user to current Clerk user id",
@@ -311,11 +308,11 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
           })
           .where(eq(users.id, userId))
           .returning()
-        console.log("[API] Linked user updated successfully")
+
         return updatedUser
       }
       // Create new user with all required fields (using camelCase for Drizzle schema)
-      console.log("[API] Creating new user")
+
       const userData: typeof users.$inferInsert = {
         id: userId,
         email: email,
@@ -330,12 +327,14 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
         completedRotations: 0,
         ...dbUpdates,
       }
-      console.log("[API] New user data:", userData)
 
       // Perform a simple insert; avoid updating the primary key on conflict
-      const result = await tx.insert(users).values(userData).returning() as typeof users.$inferSelect[]
+      const result = (await tx
+        .insert(users)
+        .values(userData)
+        .returning()) as (typeof users.$inferSelect)[]
       const newUser = result[0]
-      console.log("[API] User created successfully")
+
       return newUser
     })
   } catch (transactionError) {
@@ -370,15 +369,12 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR
     }
 
-    const errorDetails = process.env.NODE_ENV === "development"
-      ? { message: msg, transactionRolledBack: true }
-      : { transactionRolledBack: true }
+    const errorDetails =
+      process.env.NODE_ENV === "development"
+        ? { message: msg, transactionRolledBack: true }
+        : { transactionRolledBack: true }
 
-    return createErrorResponse(
-      errorMessage,
-      statusCode,
-      errorDetails
-    )
+    return createErrorResponse(errorMessage, statusCode, errorDetails)
   }
 
   // Return user data with camelCase fields for frontend
@@ -401,7 +397,12 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     updatedAt: user.updatedAt,
   }
 
-  console.log("[API] Returning user data:", responseUser)
+  // Invalidate cache
+  try {
+    await cacheIntegrationService.invalidateByTags(["users", "student-dashboard"])
+  } catch (error) {
+    console.warn("Failed to invalidate cache:", error)
+  }
+
   return createSuccessResponse(responseUser)
 })
-

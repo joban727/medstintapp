@@ -73,16 +73,16 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     const studentCounts = await db
       .select({ cohortId: users.cohortId, count: count(users.id) })
       .from(users)
-      .where(and(
-        eq(users.role, "STUDENT"),
-        eq(users.isActive, true)
-      ))
+      .where(and(eq(users.role, "STUDENT"), eq(users.isActive, true)))
       .groupBy(users.cohortId)
 
-    enrolledCounts = studentCounts.reduce((acc, row) => {
-      if (row.cohortId) acc[row.cohortId] = Number(row.count)
-      return acc
-    }, {} as Record<string, number>)
+    enrolledCounts = studentCounts.reduce(
+      (acc, row) => {
+        if (row.cohortId) acc[row.cohortId] = Number(row.count)
+        return acc
+      },
+      {} as Record<string, number>
+    )
   }
 
   // Add enrolled count to each cohort
@@ -136,6 +136,9 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     status: "ACTIVE",
   })
 
-  return createSuccessResponse({ id: newCohortId, name, graduationYear: calculatedGraduationYear }, "Cohort created successfully", HTTP_STATUS.CREATED)
+  return createSuccessResponse(
+    { id: newCohortId, name, graduationYear: calculatedGraduationYear },
+    "Cohort created successfully",
+    HTTP_STATUS.CREATED
+  )
 })
-

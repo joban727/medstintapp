@@ -71,23 +71,23 @@ export default async function SuperAdminOnboardingPage() {
             user={
               user
                 ? {
-                  id: user.id,
-                  email: user.email,
-                  name: user.name || "",
-                  role: user.role || "SUPER_ADMIN" as UserRole,
-                  onboardingCompleted: user.onboardingCompleted,
-                  schoolId: null,
-                  programId: null,
-                }
+                    id: user.id,
+                    email: user.email,
+                    name: user.name || "",
+                    role: user.role || ("SUPER_ADMIN" as UserRole),
+                    onboardingCompleted: user.onboardingCompleted,
+                    schoolId: null,
+                    programId: null,
+                  }
                 : {
-                  id: "",
-                  email: "",
-                  name: "",
-                  role: "SUPER_ADMIN" as UserRole,
-                  onboardingCompleted: false,
-                  schoolId: null,
-                  programId: null,
-                }
+                    id: "",
+                    email: "",
+                    name: "",
+                    role: "SUPER_ADMIN" as UserRole,
+                    onboardingCompleted: false,
+                    schoolId: null,
+                    programId: null,
+                  }
             }
             clerkUser={{
               id: clerkUser.id,

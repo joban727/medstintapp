@@ -6,7 +6,17 @@ import { useUser } from "@clerk/nextjs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, CheckCircle, XCircle, ArrowRight, Mail, School, BookOpen, Users, AlertTriangle } from "lucide-react"
+import {
+  Loader2,
+  CheckCircle,
+  XCircle,
+  ArrowRight,
+  Mail,
+  School,
+  BookOpen,
+  Users,
+  AlertTriangle,
+} from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface InvitationDetails {
@@ -25,14 +35,22 @@ function InviteAcceptContent() {
   const { user: clerkUser, isLoaded: isUserLoaded } = useUser()
   const token = searchParams.get("token")
 
-  const [status, setStatus] = useState<"loading" | "preview" | "accepting" | "success" | "error">("loading")
+  const [status, setStatus] = useState<"loading" | "preview" | "accepting" | "success" | "error">(
+    "loading"
+  )
   const [errorMessage, setErrorMessage] = useState("")
   const [invitationDetails, setInvitationDetails] = useState<InvitationDetails | null>(null)
 
   // Check for email mismatch
   const currentUserEmail = clerkUser?.primaryEmailAddress?.emailAddress?.toLowerCase()
   const invitedEmail = invitationDetails?.email?.toLowerCase()
-  const hasEmailMismatch = Boolean(isUserLoaded && invitationDetails && currentUserEmail && invitedEmail && currentUserEmail !== invitedEmail)
+  const hasEmailMismatch = Boolean(
+    isUserLoaded &&
+      invitationDetails &&
+      currentUserEmail &&
+      invitedEmail &&
+      currentUserEmail !== invitedEmail
+  )
 
   // Fetch invitation details on mount (read-only preview)
   useEffect(() => {
@@ -103,7 +121,10 @@ function InviteAcceptContent() {
   }
 
   const formatRole = (role: string) => {
-    return role.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+    return role
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (c) => c.toUpperCase())
   }
 
   return (
@@ -157,7 +178,8 @@ function InviteAcceptContent() {
                   </div>
                 </div>
                 <p className="text-xs text-center text-muted-foreground">
-                  This invitation expires on {new Date(invitationDetails.expiresAt).toLocaleDateString()}
+                  This invitation expires on{" "}
+                  {new Date(invitationDetails.expiresAt).toLocaleDateString()}
                 </p>
               </div>
 
@@ -166,25 +188,18 @@ function InviteAcceptContent() {
                 <Alert variant="destructive" className="mb-4">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription className="text-sm">
-                    This invitation was sent to <strong>{invitationDetails.email}</strong>, but you're signed in as <strong>{currentUserEmail}</strong>.
-                    Please sign in with the correct email to accept this invitation.
+                    This invitation was sent to <strong>{invitationDetails.email}</strong>, but
+                    you're signed in as <strong>{currentUserEmail}</strong>. Please sign in with the
+                    correct email to accept this invitation.
                   </AlertDescription>
                 </Alert>
               )}
 
               <div className="flex gap-3 w-full">
-                <Button
-                  variant="outline"
-                  onClick={handleDecline}
-                  className="flex-1"
-                >
+                <Button variant="outline" onClick={handleDecline} className="flex-1">
                   {hasEmailMismatch ? "Go Back" : "Decline"}
                 </Button>
-                <Button
-                  onClick={handleAccept}
-                  className="flex-1"
-                  disabled={hasEmailMismatch}
-                >
+                <Button onClick={handleAccept} className="flex-1" disabled={hasEmailMismatch}>
                   Accept Invitation
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -205,7 +220,9 @@ function InviteAcceptContent() {
               <div className="text-center space-y-2">
                 <h3 className="text-lg font-medium">Welcome!</h3>
                 <p className="text-muted-foreground">You have successfully joined the school.</p>
-                <p className="text-sm text-muted-foreground">Redirecting to complete your setup...</p>
+                <p className="text-sm text-muted-foreground">
+                  Redirecting to complete your setup...
+                </p>
               </div>
               <Button onClick={() => router.push("/onboarding")} className="w-full">
                 Continue Setup <ArrowRight className="ml-2 h-4 w-4" />
@@ -220,11 +237,7 @@ function InviteAcceptContent() {
                 <h3 className="text-lg font-medium text-destructive">Invitation Failed</h3>
                 <p className="text-muted-foreground">{errorMessage}</p>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => router.push("/")}
-                className="w-full"
-              >
+              <Button variant="outline" onClick={() => router.push("/")} className="w-full">
                 Return Home
               </Button>
             </>

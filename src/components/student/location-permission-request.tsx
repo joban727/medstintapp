@@ -5,8 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { MapPin, AlertCircle, RefreshCw, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { ThemeAwareCard } from "@/components/ui/theme-aware-card"
-import { ThemeAwareButton } from "@/components/ui/theme-aware-button"
 
 interface LocationPermissionRequestProps {
   onPermissionGranted: () => void
@@ -94,22 +92,27 @@ export const LocationPermissionRequest: React.FC<LocationPermissionRequestProps>
   }
 
   return (
-    <ThemeAwareCard variant="warning" className={cn("w-full", className)}>
+    <Card
+      className={cn(
+        "w-full backdrop-blur-md shadow-sm border-yellow-500/20 bg-yellow-500/5",
+        className
+      )}
+    >
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
-          <MapPin className="h-5 w-5 text-warning" />
-          <span className="text-warning">Location Access Required</span>
+          <MapPin className="h-5 w-5 text-yellow-500" />
+          <span className="text-yellow-500">Location Access Required</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="gap-4">
         <div className="flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-warning mt-0.5 flex-shrink-0" />
+          <AlertCircle className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
           <div className="gap-2">
-            <p className="text-sm text-foreground">
+            <p className="text-sm text-white">
               This application needs access to your location to verify you're at the correct site
               when clocking in/out.
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-[var(--text-muted)]">
               Your location data is only used for verification purposes and is not shared with third
               parties.
             </p>
@@ -118,25 +121,29 @@ export const LocationPermissionRequest: React.FC<LocationPermissionRequestProps>
         <div className="flex flex-col sm:flex-row gap-3">
           {permissionStatus === "denied" ? (
             <>
-              <ThemeAwareButton onClick={openBrowserSettings} variant="outline" className="flex-1">
+              <Button
+                onClick={openBrowserSettings}
+                variant="outline"
+                className="flex-1 border-white/10 text-white hover:bg-white/10"
+              >
                 <Settings className="h-4 w-4 mr-2" />
                 Open Browser Settings
-              </ThemeAwareButton>
-              <ThemeAwareButton
+              </Button>
+              <Button
                 onClick={() => window.location.reload()}
                 variant="default"
-                className="flex-1"
+                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh Page
-              </ThemeAwareButton>
+              </Button>
             </>
           ) : (
-            <ThemeAwareButton
+            <Button
               onClick={requestPermission}
               disabled={isRequesting}
               variant="default"
-              className="flex-1"
+              className="flex-1 bg-theme-gradient text-white"
             >
               {isRequesting ? (
                 <>
@@ -149,20 +156,20 @@ export const LocationPermissionRequest: React.FC<LocationPermissionRequestProps>
                   Enable Location Access
                 </>
               )}
-            </ThemeAwareButton>
+            </Button>
           )}
         </div>
         {permissionStatus === "denied" && (
-          <div className="p-3 bg-warning/10 border border-warning/20 rounded-lg">
-            <p className="text-sm text-warning font-medium mb-1">Permission Denied</p>
-            <p className="text-xs text-muted-foreground">
+          <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+            <p className="text-sm text-yellow-500 font-medium mb-1">Permission Denied</p>
+            <p className="text-xs text-[var(--text-muted)]">
               Location access has been blocked. Please enable it in your browser settings and
               refresh the page.
             </p>
           </div>
         )}
       </CardContent>
-    </ThemeAwareCard>
+    </Card>
   )
 }
 

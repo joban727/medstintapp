@@ -52,12 +52,14 @@ interface TimecardCorrectionsListProps {
   studentId?: string
   limit?: number
   showTitle?: boolean
+  onRefresh?: () => void
 }
 
 export function TimecardCorrectionsList({
   studentId,
   limit = 10,
   showTitle = true,
+  onRefresh,
 }: TimecardCorrectionsListProps) {
   const [corrections, setCorrections] = useState<TimecardCorrection[]>([])
   const [loading, setLoading] = useState(true)
@@ -92,6 +94,22 @@ export function TimecardCorrectionsList({
   useEffect(() => {
     fetchCorrections()
   }, [fetchCorrections])
+
+  // Poll for updates every 30 seconds when the page is focused
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.hasFocus()) {
+        fetchCorrections()
+      }
+    }, 30000) // 30 seconds
+
+    return () => clearInterval(interval)
+  }, [fetchCorrections])
+
+  // Call onRefresh callback when corrections change
+  useEffect(() => {
+    onRefresh?.()
+  }, [corrections, onRefresh])
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -181,14 +199,14 @@ export function TimecardCorrectionsList({
       changes.push({
         field: "Clock In",
         original: formatTime(originalTimeRecord.clockIn),
-        requested: requestedChanges.clockIn,
+        requested: formatTime(new Date(requestedChanges.clockIn)),
       })
     }
     if (requestedChanges.clockOut) {
       changes.push({
         field: "Clock Out",
         original: formatTime(originalTimeRecord.clockOut),
-        requested: requestedChanges.clockOut,
+        requested: formatTime(new Date(requestedChanges.clockOut)),
       })
     }
     if (requestedChanges.activities) {

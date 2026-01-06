@@ -4,6 +4,7 @@ import { and, desc, eq, gte, inArray, lte } from "drizzle-orm"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "../../../database/connection-pool"
+import { withCSRF } from "@/lib/csrf-middleware"
 
 // Role validation utilities
 const hasRole = (userRole: UserRole, allowedRoles: UserRole[]): boolean => {
@@ -359,7 +360,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST - Schedule report generation
-export async function POST(request: NextRequest) {
+export const POST = withCSRF(async (request: NextRequest) => {
   return withErrorHandlingAsync(async () => {
     const user = await currentUser()
     if (!user) {
@@ -387,10 +388,10 @@ export async function POST(request: NextRequest) {
       schedule: validatedData,
     })
   })
-}
+})
 
 // DELETE - Clear report cache
-export async function DELETE(_request: NextRequest) {
+export const DELETE = withCSRF(async (_request: NextRequest) => {
   return withErrorHandlingAsync(async () => {
     const user = await currentUser()
     if (!user) {
@@ -409,5 +410,4 @@ export async function DELETE(_request: NextRequest) {
       message: "Cache cleared successfully",
     })
   })
-}
-
+})

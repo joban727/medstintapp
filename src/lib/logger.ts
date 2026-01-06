@@ -1,7 +1,7 @@
 // import pino from 'pino'
-import { db } from '@/database/connection-pool'
-import { auditLogs } from '@/database/schema'
-import crypto from 'crypto'
+import { db } from "@/database/connection-pool"
+import { auditLogs } from "@/database/schema"
+import crypto from "crypto"
 
 // Configure Pino
 // const isDev = process.env.NODE_ENV === 'development'
@@ -30,8 +30,8 @@ export const logger = {
 }
 
 // Audit Log Severity Levels
-export type AuditSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-export type AuditStatus = 'SUCCESS' | 'FAILURE' | 'ERROR'
+export type AuditSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+export type AuditStatus = "SUCCESS" | "FAILURE" | "ERROR"
 
 interface AuditLogParams {
   action: string
@@ -63,14 +63,14 @@ export const auditLogger = {
         resource: params.resource,
         resourceId: params.resourceId,
         details: params.details ? JSON.stringify(params.details) : undefined,
-        severity: params.severity || 'LOW',
-        status: params.status || 'SUCCESS',
+        severity: params.severity || "LOW",
+        status: params.status || "SUCCESS",
         ipAddress: params.ipAddress,
         userAgent: params.userAgent,
       })
     } catch (error) {
       // Fallback: Log the failure to write to DB, but don't crash the app
-      logger.error({ err: error, auditParams: params }, 'Failed to write audit log to database')
+      logger.error({ err: error, auditParams: params }, "Failed to write audit log to database")
     }
-  }
+  },
 }

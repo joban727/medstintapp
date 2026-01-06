@@ -376,6 +376,23 @@ export function validateEnvironment(): {
 
   // Check production-specific requirements
   if (process.env.NODE_ENV === "production") {
+    // Critical security: encryption key validation
+    const encryptionKey = process.env.LOCATION_ENCRYPTION_KEY
+    if (!encryptionKey) {
+      errors.push(
+        "LOCATION_ENCRYPTION_KEY is required in production for encrypting sensitive location data"
+      )
+    } else if (encryptionKey.length !== 64) {
+      errors.push(
+        "LOCATION_ENCRYPTION_KEY must be 64 hex characters (256 bits). Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+      )
+    }
+
+    // Webhook secrets required in production
+    if (!process.env.CLERK_WEBHOOK_SECRET) {
+      errors.push("CLERK_WEBHOOK_SECRET is required in production for webhook verification")
+    }
+
     if (publishableKey && !publishableKey.startsWith("pk_live_")) {
       warnings.push("Using test Clerk keys in production - should use live keys (pk_live_)")
     }
@@ -393,7 +410,9 @@ export function validateEnvironment(): {
     }
 
     if (getProductionConfig().database.replicationEnabled && !process.env.DATABASE_URL_READ) {
-      warnings.push("Replication is enabled but DATABASE_URL_READ is not set - falling back to primary for reads")
+      warnings.push(
+        "Replication is enabled but DATABASE_URL_READ is not set - falling back to primary for reads"
+      )
     }
 
     if (!process.env.MONITORING_API_KEY) {

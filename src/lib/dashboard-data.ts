@@ -249,7 +249,7 @@ export async function getRecentActivitiesData(limit = 5): Promise<RecentActivity
             userName: users.name,
           })
           .from(auditLogs)
-          .leftJoin(users, eq(auditLogs.userId as any, users.id))
+          .leftJoin(users, eq(auditLogs.userId, users.id))
           .where(
             currentUser.role === ("SUPER_ADMIN" as UserRole)
               ? undefined // Super admin sees all
@@ -381,9 +381,8 @@ export async function getSchoolStats() {
 
         const totalStudents = totalStudentsCount[0]?.count || 0
         const activeRotations = activeRotationsCount[0]?.count || 0
-        const placementRate = totalStudents > 0
-          ? Math.round((activeRotations / totalStudents) * 100)
-          : 0
+        const placementRate =
+          totalStudents > 0 ? Math.round((activeRotations / totalStudents) * 100) : 0
 
         return {
           activeRotations,
@@ -443,16 +442,24 @@ export async function getEnrollmentTrendData() {
             enrollmentDate: users.enrollmentDate,
           })
           .from(users)
-          .where(
-            and(
-              eq(users.schoolId, schoolId),
-              eq(users.role, "STUDENT")
-            )
-          )
+          .where(and(eq(users.schoolId, schoolId), eq(users.role, "STUDENT")))
 
         // Group by month
         const monthlyData = new Map<string, number>()
-        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        const months = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ]
 
         // Initialize last 7 months
         for (let i = 6; i >= 0; i--) {
@@ -522,12 +529,7 @@ export async function getSiteCapacityData() {
             const activeRotations = await db
               .select({ count: count() })
               .from(rotations)
-              .where(
-                and(
-                  eq(rotations.clinicalSiteId, site.id),
-                  eq(rotations.status, "ACTIVE")
-                )
-              )
+              .where(and(eq(rotations.clinicalSiteId, site.id), eq(rotations.status, "ACTIVE")))
 
             return {
               name: site.name,
@@ -589,7 +591,7 @@ export async function getCompetencyOverviewData() {
         // Assuming database ratings are 1-5
         const scaleScore = (val: string | number | null) => {
           if (!val) return 0
-          const num = typeof val === 'string' ? parseFloat(val) : val
+          const num = typeof val === "string" ? parseFloat(val) : val
           return Math.round((num / 5) * 150)
         }
 
@@ -598,9 +600,6 @@ export async function getCompetencyOverviewData() {
           { subject: "Communication", A: scaleScore(stats.avgComm), fullMark: 150 },
           { subject: "Professionalism", A: scaleScore(stats.avgProf), fullMark: 150 },
           { subject: "Critical Thinking", A: scaleScore(stats.avgCritical), fullMark: 150 },
-          // Add some placeholders if needed or derive more from other tables
-          { subject: "Patient Care", A: scaleScore(stats.avgClinical), fullMark: 150 }, // Reuse clinical for now
-          { subject: "Systems-Based", A: scaleScore(stats.avgCritical), fullMark: 150 }, // Reuse critical for now
         ]
       },
       CACHE_CONFIG.defaultTTL

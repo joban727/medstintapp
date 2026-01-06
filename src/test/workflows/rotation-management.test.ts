@@ -34,6 +34,10 @@ vi.mock('@/lib/school-utils', () => ({
     getSchoolContext: vi.fn(() => Promise.resolve(mockContext))
 }))
 
+vi.mock('@/lib/csrf-middleware', () => ({
+    withCSRF: (handler: any) => handler
+}))
+
 // Helper to create requests
 function createRequest(method: string, body?: any, searchParams?: Record<string, string>) {
     let url = 'http://localhost/api/rotations'

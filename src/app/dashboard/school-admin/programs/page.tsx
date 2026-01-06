@@ -31,8 +31,8 @@ export default async function ProgramsPage() {
     avgStudentsPerProgram:
       programs.length > 0
         ? Math.round(
-          programs.reduce((sum, p) => sum + (p.stats?.totalStudents || 0), 0) / programs.length
-        )
+            programs.reduce((sum, p) => sum + (p.stats?.totalStudents || 0), 0) / programs.length
+          )
         : 0,
   }
 

@@ -1,5 +1,5 @@
 // TODO: Add cache invalidation hooks for mutations
-"use client";
+"use client"
 
 import {
   ArrowRight,
@@ -12,7 +12,7 @@ import {
   Settings,
   UserPlus,
   Users,
-} from "lucide-react";
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -23,8 +23,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui
 import { motion } from "framer-motion"
 
 const validateEmail = (email: string): boolean => {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-};
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
 
 interface UserData {
   id: string
@@ -157,15 +157,15 @@ export function OnboardingCompletion({
 
       if (!response.ok) {
         const errorData = await response.json().catch((err) => {
-          console.error('Failed to parse JSON response:', err)
-          throw new Error('Invalid response format')
+          console.error("Failed to parse JSON response:", err)
+          throw new Error("Invalid response format")
         })
         throw new Error(errorData.error || "Failed to complete onboarding")
       }
 
       const _result = await response.json().catch((err) => {
-        console.error('Failed to parse JSON response:', err)
-        throw new Error('Invalid response format')
+        console.error("Failed to parse JSON response:", err)
+        throw new Error("Invalid response format")
       })
 
       toast.success("Welcome to MedStint! Redirecting to your dashboard...")
@@ -284,8 +284,8 @@ export function OnboardingCompletion({
                           ) : (
                             <>
                               <p>
-                                <span className="font-medium">Student:</span>{" "}
-                                {userData?.firstName} {userData?.lastName}
+                                <span className="font-medium">Student:</span> {userData?.firstName}{" "}
+                                {userData?.lastName}
                               </p>
                               <p>
                                 <span className="font-medium">School:</span>{" "}
@@ -315,9 +315,7 @@ export function OnboardingCompletion({
                 transition={{ delay: 0.8 }}
                 className="mb-8"
               >
-                <h3 className="mb-6 font-semibold text-gray-900 text-xl">
-                  Recommended Next Steps
-                </h3>
+                <h3 className="mb-6 font-semibold text-gray-900 text-xl">Recommended Next Steps</h3>
 
                 {/* High Priority Steps */}
                 {highPrioritySteps.length > 0 && (
@@ -326,9 +324,7 @@ export function OnboardingCompletion({
                       <Badge className="border-red-200 bg-red-100 text-red-800">
                         High Priority
                       </Badge>
-                      <span className="text-gray-600 text-sm">
-                        Complete these first
-                      </span>
+                      <span className="text-gray-600 text-sm">Complete these first</span>
                     </div>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {highPrioritySteps.map((step, index) => (
@@ -350,17 +346,9 @@ export function OnboardingCompletion({
                                   {step.icon}
                                 </div>
                                 <div className="flex-1">
-                                  <h4 className="mb-1 font-medium text-gray-900">
-                                    {step.title}
-                                  </h4>
-                                  <p className="mb-3 text-gray-600 text-sm">
-                                    {step.description}
-                                  </p>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-xs"
-                                  >
+                                  <h4 className="mb-1 font-medium text-gray-900">{step.title}</h4>
+                                  <p className="mb-3 text-gray-600 text-sm">{step.description}</p>
+                                  <Button size="sm" variant="outline" className="text-xs">
                                     {step.action}
                                     <ArrowRight className="ml-1 h-3 w-3" />
                                   </Button>
@@ -379,18 +367,14 @@ export function OnboardingCompletion({
                   <div>
                     <div className="mb-4 flex items-center gap-2">
                       <Badge variant="outline">Additional Options</Badge>
-                      <span className="text-gray-600 text-sm">
-                        Complete when ready
-                      </span>
+                      <span className="text-gray-600 text-sm">Complete when ready</span>
                     </div>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {otherSteps.map((step, index) => (
                         <motion.div
                           key={`other-step-${step.title
                             .replace(/\s+/g, "-")
-                            .toLowerCase()}-${step.priority}-${step.href
-                              .split("/")
-                              .pop()}`}
+                            .toLowerCase()}-${step.priority}-${step.href.split("/").pop()}`}
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: 1.2 + index * 0.1 }}
@@ -402,35 +386,26 @@ export function OnboardingCompletion({
                             <CardContent className="p-4">
                               <div className="flex items-start gap-3">
                                 <div
-                                  className={`flex h-10 w-10 items-center justify-center rounded-lg ${step.priority === "medium"
-                                    ? "bg-yellow-100 text-yellow-600"
-                                    : "bg-green-100 text-healthcare-green"
-                                    }`}
+                                  className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                                    step.priority === "medium"
+                                      ? "bg-yellow-100 text-yellow-600"
+                                      : "bg-green-100 text-healthcare-green"
+                                  }`}
                                 >
                                   {step.icon}
                                 </div>
                                 <div className="flex-1">
                                   <div className="mb-1 flex items-center gap-2">
-                                    <h4 className="font-medium text-gray-900">
-                                      {step.title}
-                                    </h4>
+                                    <h4 className="font-medium text-gray-900">{step.title}</h4>
                                     <Badge
                                       variant="outline"
-                                      className={`text-xs ${getPriorityColor(
-                                        step.priority
-                                      )}`}
+                                      className={`text-xs ${getPriorityColor(step.priority)}`}
                                     >
                                       {step.priority}
                                     </Badge>
                                   </div>
-                                  <p className="mb-3 text-gray-600 text-sm">
-                                    {step.description}
-                                  </p>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-xs"
-                                  >
+                                  <p className="mb-3 text-gray-600 text-sm">{step.description}</p>
+                                  <Button size="sm" variant="outline" className="text-xs">
                                     {step.action}
                                     <ArrowRight className="ml-1 h-3 w-3" />
                                   </Button>

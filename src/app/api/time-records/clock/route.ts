@@ -20,6 +20,7 @@ import {
 import { TimingPerformanceMonitor } from "@/lib/high-precision-timing"
 import crypto from "crypto"
 import { ClockService } from "@/lib/clock-service"
+import { withCSRF } from "@/lib/csrf-middleware"
 
 // Helper function to extract client information
 function getClientInfo(request: NextRequest) {
@@ -107,7 +108,7 @@ function createOptimizedResponse(
   return NextResponse.json(data, { status, headers })
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withCSRF(async (request: NextRequest) => {
   return withErrorHandlingAsync(async () => {
     return TimingPerformanceMonitor.measure("clock-operation-total", async () => {
       // Enhanced rate limiting with connection pool awareness
@@ -161,7 +162,7 @@ export async function POST(request: NextRequest) {
       }
     })
   })
-}
+})
 
 export async function GET(request: NextRequest) {
   return withErrorHandlingAsync(async () => {
@@ -241,10 +242,10 @@ async function handleClockIn(request: NextRequest, validatedData: z.infer<typeof
         location:
           latitude && longitude
             ? {
-              latitude,
-              longitude,
-              accuracy: accuracy || 0,
-            }
+                latitude,
+                longitude,
+                accuracy: accuracy || 0,
+              }
             : undefined,
         clientTimestamp: timestamp,
         ipAddress,
@@ -288,7 +289,10 @@ async function handleClockIn(request: NextRequest, validatedData: z.infer<typeof
 
       return createOptimizedResponse(responseData, { isClockOperation: true })
     } catch (error) {
-      logger.error({ error: error instanceof Error ? error.message : String(error) }, "Clock-in failed")
+      logger.error(
+        { error: error instanceof Error ? error.message : String(error) },
+        "Clock-in failed"
+      )
       if (error instanceof Error) {
         // Map ClockService errors to API responses
         if (error.message.includes("already clocked in")) {
@@ -338,10 +342,10 @@ async function handleClockOut(request: NextRequest, validatedData: z.infer<typeo
         location:
           latitude && longitude
             ? {
-              latitude,
-              longitude,
-              accuracy: accuracy || 0,
-            }
+                latitude,
+                longitude,
+                accuracy: accuracy || 0,
+              }
             : undefined,
         clientTimestamp: timestamp,
         ipAddress,
@@ -380,7 +384,10 @@ async function handleClockOut(request: NextRequest, validatedData: z.infer<typeo
 
       return createOptimizedResponse(responseData, { isClockOperation: true })
     } catch (error) {
-      logger.error({ error: error instanceof Error ? error.message : String(error) }, "Clock-out failed")
+      logger.error(
+        { error: error instanceof Error ? error.message : String(error) },
+        "Clock-out failed"
+      )
       if (error instanceof Error) {
         if (error.message.includes("not currently clocked in")) {
           return createErrorResponse("Student is not clocked in", HTTP_STATUS.CONFLICT)
@@ -391,4 +398,3 @@ async function handleClockOut(request: NextRequest, validatedData: z.infer<typeo
     }
   })
 }
-

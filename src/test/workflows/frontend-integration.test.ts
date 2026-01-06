@@ -27,8 +27,14 @@ vi.mock('@/lib/cache-integration', () => ({
 vi.mock('@/lib/neon-cache', () => ({
     cache: {
         getUserProgress: vi.fn().mockResolvedValue(null),
+        setUserProgress: vi.fn(),
     },
     invalidateRelatedCaches: vi.fn(),
+}));
+
+// Mock CSRF middleware
+vi.mock('@/lib/csrf-middleware', () => ({
+    withCSRF: (handler: any) => handler,
 }));
 
 // Mock Schema to ensure singleton
@@ -74,17 +80,17 @@ describe('Frontend Integration Workflow', () => {
         assignmentId = 'assign-1';
 
         // Create School
-        await dbMock.insert('schools', { id: schoolId, name: 'Test School' });
+        dbMock.insert('schools').values({ id: schoolId, name: 'Test School' });
 
         // Create Users
-        await dbMock.insert('users', { id: studentId, role: 'STUDENT', schoolId, name: 'Test Student' });
-        await dbMock.insert('users', { id: preceptorId, role: 'CLINICAL_PRECEPTOR', schoolId, name: 'Test Preceptor' });
+        dbMock.insert('users').values({ id: studentId, role: 'STUDENT', schoolId, name: 'Test Student' });
+        dbMock.insert('users').values({ id: preceptorId, role: 'CLINICAL_PRECEPTOR', schoolId, name: 'Test Preceptor' });
 
         // Create Program
-        await dbMock.insert('programs', { id: programId, schoolId, name: 'Test Program' });
+        dbMock.insert('programs').values({ id: programId, schoolId, name: 'Test Program' });
 
         // Create Competency with Rubric
-        await dbMock.insert('competencies', {
+        dbMock.insert('competencies').values({
             id: competencyId,
             programId,
             name: 'Vital Signs',
@@ -95,7 +101,7 @@ describe('Frontend Integration Workflow', () => {
         });
 
         // Create Assignment
-        await dbMock.insert('competency_assignments', {
+        dbMock.insert('competency_assignments').values({
             id: assignmentId,
             studentId,
             competencyId,
@@ -131,7 +137,13 @@ describe('Frontend Integration Workflow', () => {
                         progressPercentage: 100,
                         currentScore: 5,
                         totalScore: 5,
-                        status: 'completed'
+                        status: 'completed',
+                        userName: 'Test Student',
+                        userEmail: 'student@test.com',
+                        competencyName: 'Vital Signs',
+                        competencyCategory: 'Clinical Skills',
+                        assignmentDueDate: new Date().toISOString(),
+                        assignmentStatus: 'ASSIGNED'
                     }]).then(resolve);
                 })
             }))
@@ -141,6 +153,11 @@ describe('Frontend Integration Workflow', () => {
         vi.mocked(auth).mockResolvedValue({ userId: studentId } as any);
         const progressReq = new NextRequest(`http://localhost:3000/api/competency-progress?userId=${studentId}`);
         const progressRes = await getProgress(progressReq);
+        if (!progressRes) throw new Error('progressRes is undefined');
+        if (progressRes.status !== 200) {
+            const errorBody = await progressRes.json();
+            console.error('Progress API Error:', JSON.stringify(errorBody, null, 2));
+        }
         expect(progressRes.status).toBe(200);
         const progressData = await progressRes.json();
 
@@ -202,12 +219,14 @@ describe('Frontend Integration Workflow', () => {
         });
 
         const evalRes = await submitEvaluation(evalReq);
+        if (!evalRes) throw new Error('evalRes is undefined');
         expect(evalRes.status).toBe(200);
 
         // 3. Verify Student Dashboard Update
         vi.mocked(auth).mockResolvedValue({ userId: studentId } as any);
         const progressReq2 = new NextRequest(`http://localhost:3000/api/competency-progress?studentId=${studentId}`);
         const progressRes2 = await getProgress(progressReq2);
+        if (!progressRes2) throw new Error('progressRes2 is undefined');
         const progressData2 = await progressRes2.json();
 
         // Verify progress update

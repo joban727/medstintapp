@@ -1,3 +1,5 @@
+import { logger } from "@/lib/client-logger"
+
 /**
  * Optimistic Updates Service
  * Provides immediate UI feedback while API requests are processed in the background

@@ -245,7 +245,10 @@ export default function ClinicalSitesActionBar({
                 <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="glass-card-subtle">
+            <DropdownMenuContent
+              align="end"
+              className="bg-black/80 backdrop-blur-xl border border-white/10"
+            >
               <DropdownMenuItem className="cursor-pointer focus:bg-primary/10">
                 Export as CSV
               </DropdownMenuItem>
@@ -278,20 +281,22 @@ export default function ClinicalSitesActionBar({
           </Button>
 
           {/* Add Clinical Site Dialog */}
-          <ClinicalSiteFormDialog
-            open={isAddDialogOpen}
-            onOpenChange={setIsAddDialogOpen}
-            onSuccess={() => {
-              toast.success("Clinical site added successfully!")
-              onRefresh?.()
-            }}
-          />
+          {isAddDialogOpen && (
+            <ClinicalSiteFormDialog
+              open={isAddDialogOpen}
+              onOpenChange={setIsAddDialogOpen}
+              onSuccess={() => {
+                toast.success("Clinical site added successfully!")
+                onRefresh?.()
+              }}
+            />
+          )}
         </div>
       </div>
 
       {/* Advanced Filters Panel */}
       {showAdvancedFilters && (
-        <div className="rounded-lg border bg-card p-4 glass-card-subtle card-hover-lift">
+        <div className="rounded-lg border p-4 bg-white/5 backdrop-blur-sm border-white/10 card-hover-lift">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>State/Region</Label>

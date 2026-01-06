@@ -1,300 +1,273 @@
 "use client"
 
-import { createContext, useContext, useEffect, useEffectEvent, useState, type ReactNode } from "react"
-import { useTheme as useNextTheme } from "next-themes"
+import { createContext, useContext, useEffect, useState, ReactNode } from "react"
 
-// Enhanced theme configuration interface
-export interface ThemeConfig {
-  mode: 'light' | 'dark' | 'system'
-  colorScheme: 'medical' | 'professional' | 'accessible'
-  animations: 'full' | 'reduced' | 'none'
-  density: 'compact' | 'comfortable' | 'spacious'
-  contrast: 'normal' | 'high'
-  fontSize: 'small' | 'medium' | 'large'
+export type ThemeColor = "slate" | "orange" | "indigo" | "purple" | "emerald" | "rose" | "amber" | "blue"
+export type GlassPreset = "off" | "subtle" | "normal" | "strong" | "custom"
+export type ThemeFont = "inter" | "manrope" | "outfit" | "roboto"
+
+export interface GlassSettings {
+  preset: GlassPreset
+  opacity: number      // 0 - 0.20
+  blur: number         // 0 - 40
+  borderOpacity: number // 0 - 0.30
+  saturation: number   // 100 - 200
+  hoverOpacityAdd: number
+  hoverBorderAdd: number
 }
 
-// Theme context interface
-interface ThemeContextType {
-  config: ThemeConfig
-  updateConfig: (updates: Partial<ThemeConfig>) => void
-  resetToDefaults: () => void
-  isLoading: boolean
-  applyTheme: (config: ThemeConfig) => void
+interface ThemeColors {
+  primary: string
+  primaryRgb: string
+  gradientFrom: string
+  gradientTo: string
+  name: string
 }
 
-// Default theme configuration
-const defaultThemeConfig: ThemeConfig = {
-  mode: 'system',
-  colorScheme: 'medical',
-  animations: 'full',
-  density: 'comfortable',
-  contrast: 'normal',
-  fontSize: 'medium'
+export const GLASS_PRESETS: Record<Exclude<GlassPreset, "custom">, Omit<GlassSettings, "preset">> = {
+  off: { opacity: 0, blur: 0, borderOpacity: 0.10, saturation: 100, hoverOpacityAdd: 0.02, hoverBorderAdd: 0.05 },
+  subtle: { opacity: 0.06, blur: 16, borderOpacity: 0.10, saturation: 150, hoverOpacityAdd: 0.02, hoverBorderAdd: 0.05 },
+  normal: { opacity: 0.12, blur: 24, borderOpacity: 0.18, saturation: 180, hoverOpacityAdd: 0.02, hoverBorderAdd: 0.05 },
+  strong: { opacity: 0.18, blur: 32, borderOpacity: 0.25, saturation: 200, hoverOpacityAdd: 0.02, hoverBorderAdd: 0.05 }
 }
 
-// Theme context
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
-
-// Local storage key
-const THEME_CONFIG_KEY = 'medstint-theme-config'
-
-// Theme provider component
-export function EnhancedThemeProvider({ children }: { children: ReactNode }) {
-  const { theme, setTheme, systemTheme } = useNextTheme()
-  const [config, setConfig] = useState<ThemeConfig>(defaultThemeConfig)
-  const [isLoading, setIsLoading] = useState(true)
-
-  // Load theme configuration from localStorage on mount
-  useEffect(() => {
-    try {
-      const savedConfig = localStorage.getItem(THEME_CONFIG_KEY)
-      if (savedConfig) {
-        const parsedConfig = JSON.parse(savedConfig) as ThemeConfig
-        setConfig({ ...defaultThemeConfig, ...parsedConfig })
-      }
-    } catch (error) {
-      console.warn('Failed to load theme configuration:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  // Apply theme configuration to document
-  const applyTheme = (themeConfig: ThemeConfig) => {
-    const root = document.documentElement
-
-    // Apply theme mode
-    if (themeConfig.mode !== 'system') {
-      setTheme(themeConfig.mode)
-    } else {
-      setTheme('system')
-    }
-
-    // Apply color scheme
-    root.setAttribute('data-color-scheme', themeConfig.colorScheme)
-
-    // Apply animation preferences
-    root.setAttribute('data-animations', themeConfig.animations)
-    if (themeConfig.animations === 'none' || themeConfig.animations === 'reduced') {
-      root.style.setProperty('--animation-duration', '0ms')
-      root.style.setProperty('--transition-duration', '0ms')
-    } else {
-      root.style.removeProperty('--animation-duration')
-      root.style.removeProperty('--transition-duration')
-    }
-
-    // Apply density
-    root.setAttribute('data-density', themeConfig.density)
-    switch (themeConfig.density) {
-      case 'compact':
-        root.style.setProperty('--spacing-multiplier', '0.75')
-        root.style.setProperty('--component-padding', '0.5rem')
-        break
-      case 'spacious':
-        root.style.setProperty('--spacing-multiplier', '1.25')
-        root.style.setProperty('--component-padding', '1.5rem')
-        break
-      default:
-        root.style.setProperty('--spacing-multiplier', '1')
-        root.style.setProperty('--component-padding', '1rem')
-    }
-
-    // Apply contrast
-    root.setAttribute('data-contrast', themeConfig.contrast)
-    if (themeConfig.contrast === 'high') {
-      root.style.setProperty('--border-width', '2px')
-      root.style.setProperty('--focus-ring-width', '3px')
-    } else {
-      root.style.setProperty('--border-width', '1px')
-      root.style.setProperty('--focus-ring-width', '2px')
-    }
-
-    // Apply font size
-    root.setAttribute('data-font-size', themeConfig.fontSize)
-    switch (themeConfig.fontSize) {
-      case 'small':
-        root.style.setProperty('--base-font-size', '14px')
-        break
-      case 'large':
-        root.style.setProperty('--base-font-size', '18px')
-        break
-      default:
-        root.style.setProperty('--base-font-size', '16px')
-    }
-
-    // Apply medical theme specific styles
-    if (themeConfig.colorScheme === 'medical') {
-      root.style.setProperty('--primary', 'var(--medical-primary)')
-      root.style.setProperty('--accent', 'var(--healthcare-green)')
-    } else if (themeConfig.colorScheme === 'professional') {
-      root.style.setProperty('--primary', 'var(--professional-gray-dark)')
-      root.style.setProperty('--accent', 'var(--medical-teal)')
-    }
-  }
-
-  // Update theme configuration
-  const updateConfig = (updates: Partial<ThemeConfig>) => {
-    const newConfig = { ...config, ...updates }
-    setConfig(newConfig)
-
-    // Save to localStorage
-    try {
-      localStorage.setItem(THEME_CONFIG_KEY, JSON.stringify(newConfig))
-    } catch (error) {
-      console.warn('Failed to save theme configuration:', error)
-    }
-
-    // Apply theme immediately
-    applyTheme(newConfig)
-  }
-
-  // Reset to default configuration
-  const resetToDefaults = () => {
-    setConfig(defaultThemeConfig)
-    try {
-      localStorage.removeItem(THEME_CONFIG_KEY)
-    } catch (error) {
-      console.warn('Failed to clear theme configuration:', error)
-    }
-    applyTheme(defaultThemeConfig)
-  }
-
-  // Apply theme when config changes
-  useEffect(() => {
-    if (!isLoading) {
-      applyTheme(config)
-    }
-  }, [config, isLoading])
-
-  // Handle system theme changes
-  useEffect(() => {
-    if (config.mode === 'system' && systemTheme) {
-      applyTheme(config)
-    }
-  }, [systemTheme, config])
-
-  // Stable event handler for reduced motion (React 19.2+)
-  const onReducedMotionChange = useEffectEvent((e: MediaQueryListEvent) => {
-    if (e.matches && config.animations === 'full') {
-      updateConfig({ animations: 'reduced' })
-    }
-  })
-
-  // Handle reduced motion preference
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-
-    mediaQuery.addEventListener('change', onReducedMotionChange)
-
-    // Check initial state
-    if (mediaQuery.matches && config.animations === 'full') {
-      updateConfig({ animations: 'reduced' })
-    }
-
-    return () => mediaQuery.removeEventListener('change', onReducedMotionChange)
-  }, []) // Only runs once - onReducedMotionChange always has fresh state
-
-  // Stable event handler for high contrast (React 19.2+)
-  const onHighContrastChange = useEffectEvent((e: MediaQueryListEvent) => {
-    if (e.matches && config.contrast === 'normal') {
-      updateConfig({ contrast: 'high' })
-    }
-  })
-
-  // Handle high contrast preference
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-contrast: high)')
-
-    mediaQuery.addEventListener('change', onHighContrastChange)
-
-    // Check initial state
-    if (mediaQuery.matches && config.contrast === 'normal') {
-      updateConfig({ contrast: 'high' })
-    }
-
-    return () => mediaQuery.removeEventListener('change', onHighContrastChange)
-  }, []) // Only runs once - onHighContrastChange always has fresh state
-
-  const contextValue: ThemeContextType = {
-    config,
-    updateConfig,
-    resetToDefaults,
-    isLoading,
-    applyTheme
-  }
-
-  return (
-    <ThemeContext.Provider value={contextValue}>
-      {children}
-    </ThemeContext.Provider>
-  )
+const DEFAULT_GLASS_SETTINGS: GlassSettings = {
+  preset: "subtle",
+  ...GLASS_PRESETS.subtle
 }
 
-// Custom hook to use theme context
-export function useEnhancedTheme() {
+const themeColorMap: Record<ThemeColor, ThemeColors> = {
+  slate: {
+    primary: "215 25% 63%",
+    primaryRgb: "148, 162, 180",
+    gradientFrom: "#94a2b4",
+    gradientTo: "#7a8a9e",
+    name: "Slate"
+  },
+  orange: {
+    primary: "25 70% 63%",
+    primaryRgb: "217, 152, 105",
+    gradientFrom: "#d99869",
+    gradientTo: "#c78555",
+    name: "Peach"
+  },
+  indigo: {
+    primary: "239 50% 68%",
+    primaryRgb: "150, 153, 200",
+    gradientFrom: "#9699c8",
+    gradientTo: "#8385ba",
+    name: "Lavender"
+  },
+  purple: {
+    primary: "270 45% 68%",
+    primaryRgb: "175, 150, 200",
+    gradientFrom: "#af96c8",
+    gradientTo: "#9880b0",
+    name: "Lilac"
+  },
+  emerald: {
+    primary: "160 40% 58%",
+    primaryRgb: "117, 168, 148",
+    gradientFrom: "#75a894",
+    gradientTo: "#5d9580",
+    name: "Sage"
+  },
+  rose: {
+    primary: "350 50% 68%",
+    primaryRgb: "200, 140, 150",
+    gradientFrom: "#c88c96",
+    gradientTo: "#b57882",
+    name: "Rose"
+  },
+  amber: {
+    primary: "45 55% 63%",
+    primaryRgb: "195, 175, 120",
+    gradientFrom: "#c3af78",
+    gradientTo: "#b09c65",
+    name: "Gold"
+  },
+  blue: {
+    primary: "210 50% 65%",
+    primaryRgb: "130, 165, 200",
+    gradientFrom: "#82a5c8",
+    gradientTo: "#6a90b5",
+    name: "Sky"
+  }
+}
+
+const fontMap: Record<ThemeFont, string> = {
+  inter: "'Inter', sans-serif",
+  manrope: "'Manrope', sans-serif",
+  outfit: "'Outfit', sans-serif",
+  roboto: "'Roboto', sans-serif",
+}
+
+interface ThemeContextValue {
+  // Theme color
+  themeColor: ThemeColor
+  setThemeColor: (color: ThemeColor) => void
+  themeColors: ThemeColors
+
+  // Glass settings
+  glassSettings: GlassSettings
+  setGlassPreset: (preset: GlassPreset) => void
+  setCustomGlassSettings: (settings: Partial<GlassSettings>) => void
+
+  // Background color
+  bgColor: string
+  setBgColor: (color: string) => void
+
+  // Font
+  themeFont: ThemeFont
+  setThemeFont: (font: ThemeFont) => void
+}
+
+const ThemeContext = createContext<ThemeContextValue | null>(null)
+
+export function useTheme() {
   const context = useContext(ThemeContext)
-  if (context === undefined) {
-    throw new Error('useEnhancedTheme must be used within an EnhancedThemeProvider')
+  if (!context) {
+    throw new Error("useTheme must be used within a ThemeProvider")
   }
   return context
 }
 
-// Utility function to get theme-aware classes
-export function getThemeClasses(baseClasses: string, themeVariants?: {
-  light?: string
-  dark?: string
-  medical?: string
-  professional?: string
-  accessible?: string
-}) {
-  if (!themeVariants) return baseClasses
-
-  const variants = []
-
-  if (themeVariants.light) {
-    variants.push(`light:${themeVariants.light}`)
+// Backwards compatibility alias for existing code that uses useEnhancedTheme
+export function useEnhancedTheme() {
+  const theme = useTheme()
+  return {
+    ...theme,
+    // Provide a config object for compatibility
+    config: {
+      themeColor: theme.themeColor,
+      glassSettings: theme.glassSettings,
+      bgColor: theme.bgColor,
+      themeFont: theme.themeFont,
+    }
   }
-
-  if (themeVariants.dark) {
-    variants.push(`dark:${themeVariants.dark}`)
-  }
-
-  if (themeVariants.medical) {
-    variants.push(`[data-color-scheme="medical"]:${themeVariants.medical}`)
-  }
-
-  if (themeVariants.professional) {
-    variants.push(`[data-color-scheme="professional"]:${themeVariants.professional}`)
-  }
-
-  if (themeVariants.accessible) {
-    variants.push(`[data-color-scheme="accessible"]:${themeVariants.accessible}`)
-  }
-
-  return `${baseClasses} ${variants.join(' ')}`
 }
 
-// Theme-aware component wrapper
-export function ThemeAware({
-  children,
-  className = "",
-  themeClasses
-}: {
+interface ThemeProviderProps {
   children: ReactNode
-  className?: string
-  themeClasses?: {
-    light?: string
-    dark?: string
-    medical?: string
-    professional?: string
-    accessible?: string
+}
+
+export function EnhancedThemeProvider({ children }: ThemeProviderProps) {
+  const [themeColor, setThemeColorState] = useState<ThemeColor>("slate")
+  const [glassSettings, setGlassSettings] = useState<GlassSettings>(DEFAULT_GLASS_SETTINGS)
+  const [bgColor, setBgColorState] = useState("#0a0a0a")
+  const [themeFont, setThemeFontState] = useState<ThemeFont>("inter")
+  const [mounted, setMounted] = useState(false)
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    setMounted(true)
+
+    const savedColor = localStorage.getItem("theme-color") as ThemeColor
+    if (savedColor && themeColorMap[savedColor]) {
+      setThemeColorState(savedColor)
+    }
+
+    const savedGlass = localStorage.getItem("theme-glass")
+    if (savedGlass) {
+      try {
+        setGlassSettings(JSON.parse(savedGlass))
+      } catch { }
+    }
+
+    const savedBgColor = localStorage.getItem("theme-bg-color")
+    if (savedBgColor) {
+      setBgColorState(savedBgColor)
+    }
+
+    const savedFont = localStorage.getItem("theme-font") as ThemeFont
+    if (savedFont && fontMap[savedFont]) {
+      setThemeFontState(savedFont)
+    }
+  }, [])
+
+  // Apply CSS variables when values change
+  useEffect(() => {
+    if (!mounted) return
+
+    const colors = themeColorMap[themeColor]
+    const d = document.documentElement
+
+    d.style.setProperty("--theme-primary", colors.primary)
+    d.style.setProperty("--theme-primary-rgb", colors.primaryRgb)
+    d.style.setProperty("--theme-gradient-from", colors.gradientFrom)
+    d.style.setProperty("--theme-gradient-to", colors.gradientTo)
+
+    localStorage.setItem("theme-color", themeColor)
+  }, [themeColor, mounted])
+
+  useEffect(() => {
+    if (!mounted) return
+
+    const d = document.documentElement
+    d.style.setProperty("--glass-opacity", String(glassSettings.opacity))
+    d.style.setProperty("--glass-blur", `${glassSettings.blur}px`)
+    d.style.setProperty("--glass-border-opacity", String(glassSettings.borderOpacity))
+    d.style.setProperty("--glass-saturation", `${glassSettings.saturation}%`)
+    d.style.setProperty("--glass-hover-opacity-add", String(glassSettings.hoverOpacityAdd))
+    d.style.setProperty("--glass-hover-border-add", String(glassSettings.hoverBorderAdd))
+
+    localStorage.setItem("theme-glass", JSON.stringify(glassSettings))
+  }, [glassSettings, mounted])
+
+  useEffect(() => {
+    if (!mounted) return
+
+    document.documentElement.style.setProperty("--theme-bg-color", bgColor)
+    localStorage.setItem("theme-bg-color", bgColor)
+  }, [bgColor, mounted])
+
+  useEffect(() => {
+    if (!mounted) return
+
+    document.documentElement.style.setProperty("--font-sans", fontMap[themeFont])
+    localStorage.setItem("theme-font", themeFont)
+  }, [themeFont, mounted])
+
+  const setThemeColor = (color: ThemeColor) => {
+    setThemeColorState(color)
   }
-}) {
-  const enhancedClasses = getThemeClasses(className, themeClasses)
+
+  const setGlassPreset = (preset: GlassPreset) => {
+    if (preset === "custom") {
+      setGlassSettings(prev => ({ ...prev, preset }))
+    } else {
+      setGlassSettings({ preset, ...GLASS_PRESETS[preset] })
+    }
+  }
+
+  const setCustomGlassSettings = (settings: Partial<GlassSettings>) => {
+    setGlassSettings(prev => ({ ...prev, ...settings, preset: "custom" }))
+  }
+
+  const setBgColor = (color: string) => {
+    setBgColorState(color)
+  }
+
+  const setThemeFont = (font: ThemeFont) => {
+    setThemeFontState(font)
+  }
+
+  const value: ThemeContextValue = {
+    themeColor,
+    setThemeColor,
+    themeColors: themeColorMap[themeColor],
+    glassSettings,
+    setGlassPreset,
+    setCustomGlassSettings,
+    bgColor,
+    setBgColor,
+    themeFont,
+    setThemeFont
+  }
 
   return (
-    <div className={enhancedClasses}>
+    <ThemeContext.Provider value={value}>
       {children}
-    </div>
+    </ThemeContext.Provider>
   )
 }

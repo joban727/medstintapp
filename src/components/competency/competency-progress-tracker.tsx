@@ -141,10 +141,6 @@ export function CompetencyProgressTracker({
     fetchProgressData()
   }, [fetchProgressData])
 
-
-
-
-
   if (loading) {
     return (
       <div className="gap-4">

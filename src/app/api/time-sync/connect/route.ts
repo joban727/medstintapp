@@ -3,7 +3,12 @@ import { auth } from "@clerk/nextjs/server"
 import { db } from "@/database/connection-pool"
 import { timeSyncSessions, syncEvents } from "@/database/schema"
 import { eq } from "drizzle-orm"
-import { withErrorHandling } from "@/lib/api-response"
+import { logger } from "@/lib/logger"
+
+// Interface for controller with cleanup capability
+interface ControllerWithCleanup extends ReadableStreamDefaultController<string> {
+  cleanup?: () => Promise<void>
+}
 
 // Server-Sent Events endpoint for real-time time synchronization
 export async function GET(request: NextRequest) {
@@ -50,8 +55,11 @@ export async function GET(request: NextRequest) {
       "Access-Control-Allow-Headers": "Cache-Control",
     })
 
+    // Store cleanup function reference for the cancel handler
+    let cleanupFn: (() => Promise<void>) | undefined
+
     // Create readable stream for SSE
-    const stream = new ReadableStream({
+    const stream = new ReadableStream<string>({
       start(controller) {
         // Send initial connection event
         const initialEvent = {
@@ -86,11 +94,11 @@ export async function GET(request: NextRequest) {
                 clientTime: serverTime, // Will be updated by client
                 driftMs: 0, // Will be calculated by client
               })
-              .catch(console.error)
+              .catch((err) => logger.error({ err }, "Failed to log sync event"))
 
             controller.enqueue(`data: ${JSON.stringify(syncEvent)}\n\n`)
           } catch (error) {
-            console.error("SSE sync error:", error)
+            logger.error({ err: error }, "SSE sync error")
           }
         }, 5000)
 
@@ -104,7 +112,7 @@ export async function GET(request: NextRequest) {
             }
             controller.enqueue(`data: ${JSON.stringify(heartbeat)}\n\n`)
           } catch (error) {
-            console.error("SSE heartbeat error:", error)
+            logger.error({ err: error }, "SSE heartbeat error")
           }
         }, 30000)
 
@@ -123,29 +131,28 @@ export async function GET(request: NextRequest) {
               })
               .where(eq(timeSyncSessions.clientId, clientId))
           } catch (error) {
-            console.error("Session cleanup error:", error)
+            logger.error({ err: error }, "Session cleanup error")
           }
         }
 
+        // Store cleanup function for cancel handler
+        cleanupFn = cleanup
+
         // Handle client disconnect
         request.signal.addEventListener("abort", cleanup)
-
-        // Store cleanup function for potential manual cleanup
-
-        ;(controller as any).cleanup = cleanup
       },
 
       cancel() {
         // Cleanup when stream is cancelled
-        if ((this as any).cleanup) {
-          ;(this as any).cleanup()
+        if (cleanupFn) {
+          cleanupFn()
         }
       },
     })
 
     return new Response(stream, { headers })
   } catch (error) {
-    console.error("SSE endpoint error:", error)
+    logger.error({ err: error }, "SSE endpoint error")
     return new Response("Internal Server Error", { status: 500 })
   }
 }
@@ -161,4 +168,3 @@ export async function OPTIONS() {
     },
   })
 }
-

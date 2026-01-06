@@ -125,11 +125,11 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       },
     })
   } catch (error) {
-    logger.error({ route: "GET /api/time-records", error: error as Error }, "Error fetching time records")
-    return createErrorResponse(
-      ERROR_MESSAGES.INTERNAL_ERROR,
-      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    logger.error(
+      { route: "GET /api/time-records", error: error as Error },
+      "Error fetching time records"
     )
+    return createErrorResponse(ERROR_MESSAGES.INTERNAL_ERROR, HTTP_STATUS.INTERNAL_SERVER_ERROR)
   }
 })
 
@@ -312,10 +312,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
         }))
       )
     }
-    return createErrorResponse(
-      ERROR_MESSAGES.INTERNAL_ERROR,
-      HTTP_STATUS.INTERNAL_SERVER_ERROR
-    )
+    return createErrorResponse(ERROR_MESSAGES.INTERNAL_ERROR, HTTP_STATUS.INTERNAL_SERVER_ERROR)
   }
 })
 
@@ -365,7 +362,10 @@ export const PUT = withErrorHandling(async (request: NextRequest) => {
         return createErrorResponse("Cannot modify approved time records", HTTP_STATUS.FORBIDDEN)
       }
       if (!record.clockIn) {
-        return createErrorResponse("Invalid time record: missing clock in time", HTTP_STATUS.BAD_REQUEST)
+        return createErrorResponse(
+          "Invalid time record: missing clock in time",
+          HTTP_STATUS.BAD_REQUEST
+        )
       }
       const windowResult = ValidationRules.validateStudentSubmissionWindow(record.clockIn)
       if (!windowResult.valid) {
@@ -392,7 +392,10 @@ export const PUT = withErrorHandling(async (request: NextRequest) => {
 
       // Recalculate total hours
       if (!record.clockIn) {
-        return createErrorResponse("Invalid time record: missing clock in time", HTTP_STATUS.BAD_REQUEST)
+        return createErrorResponse(
+          "Invalid time record: missing clock in time",
+          HTTP_STATUS.BAD_REQUEST
+        )
       }
       const clockInTime = new Date(record.clockIn)
       const clockOutTime = new Date(updateData.clockOut)
@@ -500,10 +503,7 @@ export const PUT = withErrorHandling(async (request: NextRequest) => {
         }))
       )
     }
-    return createErrorResponse(
-      ERROR_MESSAGES.INTERNAL_ERROR,
-      HTTP_STATUS.INTERNAL_SERVER_ERROR
-    )
+    return createErrorResponse(ERROR_MESSAGES.INTERNAL_ERROR, HTTP_STATUS.INTERNAL_SERVER_ERROR)
   }
 })
 
@@ -572,10 +572,6 @@ export const DELETE = withErrorHandling(async (request: NextRequest) => {
     })
   } catch (error) {
     console.error("Error deleting time record:", error)
-    return createErrorResponse(
-      ERROR_MESSAGES.INTERNAL_ERROR,
-      HTTP_STATUS.INTERNAL_SERVER_ERROR
-    )
+    return createErrorResponse(ERROR_MESSAGES.INTERNAL_ERROR, HTTP_STATUS.INTERNAL_SERVER_ERROR)
   }
 })
-

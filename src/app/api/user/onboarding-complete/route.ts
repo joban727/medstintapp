@@ -20,13 +20,14 @@ import {
   HTTP_STATUS,
 } from "@/lib/api-response"
 import { invalidateUserCache } from "@/lib/auth-utils"
+import { cacheIntegrationService } from "@/lib/cache-integration"
 
 /**
  * Onboarding Complete API
  * Finalizes the onboarding process by:
  * 1. Persisting any temporary session data to real tables (if session exists)
  * 2. Marking the user's onboarding as complete
- * 
+ *
  * The API will succeed even if no session data exists - it just marks onboarding complete.
  */
 export const POST = withErrorHandling(async (request: NextRequest) => {
@@ -63,6 +64,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     // Invalidate middleware cache so user gets redirected to dashboard immediately
     invalidateUserCache(user.id)
 
+    // Invalidate application cache
+    try {
+      await cacheIntegrationService.invalidateByTags(["users"])
+    } catch (error) {
+      console.warn("Failed to invalidate cache:", error)
+    }
+
     return createSuccessResponse(
       {
         message: "Onboarding completed successfully",
@@ -72,7 +80,42 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     )
   }
 
-  const formData = session.formData as any
+  // Define the expected shape of onboarding form data
+  interface OnboardingFormData {
+    schoolProfile?: {
+      name?: string
+      address?: string
+      phone?: string
+      website?: string
+    }
+    programs?: Array<{
+      id: string
+      name: string
+      type?: string
+      description?: string
+      duration?: string
+      requirements?: string[]
+      classYears?: Array<{
+        year: number
+        name?: string
+        capacity?: string
+        description?: string
+      }>
+    }>
+    rotations?: Array<{
+      siteId?: string
+      siteName?: string
+      programId?: string
+      name?: string
+      address?: string
+      phone?: string
+      email?: string
+      type?: string
+      capacity?: string
+    }>
+  }
+
+  const formData = session.formData as OnboardingFormData
   const createdEntities: string[] = []
 
   try {
@@ -107,7 +150,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
             name: prog.name,
             type: prog.type, // Save the program type
             description: prog.description || "",
-            duration: parseInt(prog.duration) || 12, // Default to 12 months if invalid
+            duration: parseInt(prog.duration || "12") || 12, // Default to 12 months if invalid
             classYear: 0, // Legacy field, can be 0 or ignored
             isActive: true,
             requirements: JSON.stringify(prog.requirements || []),
@@ -122,7 +165,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
               const cohortId = crypto.randomUUID()
               // Calculate dates based on "Year" (assuming academic year starts in Fall)
               // This is a simplification; ideally UI provides exact dates.
-              const startYear = cls.year - Math.ceil(parseInt(prog.duration) / 12)
+              const startYear = cls.year - Math.ceil(parseInt(prog.duration || "12") / 12)
               const startDate = new Date(startYear, 8, 1) // Sept 1st
               const endDate = new Date(cls.year, 5, 30) // June 30th of grad year
 
@@ -132,7 +175,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
                 name: cls.name || `Class of ${cls.year}`,
                 startDate: startDate,
                 endDate: endDate,
-                capacity: parseInt(cls.capacity) || 0,
+                capacity: parseInt(cls.capacity || "0") || 0,
                 description: cls.description,
                 status: "ACTIVE",
                 createdAt: new Date(),
@@ -165,7 +208,9 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
               address: rot.address || "Address Pending",
               phone: rot.phone || "Phone Pending",
               email: rot.email || "pending@example.com",
-              type: rot.type || "HOSPITAL",
+              type:
+                (rot.type as "HOSPITAL" | "CLINIC" | "NURSING_HOME" | "OUTPATIENT" | "OTHER") ||
+                "HOSPITAL",
               capacity: rot.capacity ? parseInt(rot.capacity) : 0,
               isActive: true,
               createdAt: new Date(),
@@ -175,7 +220,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
             createdEntities.push(`Clinical Site: ${rot.siteName}`)
           }
 
-          const linkedProgramId = programMap.get(rot.programId)
+          const linkedProgramId = rot.programId ? programMap.get(rot.programId) : undefined
 
           if (siteId && linkedProgramId) {
             // Link to program
@@ -207,6 +252,19 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     // Invalidate middleware cache so user gets redirected to dashboard immediately
     invalidateUserCache(user.id)
 
+    // Invalidate application cache
+    try {
+      await cacheIntegrationService.invalidateByTags([
+        "users",
+        "schools",
+        "programs",
+        "cohorts",
+        "clinical-sites",
+      ])
+    } catch (error) {
+      console.warn("Failed to invalidate cache:", error)
+    }
+
     return createSuccessResponse(
       {
         message: "Onboarding completed successfully",
@@ -222,4 +280,3 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     )
   }
 })
-

@@ -29,7 +29,7 @@ import crypto from "crypto"
 import {
   validateLocationWithGeofence,
   saveLocationVerification,
-  type LocationValidationResult
+  type LocationValidationResult,
 } from "@/services/location-validation"
 
 // Clock operation interfaces
@@ -299,11 +299,14 @@ export class ClockService {
             longitude: request.location.longitude,
             accuracy: request.location.accuracy || 0,
             clinicalSiteId: rotation.clinicalSiteId,
-            strictMode: strictMode
+            strictMode: strictMode,
           })
 
           if (!locationValidationResult.isValid) {
-            const reasons = [...locationValidationResult.errors, ...locationValidationResult.warnings].join("; ")
+            const reasons = [
+              ...locationValidationResult.errors,
+              ...locationValidationResult.warnings,
+            ].join("; ")
 
             if (strictMode) {
               throw createValidationError(
@@ -317,7 +320,10 @@ export class ClockService {
           }
         }
       } catch (error) {
-        logger.warn({ error: error instanceof Error ? error.message : String(error) }, "Geofence validation error")
+        logger.warn(
+          { error: error instanceof Error ? error.message : String(error) },
+          "Geofence validation error"
+        )
         systemFlags.push(`[SYSTEM FLAG]: Geofence validation error - ${(error as Error).message}`)
       }
     }
@@ -450,11 +456,14 @@ export class ClockService {
             longitude: request.location.longitude,
             accuracy: request.location.accuracy || 0,
             clinicalSiteId: rotation.clinicalSiteId,
-            strictMode: strictMode
+            strictMode: strictMode,
           })
 
           if (!locationValidationResult.isValid) {
-            const reasons = [...locationValidationResult.errors, ...locationValidationResult.warnings].join("; ")
+            const reasons = [
+              ...locationValidationResult.errors,
+              ...locationValidationResult.warnings,
+            ].join("; ")
 
             if (strictMode) {
               throw createValidationError(
@@ -468,7 +477,10 @@ export class ClockService {
           }
         }
       } catch (error) {
-        logger.warn({ error: error instanceof Error ? error.message : String(error) }, "Geofence validation error")
+        logger.warn(
+          { error: error instanceof Error ? error.message : String(error) },
+          "Geofence validation error"
+        )
         systemFlags.push(`[SYSTEM FLAG]: Geofence validation error - ${(error as Error).message}`)
       }
     }
@@ -497,9 +509,12 @@ export class ClockService {
       }
     } catch (error) {
       // Ignore DB errors during soft validation, will be caught in atomic operation
-      logger.warn({
-        error: error instanceof Error ? error.message : String(error),
-      }, "Failed to validate session duration")
+      logger.warn(
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+        "Failed to validate session duration"
+      )
     }
 
     // Append flags to notes
@@ -552,11 +567,14 @@ export class ClockService {
         (error) => error instanceof ClockError && error.retryable
       )
 
-      logger.info({
-        operationId,
-        recordId: result.recordId,
-        flags: JSON.stringify(systemFlags),
-      }, "Clock-in operation completed successfully (with potential flags)")
+      logger.info(
+        {
+          operationId,
+          recordId: result.recordId,
+          flags: JSON.stringify(systemFlags),
+        },
+        "Clock-in operation completed successfully (with potential flags)"
+      )
 
       return {
         ...result,
@@ -567,12 +585,15 @@ export class ClockService {
         },
       }
     } catch (error) {
-      logger.error({
-        operationId,
-        error: error instanceof Error ? error.message : "Unknown error",
-        errorType: error?.constructor?.name,
-        isClockError: error instanceof ClockError,
-      }, "Clock-in operation failed")
+      logger.error(
+        {
+          operationId,
+          error: error instanceof Error ? error.message : "Unknown error",
+          errorType: error?.constructor?.name,
+          isClockError: error instanceof ClockError,
+        },
+        "Clock-in operation failed"
+      )
 
       // Debug logging for error analysis
       console.log("DEBUG: Caught error in clockIn:", {
@@ -646,11 +667,14 @@ export class ClockService {
         (error) => error instanceof ClockError && error.retryable
       )
 
-      logger.info({
-        operationId,
-        recordId: result.recordId,
-        flags: JSON.stringify(systemFlags),
-      }, "Clock-out operation completed successfully (with potential flags)")
+      logger.info(
+        {
+          operationId,
+          recordId: result.recordId,
+          flags: JSON.stringify(systemFlags),
+        },
+        "Clock-out operation completed successfully (with potential flags)"
+      )
 
       return {
         ...result,
@@ -661,10 +685,13 @@ export class ClockService {
         },
       }
     } catch (error) {
-      logger.error({
-        operationId,
-        error: error instanceof Error ? error.message : "Unknown error",
-      }, "Clock-out operation failed")
+      logger.error(
+        {
+          operationId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        },
+        "Clock-out operation failed"
+      )
 
       if (error instanceof ClockError) {
         throw error
@@ -745,10 +772,13 @@ export class ClockService {
         // Make sure to return null-safe values
       }
     } catch (error) {
-      logger.error({
-        studentId,
-        error: error instanceof Error ? error.message : "Unknown error",
-      }, "Failed to get clock status")
+      logger.error(
+        {
+          studentId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        },
+        "Failed to get clock status"
+      )
 
       throw createDatabaseError("Failed to get clock status", "get-status", true)
     }
@@ -831,9 +861,6 @@ export class ClockService {
         // We will rely on the caller or do it here if we can get the ID.
         // Wait, we are inside the transaction callback here.
         // Let's do it inside the transaction to ensure it's recorded.
-
-
-
       } catch (error: any) {
         // Handle Postgres unique constraint violation for concurrent requests
         if (
@@ -955,9 +982,7 @@ export class ClockService {
           currentDuration: 0,
         }
       })
-
     })
-
   }
 
   /**
@@ -965,12 +990,12 @@ export class ClockService {
    */
   private static async getSiteInfo(rotationId: string): Promise<
     | {
-      id: string
-      name: string
-      address: string
-      latitude?: number
-      longitude?: number
-    }
+        id: string
+        name: string
+        address: string
+        latitude?: number
+        longitude?: number
+      }
     | undefined
   > {
     try {
@@ -992,16 +1017,19 @@ export class ClockService {
 
       return site
         ? {
-          id: site.id,
-          name: site.name,
-          address: site.address,
-        }
+            id: site.id,
+            name: site.name,
+            address: site.address,
+          }
         : undefined
     } catch (error) {
-      logger.warn({
-        rotationId,
-        error: error instanceof Error ? error.message : String(error),
-      }, "Failed to get site info")
+      logger.warn(
+        {
+          rotationId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        "Failed to get site info"
+      )
       return undefined
     }
   }
@@ -1072,10 +1100,13 @@ export class ClockService {
         address: "Unknown Address",
       }
     } catch (error) {
-      logger.warn({
-        siteId,
-        error: error instanceof Error ? error.message : String(error),
-      }, "Failed to get site information")
+      logger.warn(
+        {
+          siteId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        "Failed to get site information"
+      )
       return {
         id: siteId,
         name: "Unknown Site",

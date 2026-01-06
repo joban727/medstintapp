@@ -1,7 +1,13 @@
 import { eq, inArray, count, aliasedTable } from "drizzle-orm"
 import { SchoolRotationsClient } from "../../../../components/dashboard/school-rotations-client"
 import { db } from "@/database/connection-pool"
-import { rotations, users, clinicalSites, siteAssignments, cohorts } from "../../../../database/schema"
+import {
+  rotations,
+  users,
+  clinicalSites,
+  siteAssignments,
+  cohorts,
+} from "../../../../database/schema"
 import { requireAnyRole } from "../../../../lib/auth-clerk"
 
 export default async function SchoolRotationsPage() {
@@ -14,31 +20,31 @@ export default async function SchoolRotationsPage() {
 
   const schoolRotations = userSchoolId
     ? await db
-      .select({
-        id: rotations.id,
-        title: rotations.specialty,
-        startDate: rotations.startDate,
-        endDate: rotations.endDate,
-        status: rotations.status,
-        studentId: rotations.studentId,
-        preceptorId: rotations.preceptorId,
-        clinicalSiteId: rotations.clinicalSiteId,
-        studentName: users.name,
-        studentEmail: users.email,
-        cohortName: cohorts.name,
-        siteName: clinicalSites.name,
-        siteCapacity: clinicalSites.capacity,
-        preceptorName: preceptors.name,
-        completedHours: rotations.completedHours,
-        requiredHours: rotations.requiredHours,
-      })
-      .from(rotations)
-      .leftJoin(users, eq(rotations.studentId, users.id))
-      .leftJoin(clinicalSites, eq(rotations.clinicalSiteId, clinicalSites.id))
-      .leftJoin(preceptors, eq(rotations.preceptorId, preceptors.id))
-      .leftJoin(cohorts, eq(users.cohortId, cohorts.id))
-      .where(eq(users.schoolId, userSchoolId))
-      .orderBy(rotations.startDate)
+        .select({
+          id: rotations.id,
+          title: rotations.specialty,
+          startDate: rotations.startDate,
+          endDate: rotations.endDate,
+          status: rotations.status,
+          studentId: rotations.studentId,
+          preceptorId: rotations.preceptorId,
+          clinicalSiteId: rotations.clinicalSiteId,
+          studentName: users.name,
+          studentEmail: users.email,
+          cohortName: cohorts.name,
+          siteName: clinicalSites.name,
+          siteCapacity: clinicalSites.capacity,
+          preceptorName: preceptors.name,
+          completedHours: rotations.completedHours,
+          requiredHours: rotations.requiredHours,
+        })
+        .from(rotations)
+        .leftJoin(users, eq(rotations.studentId, users.id))
+        .leftJoin(clinicalSites, eq(rotations.clinicalSiteId, clinicalSites.id))
+        .leftJoin(preceptors, eq(rotations.preceptorId, preceptors.id))
+        .leftJoin(cohorts, eq(users.cohortId, cohorts.id))
+        .where(eq(users.schoolId, userSchoolId))
+        .orderBy(rotations.startDate)
     : []
 
   // Build assignment counts per rotation using Drizzle aggregation

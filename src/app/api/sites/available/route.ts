@@ -65,8 +65,8 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
     // Runtime filter: include only currently active assignments (start <= now, end null or >= now)
     const activeRows = rows.filter((row) => {
-      const start = row.startDate ? new Date(row.startDate as any) : null
-      const end = row.endDate ? new Date(row.endDate as any) : null
+      const start = row.startDate ? new Date(String(row.startDate)) : null
+      const end = row.endDate ? new Date(String(row.endDate)) : null
       const started = !start || start <= now
       const notEnded = !end || end >= now
       return started && notEnded
@@ -116,9 +116,9 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       },
       rotation: site.rotationId
         ? {
-          id: site.rotationId,
-          name: site.rotationName,
-        }
+            id: site.rotationId,
+            name: site.rotationName,
+          }
         : null,
     }))
 
@@ -231,4 +231,3 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   return createSuccessResponse(result)
 })
-

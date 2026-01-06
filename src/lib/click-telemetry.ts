@@ -10,5 +10,8 @@ export function trackClick(task: string, meta?: Record<string, string | number>)
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "click", task, meta, timestamp: new Date().toISOString() }),
     }).catch(() => {})
-  } catch {}
+  } catch (error) {
+    // Silent failure for telemetry
+    console.error("Telemetry error:", error)
+  }
 }

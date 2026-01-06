@@ -6,6 +6,7 @@ import { z } from "zod"
 import { db } from "../../../database/connection-pool"
 import { competencies, competencySubmissions, users } from "../../../database/schema"
 import { cacheIntegrationService } from "@/lib/cache-integration"
+import { withCSRF } from "@/lib/csrf-middleware"
 
 import type { UserRole } from "@/types"
 // Validation schemas
@@ -35,7 +36,9 @@ const assessmentCreateSchema = z.object({
     .enum(["SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "REQUIRES_REVISION"])
     .default("SUBMITTED"),
   dueDate: z.string().optional(),
-  metadata: z.record(z.string(), z.any()).optional(),
+  metadata: z
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+    .optional(),
 })
 
 // Assessment update schema for future use
@@ -71,11 +74,14 @@ async function checkPermissions(userId: string, targetUserId?: string) {
   }
 
   const userRole = user[0].role
-  const isAdmin = userRole !== null && ["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(userRole as UserRole)
-  const isSupervisor = userRole !== null && [
-    "CLINICAL_SUPERVISOR" as UserRole,
-    "CLINICAL_PRECEPTOR" as UserRole,
-  ].includes(userRole as UserRole)
+  const isAdmin =
+    userRole !== null &&
+    ["SUPER_ADMIN" as UserRole, "SCHOOL_ADMIN" as UserRole].includes(userRole as UserRole)
+  const isSupervisor =
+    userRole !== null &&
+    ["CLINICAL_SUPERVISOR" as UserRole, "CLINICAL_PRECEPTOR" as UserRole].includes(
+      userRole as UserRole
+    )
   const isStudent = userRole === ("STUDENT" as UserRole)
   const isOwnData = userId === targetUserId
 
@@ -220,7 +226,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/competency-assessments - Create/Submit assessment
-export async function POST(request: NextRequest) {
+export const POST = withCSRF(async (request: NextRequest) => {
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -276,15 +282,6 @@ export async function POST(request: NextRequest) {
       // Currently simplified due to schema changes
     }
 
-    // Log assessment submission for monitoring
-    console.log("Assessment submitted:", {
-      type: "assessment_submitted",
-      assessment: result[0],
-      userId: data.studentId,
-      competencyId: data.competencyId,
-      status: data.status,
-    })
-
     return NextResponse.json({
       message: "Assessment submitted successfully",
       data: result[0],
@@ -300,17 +297,17 @@ export async function POST(request: NextRequest) {
 
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateByTags(['competency'])
+      await cacheIntegrationService.invalidateByTags(["competency"])
     } catch (cacheError) {
       console.warn("Cache invalidation error in competency-assessments/route.ts:", cacheError)
     }
 
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
+})
 
 // PUT /api/competency-assessments - Bulk update assessments
-export async function PUT(request: NextRequest) {
+export const PUT = withCSRF(async (request: NextRequest) => {
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -358,13 +355,6 @@ export async function PUT(request: NextRequest) {
     // Currently simplified due to schema changes
 
     // Log bulk assessment updates for monitoring
-    if (results.length > 0) {
-      console.log("Bulk assessments updated:", {
-        type: "assessments_bulk_updated",
-        assessments: results,
-        count: results.length,
-      })
-    }
 
     return NextResponse.json({
       message: `Updated ${results.length} assessments`,
@@ -381,12 +371,11 @@ export async function PUT(request: NextRequest) {
 
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateByTags(['competency'])
+      await cacheIntegrationService.invalidateByTags(["competency"])
     } catch (cacheError) {
       console.warn("Cache invalidation error in competency-assessments/route.ts:", cacheError)
     }
 
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
-
+})

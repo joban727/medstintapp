@@ -7,20 +7,20 @@ import { NextResponse } from "next/server"
 import { ClockError, ClockErrorType } from "@/lib/enhanced-error-handling"
 import { ZodError } from "zod"
 
-export interface StandardApiResponse<T = any> {
+export interface StandardApiResponse<T = unknown> {
   success: boolean
   data?: T
   error?: string
   message?: string
   timestamp?: string
   requestId?: string
-  details?: any
+  details?: unknown
 }
 
 export interface ApiErrorDetails {
   field?: string
   code?: string
-  details?: any
+  details?: unknown
 }
 
 export interface ValidationErrorResponse {
@@ -31,19 +31,21 @@ export interface ValidationErrorResponse {
 }
 
 // Ensure response has a json() method in all environments
-function ensureJsonMethod<R extends Response>(response: R): R & { json: () => Promise<any> } {
-  const anyResp = response as any
+function ensureJsonMethod<R extends Response>(response: R): R & { json: () => Promise<unknown> } {
+  const anyResp = response as unknown as { json?: () => Promise<unknown> }
   if (typeof anyResp.json !== "function") {
-    anyResp.json = async () => {
-      const text = await response.clone().text()
-      try {
-        return JSON.parse(text)
-      } catch {
-        return text
-      }
-    }
+    Object.assign(response, {
+      json: async () => {
+        const text = await response.clone().text()
+        try {
+          return JSON.parse(text)
+        } catch {
+          return text
+        }
+      },
+    })
   }
-  return anyResp
+  return response as R & { json: () => Promise<unknown> }
 }
 
 /**
@@ -145,9 +147,9 @@ export const ERROR_MESSAGES = {
  * Returns a wrapped callable handler suitable for Next.js route handlers.
  */
 export function withErrorHandling(
-  handler: (...args: any[]) => Promise<NextResponse<any>>
-): (...args: any[]) => Promise<NextResponse<any>> {
-  return async (...args: any[]): Promise<NextResponse<any>> => {
+  handler: (...args: any[]) => Promise<NextResponse<unknown>>
+): (...args: any[]) => Promise<NextResponse<unknown>> {
+  return async (...args: any[]): Promise<NextResponse<unknown>> => {
     try {
       const resp = await handler(...args)
       return ensureJsonMethod(resp)
@@ -197,9 +199,9 @@ interface ErrorHandlingOptions {
  * Immediately executes the handler and returns the result.
  */
 export async function withErrorHandlingAsync(
-  handler: () => Promise<NextResponse<any>>,
+  handler: () => Promise<NextResponse<unknown>>,
   options?: ErrorHandlingOptions
-): Promise<NextResponse<any>> {
+): Promise<NextResponse<unknown>> {
   try {
     const resp = await handler()
     return ensureJsonMethod(resp)
@@ -242,8 +244,6 @@ export async function withErrorHandlingAsync(
   }
 }
 
-
-
 /**
  * Maps ClockError types/codes to appropriate HTTP status codes
  */
@@ -277,7 +277,7 @@ function mapClockErrorToStatus(error: ClockError): number {
  * Validates required fields in request data
  */
 export function validateRequiredFields(
-  data: Record<string, any>,
+  data: Record<string, unknown>,
   requiredFields: string[]
 ): ApiErrorDetails[] | null {
   const errors: ApiErrorDetails[] = []

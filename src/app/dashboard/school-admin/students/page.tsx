@@ -71,22 +71,22 @@ export default async function SchoolStudentsPage() {
 
   const studentProgress = userSchoolId
     ? await db
-      .select({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        role: users.role,
-        emailVerified: users.emailVerified,
-        isActive: users.isActive,
-        createdAt: users.createdAt,
-        programId: users.programId,
-        cohortId: users.cohortId,
-        cohortName: cohorts.name,
-        academicStatus: users.academicStatus,
-        completedRotations: users.completedRotations,
-        totalRotations: count(rotations.id),
-        averageScore: sql<number>`COALESCE(ROUND(AVG(${evaluations.overallRating})), 0)`,
-        currentRotationName: sql<string>`
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+          emailVerified: users.emailVerified,
+          isActive: users.isActive,
+          createdAt: users.createdAt,
+          programId: users.programId,
+          cohortId: users.cohortId,
+          cohortName: cohorts.name,
+          academicStatus: users.academicStatus,
+          completedRotations: users.completedRotations,
+          totalRotations: count(rotations.id),
+          averageScore: sql<number>`COALESCE(ROUND(AVG(${evaluations.overallRating})), 0)`,
+          currentRotationName: sql<string>`
             CASE 
               WHEN EXISTS(
                 SELECT 1 FROM ${rotations} r2 
@@ -104,35 +104,37 @@ export default async function SchoolStudentsPage() {
               ELSE NULL
             END
           `,
-      })
-      .from(users)
-      .leftJoin(rotations, eq(users.id, rotations.studentId))
-      .leftJoin(evaluations, eq(users.id, evaluations.studentId))
-      .leftJoin(cohorts, eq(users.cohortId, cohorts.id))
-      .where(eq(users.schoolId, userSchoolId))
-      .groupBy(users.id, cohorts.name)
-      .orderBy(users.createdAt)
-      .then((results) =>
-        results.map((student) => ({
-          ...student,
-          completedRotations: student.completedRotations || 0,
-          totalRotations: student.totalRotations || 0,
-          averageScore: student.averageScore || 0,
-          currentRotation: student.currentRotationName,
-          status:
-            student.academicStatus === "ACTIVE" && student.isActive
-              ? "Active"
-              : student.academicStatus === "GRADUATED"
-                ? "Graduated"
-                : student.academicStatus === "SUSPENDED"
-                  ? "Suspended"
-                  : "Inactive",
-        }))
-      )
+        })
+        .from(users)
+        .leftJoin(rotations, eq(users.id, rotations.studentId))
+        .leftJoin(evaluations, eq(users.id, evaluations.studentId))
+        .leftJoin(cohorts, eq(users.cohortId, cohorts.id))
+        .where(eq(users.schoolId, userSchoolId))
+        .groupBy(users.id, cohorts.name)
+        .orderBy(users.createdAt)
+        .then((results) =>
+          results.map((student) => ({
+            ...student,
+            completedRotations: student.completedRotations || 0,
+            totalRotations: student.totalRotations || 0,
+            averageScore: student.averageScore || 0,
+            currentRotation: student.currentRotationName,
+            status:
+              student.academicStatus === "ACTIVE" && student.isActive
+                ? "Active"
+                : student.academicStatus === "GRADUATED"
+                  ? "Graduated"
+                  : student.academicStatus === "SUSPENDED"
+                    ? "Suspended"
+                    : "Inactive",
+          }))
+        )
     : []
 
   // Extract unique cohorts for filter
-  const uniqueCohorts = Array.from(new Set(studentProgress.map(s => s.cohortName).filter(Boolean))).sort()
+  const uniqueCohorts = Array.from(
+    new Set(studentProgress.map((s) => s.cohortName).filter(Boolean))
+  ).sort()
 
   const activeStudents = studentProgress.filter((s) => s.status === "Active").length
   const totalRotations = studentProgress.reduce((sum, s) => sum + s.completedRotations, 0)
@@ -184,7 +186,8 @@ export default async function SchoolStudentsPage() {
           <p className="text-muted-foreground text-xs">
             {studentProgress.length > 0
               ? Math.round((activeStudents / studentProgress.length) * 100)
-              : 0}% of total
+              : 0}
+            % of total
           </p>
         </DashboardCard>
         <DashboardCard
@@ -211,14 +214,12 @@ export default async function SchoolStudentsPage() {
           className="card-hover-lift spotlight-card border-l-4 border-l-warning"
         >
           <div className="font-bold text-2xl animate-stat-value">{avgScore}%</div>
-          <p className="text-muted-foreground text-xs">
-            +2.5% from last term
-          </p>
+          <p className="text-muted-foreground text-xs">+2.5% from last term</p>
         </DashboardCard>
       </div>
 
       {/* Filters */}
-      <Card className="glass-card-subtle">
+      <Card className="bg-white/5 backdrop-blur-sm border border-white/10">
         <CardHeader>
           <CardTitle>Search &amp; Filter Students</CardTitle>
         </CardHeader>
@@ -285,7 +286,7 @@ export default async function SchoolStudentsPage() {
       </Card>
 
       {/* Students Table */}
-      <Card className="glass-card overflow-hidden">
+      <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm overflow-hidden">
         <CardHeader>
           <CardTitle>Students</CardTitle>
           <CardDescription>Overview of all students and their academic progress</CardDescription>
@@ -309,23 +310,31 @@ export default async function SchoolStudentsPage() {
                   <Badge
                     className={cn(
                       "shrink-0",
-                      student.status === "Active"
-                        ? "success"
-                        : "secondary"
+                      student.status === "Active" ? "success" : "secondary"
                     )}
                   >
                     {student.status}
                   </Badge>
                 </div>
                 <MobileDataField label="Cohort">
-                  <Badge variant="outline" className="text-xs">{student.cohortName || "N/A"}</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {student.cohortName || "N/A"}
+                  </Badge>
                 </MobileDataField>
                 <MobileDataField label="Progress">
-                  <span>{student.completedRotations}/{student.totalRotations} ({student.totalRotations > 0 ? Math.round((student.completedRotations / student.totalRotations) * 100) : 0}%)</span>
+                  <span>
+                    {student.completedRotations}/{student.totalRotations} (
+                    {student.totalRotations > 0
+                      ? Math.round((student.completedRotations / student.totalRotations) * 100)
+                      : 0}
+                    %)
+                  </span>
                 </MobileDataField>
                 <MobileDataField label="Current Rotation">
                   {student.currentRotation ? (
-                    <Badge variant="outline" className="text-xs">{student.currentRotation}</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {student.currentRotation}
+                    </Badge>
                   ) : (
                     <span className="text-muted-foreground text-xs">None</span>
                   )}
@@ -386,9 +395,7 @@ export default async function SchoolStudentsPage() {
                       <Badge
                         className={cn(
                           "transition-all duration-300",
-                          student.status === "Active"
-                            ? "success"
-                            : "secondary"
+                          student.status === "Active" ? "success" : "secondary"
                         )}
                       >
                         {student.status}
@@ -408,8 +415,8 @@ export default async function SchoolStudentsPage() {
                           <span className="font-medium">
                             {student.totalRotations > 0
                               ? Math.round(
-                                (student.completedRotations / student.totalRotations) * 100
-                              )
+                                  (student.completedRotations / student.totalRotations) * 100
+                                )
                               : 0}
                             %
                           </span>
@@ -470,7 +477,10 @@ export default async function SchoolStudentsPage() {
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="glass-card-subtle">
+                        <DropdownMenuContent
+                          align="end"
+                          className="bg-black/80 backdrop-blur-xl border border-white/10"
+                        >
                           <DropdownMenuItem className="cursor-pointer focus:bg-primary/10">
                             <Eye className="mr-2 h-4 w-4 text-blue-500" />
                             View Profile
@@ -484,7 +494,9 @@ export default async function SchoolStudentsPage() {
                             View Rotations
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild className="cursor-pointer focus:bg-primary/10">
-                            <a href={`/dashboard/school-admin/time-records?search=${student.email}`}>
+                            <a
+                              href={`/dashboard/school-admin/time-records?search=${student.email}`}
+                            >
                               <div className="flex items-center w-full">
                                 <Clock className="mr-2 h-4 w-4 text-green-500" />
                                 View Time Records
@@ -508,7 +520,7 @@ export default async function SchoolStudentsPage() {
 
       {/* Quick Actions */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="glass-card-subtle card-hover-lift">
+        <Card className="bg-white/5 backdrop-blur-sm border border-white/10 card-hover-lift">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-primary/10 text-primary">
@@ -544,7 +556,7 @@ export default async function SchoolStudentsPage() {
           </CardContent>
         </Card>
 
-        <Card className="glass-card-subtle card-hover-lift">
+        <Card className="bg-white/5 backdrop-blur-sm border border-white/10 card-hover-lift">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-success/10 text-success">
@@ -580,7 +592,7 @@ export default async function SchoolStudentsPage() {
           </CardContent>
         </Card>
 
-        <Card className="glass-card-subtle card-hover-lift">
+        <Card className="bg-white/5 backdrop-blur-sm border border-white/10 card-hover-lift">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-warning/10 text-warning">

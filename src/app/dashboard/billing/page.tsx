@@ -11,6 +11,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs"
 import { getCurrentUser } from "../../../lib/auth-clerk"
 import { getActiveSubscription } from "../../../lib/payments/actions"
+import { getPlans } from "../../../lib/payments/plans-service"
 import CancelSubButton from "./cancel-sub-button"
 import PlanSelector from "./plan-selector"
 
@@ -18,6 +19,7 @@ export default async function Plans() {
   const user = await getCurrentUser()
   const data = await getActiveSubscription()
   const activeSub = data.subscription
+  const plans = await getPlans()
 
   return (
     <div className="space-y-6">
@@ -163,7 +165,7 @@ export default async function Plans() {
                 .
               </p>
             </div>
-            <PlanSelector activeSub={activeSub} user={user} />
+            <PlanSelector activeSub={activeSub} user={user} plans={plans} />
           </TabsContent>
         </div>
       </Tabs>

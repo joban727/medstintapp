@@ -59,7 +59,7 @@ export default [
     rules: {
       // TypeScript rules
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
-      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-explicit-any": "warn", // Changed from off to warn
       "@typescript-eslint/explicit-function-return-type": "off",
       "@typescript-eslint/explicit-module-boundary-types": "off",
       "@typescript-eslint/no-non-null-assertion": "off",
@@ -72,7 +72,7 @@ export default [
 
       // General rules
       "no-unused-vars": "off", // Use TypeScript version instead
-      "no-console": "off",
+      "no-console": "warn", // Changed from off to warn
       "no-undef": "off",
       "prefer-const": "error",
       "no-var": "error",

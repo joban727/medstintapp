@@ -113,14 +113,18 @@ export async function GET(_request: NextRequest) {
       )
 
       // Transform the results
-      const completionRates = (completionRatesResult.rows as unknown as CompletionRateRow[]).map((row) => ({
-        step: row.step,
-        users_reached: Number.parseInt(String(row.users_reached)) || 0,
-        users_completed: Number.parseInt(String(row.users_completed)) || 0,
-        completion_rate_percent: Number.parseFloat(String(row.completion_rate_percent)) || 0,
-      }))
+      const completionRates = (completionRatesResult.rows as unknown as CompletionRateRow[]).map(
+        (row) => ({
+          step: row.step,
+          users_reached: Number.parseInt(String(row.users_reached)) || 0,
+          users_completed: Number.parseInt(String(row.users_completed)) || 0,
+          completion_rate_percent: Number.parseFloat(String(row.completion_rate_percent)) || 0,
+        })
+      )
 
-      const analyticsSummary = (analyticsSummaryResult.rows as unknown as AnalyticsSummaryRow[]).map((row) => ({
+      const analyticsSummary = (
+        analyticsSummaryResult.rows as unknown as AnalyticsSummaryRow[]
+      ).map((row) => ({
         step: row.step,
         event_type: row.event_type,
         event_count: Number.parseInt(String(row.event_count)) || 0,
@@ -166,4 +170,3 @@ export async function GET(_request: NextRequest) {
 
   return await executeOriginalLogic()
 }
-

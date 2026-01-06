@@ -262,11 +262,14 @@ export class DatabasePerformanceMonitor {
     // Log slow queries
     if (duration > 1000) {
       // More than 1 second
-      logger.warn({
-        queryName,
-        duration,
-        averageDuration: DatabasePerformanceMonitor.getAverageQueryTime(queryName),
-      }, "Slow database query detected")
+      logger.warn(
+        {
+          queryName,
+          duration,
+          averageDuration: DatabasePerformanceMonitor.getAverageQueryTime(queryName),
+        },
+        "Slow database query detected"
+      )
     }
   }
 
@@ -371,7 +374,7 @@ export async function performDatabaseHealthCheck(): Promise<{
 
     const avgQueryTime =
       Object.values(metrics.queryPerformance).reduce((sum, stat) => sum + stat.average, 0) /
-      Object.keys(metrics.queryPerformance).length || 0
+        Object.keys(metrics.queryPerformance).length || 0
 
     const status = avgQueryTime > 2000 ? "unhealthy" : avgQueryTime > 1000 ? "degraded" : "healthy"
 

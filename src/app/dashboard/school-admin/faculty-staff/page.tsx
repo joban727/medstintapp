@@ -121,9 +121,10 @@ async function getPreceptorData(schoolId: string): Promise<PreceptorData[]> {
 
     return preceptors.map((user) => {
       const ratingInfo = ratingData.get(user.id)
-      const avgRating = ratingInfo && ratingInfo.count > 0
-        ? Math.round((ratingInfo.sum / ratingInfo.count) * 10) / 10
-        : 0
+      const avgRating =
+        ratingInfo && ratingInfo.count > 0
+          ? Math.round((ratingInfo.sum / ratingInfo.count) * 10) / 10
+          : 0
 
       return {
         id: user.id,
@@ -275,7 +276,10 @@ function FacultyStaffSkeleton() {
       {/* Stats Cards Skeleton */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => `stats-skeleton-${i}`).map((key) => (
-          <Card key={key} className="glass-card overflow-hidden">
+          <Card
+            key={key}
+            className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm overflow-hidden"
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <Skeleton className="h-4 w-24 shimmer-loading" />
               <Skeleton className="h-4 w-4 shimmer-loading" />
@@ -289,7 +293,7 @@ function FacultyStaffSkeleton() {
       </div>
 
       {/* Filters Skeleton */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between glass-card-subtle p-4 rounded-lg">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/5 backdrop-blur-sm border border-white/10 p-4 rounded-lg">
         <Skeleton className="h-10 w-64 shimmer-loading" />
         <div className="flex items-center space-x-2">
           <Skeleton className="h-10 w-40 shimmer-loading" />
@@ -299,7 +303,7 @@ function FacultyStaffSkeleton() {
       </div>
 
       {/* Table Skeleton */}
-      <Card className="glass-card overflow-hidden">
+      <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm overflow-hidden">
         <CardHeader>
           <Skeleton className="h-6 w-48 shimmer-loading" />
           <Skeleton className="h-4 w-64 shimmer-loading" />

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { logger } from "@/lib/logger"
 
 interface PerformanceMetrics {
   componentName: string
@@ -17,14 +18,15 @@ export function usePerformanceMonitoring(componentName: string) {
     mountTime.current = performance.now() - startTime.current
 
     if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-      console.log(`[Performance] ${componentName} mounted in ${mountTime.current.toFixed(2)}ms`)
+      logger.debug({ duration: mountTime.current }, `[Performance] ${componentName} mounted`)
     }
 
     return () => {
       // Component unmounted
       if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-        console.log(
-          `[Performance] ${componentName} unmounted after ${performance.now() - startTime.current}ms`
+        logger.debug(
+          { duration: performance.now() - startTime.current },
+          `[Performance] ${componentName} unmounted`
         )
       }
     }
@@ -38,7 +40,7 @@ export function usePerformanceMonitoring(componentName: string) {
     requestAnimationFrame(() => {
       const actualRenderTime = performance.now() - renderTime.current
       if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-        console.log(`[Performance] ${componentName} rendered in ${actualRenderTime.toFixed(2)}ms`)
+        logger.debug({ duration: actualRenderTime }, `[Performance] ${componentName} rendered`)
       }
     })
   })
@@ -68,9 +70,7 @@ export function measureComponentPerformance<T extends (...args: any[]) => any>(
     const end = performance.now()
 
     if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-      console.log(
-        `[Performance] ${componentName} function executed in ${(end - start).toFixed(2)}ms`
-      )
+      logger.debug({ duration: end - start }, `[Performance] ${componentName} function executed`)
     }
 
     return result

@@ -6,6 +6,7 @@
 
 import { toast } from 'sonner'
 import { openMapService } from '@/lib/openmap-service'
+import { logger } from '@/lib/client-logger'
 
 export interface LocationCoordinates {
   latitude: number
@@ -98,7 +99,7 @@ class UnifiedLocationService {
         isSupported: true
       }
     } catch (error) {
-      console.warn('Permission API not available:', error)
+      logger.warn({ error }, 'Permission API not available')
       return {
         state: 'prompt',
         canRequest: true,
@@ -115,7 +116,7 @@ class UnifiedLocationService {
       const position = await this.getCurrentPosition({ timeout: 5000 })
       return !!position
     } catch (error) {
-      console.error('Permission request failed:', error)
+      logger.error({ error }, 'Permission request failed')
       return false
     }
   }
@@ -183,7 +184,7 @@ class UnifiedLocationService {
             default:
               errorMessage = 'Unknown geolocation error'
           }
-          console.warn('⚠️ [UnifiedLocationService] Geolocation error:', errorMessage)
+          logger.warn({ errorMessage }, 'Geolocation error')
           reject(new Error(errorMessage))
         },
         positionOptions
@@ -213,7 +214,7 @@ class UnifiedLocationService {
 
       return null
     } catch (error) {
-      console.warn('Facility lookup failed:', error)
+      logger.warn({ error }, 'Facility lookup failed')
       return null
     }
   }
@@ -260,15 +261,12 @@ class UnifiedLocationService {
     const opts = { ...this.DEFAULT_OPTIONS, ...options }
     const cacheKey = opts.cacheKey || 'default'
 
-    console.log('🌍 [UnifiedLocationService] Starting location capture with options:', opts)
-
     // Check cache first
     if (opts.maximumAge && opts.maximumAge > 0) {
       const cached = this.getCachedLocation(cacheKey)
       if (cached && cached.lastUpdated) {
         const age = Date.now() - cached.lastUpdated.getTime()
         if (age < opts.maximumAge) {
-          console.log('✅ [UnifiedLocationService] Using cached location:', cached)
           return cached
         }
       }
@@ -291,7 +289,6 @@ class UnifiedLocationService {
     try {
       // Check permission status
       const permissionStatus = await this.getPermissionStatus()
-      console.log('🔐 [UnifiedLocationService] Permission status:', permissionStatus)
 
       if (!permissionStatus.isSupported) {
         throw new Error('Geolocation is not supported by this browser')
@@ -303,7 +300,6 @@ class UnifiedLocationService {
 
       // Request permission if needed
       if (permissionStatus.state === 'prompt') {
-        console.log('🔐 [UnifiedLocationService] Requesting permission...')
         const granted = await this.requestPermission()
         if (!granted) {
           throw new Error('Location permission was denied')
@@ -311,31 +307,18 @@ class UnifiedLocationService {
       }
 
       // Get current position
-      console.log('📍 [UnifiedLocationService] Getting current position...')
       const locationData = await this.getCurrentPosition(opts)
-      console.log('✅ [UnifiedLocationService] Position received:', locationData)
 
       // Determine accuracy level
       const accuracyLevel = this.getAccuracyLevel(locationData.accuracy)
-
-      console.log('📏 [UnifiedLocationService] Accuracy analysis:', {
-        accuracy: locationData.accuracy,
-        level: accuracyLevel
-      })
 
       // Perform facility lookup if required
       let facility: FacilityInfo | null = null
       if (opts.requireFacilityLookup) {
         try {
-          console.log('🏥 [UnifiedLocationService] Looking up nearby facilities...')
           facility = await this.lookupFacility(locationData)
-          if (facility) {
-            console.log('✅ [UnifiedLocationService] Facility found:', facility.name)
-          } else {
-            console.log('ℹ️ [UnifiedLocationService] No nearby facilities found')
-          }
         } catch (facilityError) {
-          console.warn('⚠️ [UnifiedLocationService] Facility lookup failed:', facilityError)
+          logger.warn({ facilityError }, 'Facility lookup failed')
           // Don't fail the entire location capture if facility lookup fails
         }
       }
@@ -356,7 +339,6 @@ class UnifiedLocationService {
 
       // Cache the successful result
       this.setCachedLocation(cacheKey, locationState)
-      console.log('💾 [UnifiedLocationService] Location cached successfully')
 
       // Show success toast
       if (accuracyLevel === 'high') {
@@ -373,7 +355,6 @@ class UnifiedLocationService {
         })
       }
 
-      console.log('🎉 [UnifiedLocationService] Location capture completed successfully')
       return locationState
 
     } catch (error) {
@@ -389,7 +370,7 @@ class UnifiedLocationService {
             ? 'Location information unavailable. Try moving to an open area or check device GPS.'
             : raw
 
-      console.warn('⚠️ [UnifiedLocationService] Location capture issue:', friendly)
+      logger.warn({ friendly }, 'Location capture issue')
 
       const errorState: LocationState = {
         coordinates: null,
@@ -425,13 +406,6 @@ class UnifiedLocationService {
     captureType: 'clock_in' | 'clock_out'
   ): Promise<boolean> {
     try {
-      console.log('📡 [UnifiedLocationService] Sending location to API:', {
-        timeRecordId,
-        captureType,
-        coordinates: { latitude: locationData.latitude, longitude: locationData.longitude },
-        accuracy: locationData.accuracy
-      })
-
       const response = await fetch('/api/location/capture', {
         method: 'POST',
         headers: {
@@ -459,13 +433,10 @@ class UnifiedLocationService {
         throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
-      const result = await response.json()
-      console.log('✅ [UnifiedLocationService] Location sent successfully:', result)
-
       return true
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send location'
-      console.error('❌ [UnifiedLocationService] Failed to send location:', errorMessage)
+      logger.error({ errorMessage }, 'Failed to send location')
 
       toast.error('Failed to save location', {
         description: errorMessage
@@ -480,7 +451,6 @@ class UnifiedLocationService {
    */
   clearCache(): void {
     this.cache.clear()
-    console.log('🗑️ [UnifiedLocationService] Cache cleared')
   }
 
   /**
@@ -488,7 +458,6 @@ class UnifiedLocationService {
    */
   clearCachedLocation(cacheKey: string): void {
     this.cache.delete(cacheKey)
-    console.log('🗑️ [UnifiedLocationService] Cleared cache for key:', cacheKey)
   }
 }
 

@@ -9,6 +9,10 @@ import {
 } from '@/database/schema'
 import { sql, desc, and, eq } from "drizzle-orm"
 import { calculateDistance } from "@/lib/geo-utils"
+import { encryptLocationForStorage } from "@/lib/encryption"
+import { logger } from "@/lib/logger"
+
+export type PermissionStatus = 'granted' | 'denied' | 'prompt' | 'unknown' | 'not_requested'
 
 export interface LocationValidationResult {
   isValid: boolean
@@ -115,7 +119,7 @@ export async function findNearestClinicalSite(
 
     return results[0]
   } catch (error) {
-    console.error('Error finding nearest clinical site:', error)
+    logger.error({ error }, 'Error finding nearest clinical site')
     return null
   }
 }
@@ -184,7 +188,7 @@ export async function verifyLocationProximity(
       clinicalSiteLocationId: location.id,
     }
   } catch (error) {
-    console.error('Error verifying location proximity:', error)
+    logger.error({ error }, 'Error verifying location proximity')
     return {
       isWithinRange: false,
       distance: 0,
@@ -295,7 +299,7 @@ export async function validateLocationWithGeofence(
 
     return result
   } catch (error) {
-    console.error('Error validating location with geofence:', error)
+    logger.error({ error }, 'Error validating location with geofence')
     result.errors.push('Failed to validate location due to system error')
     return result
   }
@@ -306,7 +310,7 @@ export async function validateLocationWithGeofence(
  */
 export async function checkLocationPermissions(userId: string): Promise<{
   hasPermission: boolean
-  permissionStatus: 'granted' | 'denied' | 'prompt' | 'unknown'
+  permissionStatus: PermissionStatus
   lastUpdated?: Date
 }> {
   try {
@@ -327,11 +331,11 @@ export async function checkLocationPermissions(userId: string): Promise<{
     const permission = permissions[0]
     return {
       hasPermission: permission.permissionStatus === 'granted',
-      permissionStatus: permission.permissionStatus as any,
+      permissionStatus: permission.permissionStatus as PermissionStatus,
       lastUpdated: permission.updatedAt,
     }
   } catch (error) {
-    console.error('Error checking location permissions:', error)
+    logger.error({ error }, 'Error checking location permissions')
     return {
       hasPermission: false,
       permissionStatus: 'unknown',
@@ -365,13 +369,16 @@ export async function saveLocationVerification(
         ? validationResult.warnings.join('; ')
         : undefined
 
+    // Encrypt location coordinates before storage
+    const encryptedLocation = encryptLocationForStorage(userLatitude, userLongitude)
+
     const verificationRecord = await db
       .insert(locationVerifications)
       .values({
         timeRecordId,
         verificationType,
-        userLatitude: userLatitude.toString(),
-        userLongitude: userLongitude.toString(),
+        userLatitude: encryptedLocation,
+        userLongitude: 'ENCRYPTED_V1', // Marker indicating encrypted data
         userAccuracy: userAccuracy.toString(),
         locationSource,
         clinicalSiteLocationId: validationResult.nearestSite?.id,
@@ -379,13 +386,17 @@ export async function saveLocationVerification(
         isWithinGeofence: validationResult.isWithinGeofence,
         verificationStatus,
         flagReason,
-        metadata: metadata ?? null,
+        metadata: {
+          ...(metadata ?? {}),
+          encrypted: true,
+          encryptionVersion: 1
+        },
       })
       .returning({ id: locationVerifications.id })
 
     return verificationRecord[0].id
   } catch (error) {
-    console.error('Error saving location verification:', error)
+    logger.error({ error }, 'Error saving location verification')
     throw new Error('Failed to save location verification')
   }
 }

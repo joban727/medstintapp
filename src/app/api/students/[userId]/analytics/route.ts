@@ -131,22 +131,22 @@ export const GET = withErrorHandling(
     const avgRotationProgress =
       rotationProgress.length > 0
         ? rotationProgress.reduce((sum, rotation) => {
-          // Skip rotations without dates
-          if (!rotation.startDate || !rotation.endDate) return sum
-          const now = new Date()
-          const start = new Date(rotation.startDate)
-          const end = new Date(rotation.endDate)
-          const totalDays = Math.max(
-            1,
-            Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-          )
-          const elapsedDays = Math.max(
-            0,
-            Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-          )
-          const progress = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100))
-          return sum + progress
-        }, 0) / rotationProgress.filter(r => r.startDate && r.endDate).length || 0
+            // Skip rotations without dates
+            if (!rotation.startDate || !rotation.endDate) return sum
+            const now = new Date()
+            const start = new Date(rotation.startDate)
+            const end = new Date(rotation.endDate)
+            const totalDays = Math.max(
+              1,
+              Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+            )
+            const elapsedDays = Math.max(
+              0,
+              Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+            )
+            const progress = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100))
+            return sum + progress
+          }, 0) / rotationProgress.filter((r) => r.startDate && r.endDate).length || 0
         : 0
 
     return createSuccessResponse({

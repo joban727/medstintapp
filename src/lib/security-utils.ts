@@ -402,10 +402,13 @@ export class SecurityManager {
     if (["POST", "PUT", "PATCH"].includes(req.method)) {
       const bodyValidation = await this.inputValidator.validateRequestBody(req.clone())
       if (!bodyValidation.valid) {
-        logger.warn({
-          reason: bodyValidation.reason,
-          url: req.url,
-        }, "Request body validation failed")
+        logger.warn(
+          {
+            reason: bodyValidation.reason,
+            url: req.url,
+          },
+          "Request body validation failed"
+        )
         return {
           valid: false,
           reason: bodyValidation.reason,

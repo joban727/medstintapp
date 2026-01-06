@@ -74,57 +74,57 @@ export default async function PreceptorStudentsPage() {
 
   // Fetch comprehensive student oversight data from database
   const studentDetailsPromises = assignedStudents.map(async (student) => {
-    if (!student.id) return {
-      ...student,
-      year: 1,
-      school: "Unknown School",
-      gpa: "0.00",
-      attendanceRate: 0,
-      currentWeek: 0,
-      totalWeeks: 12,
-      lastEvaluation: 0,
-      competenciesCompleted: 0,
-      totalCompetencies: 0,
-      clinicalHours: 0,
-      requiredHours: 300,
-      strengths: "None",
-      areasForImprovement: "None",
-      nextMeeting: new Date()
-    }
+    if (!student.id)
+      return {
+        ...student,
+        year: 1,
+        school: "Unknown School",
+        gpa: "0.00",
+        attendanceRate: 0,
+        currentWeek: 0,
+        totalWeeks: 12,
+        lastEvaluation: 0,
+        competenciesCompleted: 0,
+        totalCompetencies: 0,
+        clinicalHours: 0,
+        requiredHours: 300,
+        strengths: "None",
+        areasForImprovement: "None",
+        nextMeeting: new Date(),
+      }
 
     try {
       const { timeRecords, evaluations, competencyAssignments } = await import("@/database/schema")
       const { count, sum, avg } = await import("drizzle-orm")
 
       // Fetch real student data with parallel queries
-      const [timeRecordsData, evaluationsData, competencyData] =
-        await Promise.allSettled([
-          // Get time records and clinical hours
-          db
-            .select({
-              totalHours: sum(timeRecords.totalHours),
-              attendanceRate: avg(timeRecords.totalHours),
-            })
-            .from(timeRecords)
-            .where(eq(timeRecords.studentId, student.id)),
+      const [timeRecordsData, evaluationsData, competencyData] = await Promise.allSettled([
+        // Get time records and clinical hours
+        db
+          .select({
+            totalHours: sum(timeRecords.totalHours),
+            attendanceRate: avg(timeRecords.totalHours),
+          })
+          .from(timeRecords)
+          .where(eq(timeRecords.studentId, student.id)),
 
-          // Get evaluations and scores
-          db
-            .select({
-              avgScore: avg(evaluations.overallRating),
-            })
-            .from(evaluations)
-            .where(eq(evaluations.studentId, student.id)),
+        // Get evaluations and scores
+        db
+          .select({
+            avgScore: avg(evaluations.overallRating),
+          })
+          .from(evaluations)
+          .where(eq(evaluations.studentId, student.id)),
 
-          // Get competency progress
-          db
-            .select({
-              totalAssignments: count(competencyAssignments.id),
-              completedAssignments: count(competencyAssignments.completionDate),
-            })
-            .from(competencyAssignments)
-            .where(eq(competencyAssignments.userId, student.id)),
-        ])
+        // Get competency progress
+        db
+          .select({
+            totalAssignments: count(competencyAssignments.id),
+            completedAssignments: count(competencyAssignments.completionDate),
+          })
+          .from(competencyAssignments)
+          .where(eq(competencyAssignments.userId, student.id)),
+      ])
 
       // Process results with safe fallbacks
       const timeData = timeRecordsData.status === "fulfilled" ? timeRecordsData.value[0] : null
@@ -142,9 +142,16 @@ export default async function PreceptorStudentsPage() {
         Math.max(0, Math.round((clinicalHours / requiredHours) * 100))
       )
 
-      // Calculate year based on random logic for now as enrollmentDate isn't in the query yet
-      // In a real app we'd join with users table properly, but we have partial user data
-      const year = Math.floor(Math.random() * 4) + 1
+      // Calculate year based on rotation start date (approximation: 1 year = 1 program year)
+      // Falls back to year 1 if no date available
+      const calculateStudentYear = (): number => {
+        if (!student.rotationStart) return 1
+        const startYear = new Date(student.rotationStart).getFullYear()
+        const currentYear = new Date().getFullYear()
+        const yearDiff = currentYear - startYear
+        return Math.min(4, Math.max(1, yearDiff + 1)) // Clamp between 1-4
+      }
+      const year = calculateStudentYear()
 
       return {
         ...student,
@@ -178,7 +185,7 @@ export default async function PreceptorStudentsPage() {
         requiredHours: 300,
         strengths: "None",
         areasForImprovement: "None",
-        nextMeeting: new Date()
+        nextMeeting: new Date(),
       }
     }
   })
@@ -420,7 +427,9 @@ export default async function PreceptorStudentsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <div className="font-medium">{student.nextMeeting.toLocaleDateString()}</div>
+                        <div className="font-medium">
+                          {student.nextMeeting.toLocaleDateString()}
+                        </div>
                         <div className="text-muted-foreground">
                           {student.nextMeeting.toLocaleTimeString([], {
                             hour: "2-digit",
@@ -466,8 +475,6 @@ export default async function PreceptorStudentsPage() {
             </Table>
           </CardContent>
         </Card>
-
-
       </div>
     </PageContainer>
   )

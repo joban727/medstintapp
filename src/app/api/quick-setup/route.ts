@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server"
+import { logger } from "@/lib/logger"
 import { eq } from "drizzle-orm"
 import { type NextRequest } from "next/server"
 import { db } from "@/database/connection-pool"
@@ -177,8 +177,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       created.length > 0 ? "Quick setup completed" : "No setup needed"
     )
   } catch (error) {
-    console.error("Quick setup error:", error)
+    logger.error({ error }, "Quick setup error")
     return createErrorResponse("Failed to complete quick setup", HTTP_STATUS.INTERNAL_SERVER_ERROR)
   }
 })
-

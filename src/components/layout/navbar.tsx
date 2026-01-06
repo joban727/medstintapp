@@ -29,16 +29,15 @@ export const Navbar = () => {
           {/* Logo */}
           <Link
             href="/"
-            className="group flex items-center gap-2 sm:gap-3 font-semibold transition-colors duration-200"
+            className="group flex items-center font-semibold transition-colors duration-200"
           >
             <Image
               src="/logo-medstint.svg"
               alt="MedStint Logo"
-              width={32}
-              height={32}
-              className="h-8 w-8 sm:h-10 sm:w-10"
+              width={140}
+              height={40}
+              className="h-8 sm:h-10"
             />
-            <h3 className="text-xl sm:text-2xl lg:text-3xl text-foreground">{site.name}</h3>
           </Link>
 
           {/* Spacer for centered logo */}
@@ -91,19 +90,14 @@ export const Navbar = () => {
                 <div className="flex h-full flex-col">
                   <SheetHeader className="pb-6">
                     <SheetTitle>
-                      <Link
-                        href="/"
-                        className="flex items-center gap-3"
-                        onClick={() => setIsOpen(false)}
-                      >
+                      <Link href="/" className="flex items-center" onClick={() => setIsOpen(false)}>
                         <Image
                           src="/logo-medstint.svg"
                           alt="MedStint Logo"
-                          width={40}
+                          width={140}
                           height={40}
-                          className="h-10 w-10"
+                          className="h-10"
                         />
-                        <span className="font-semibold text-xl text-foreground">{site.name}</span>
                       </Link>
                     </SheetTitle>
                   </SheetHeader>

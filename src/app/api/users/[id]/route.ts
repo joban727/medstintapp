@@ -77,10 +77,7 @@ export const DELETE = withErrorHandling(
       }
 
       // Also soft delete any schools where this user is the admin
-      await tx
-        .update(schools)
-        .set({ isActive: false })
-        .where(eq(schools.adminId, userIdToDelete))
+      await tx.update(schools).set({ isActive: false }).where(eq(schools.adminId, userIdToDelete))
 
       // Soft delete the user
       await tx.update(users).set({ isActive: false }).where(eq(users.id, userIdToDelete))
@@ -88,7 +85,7 @@ export const DELETE = withErrorHandling(
 
     // Invalidate related caches
     try {
-      await cacheIntegrationService.invalidateByTags(['user'])
+      await cacheIntegrationService.invalidateByTags(["user"])
     } catch (cacheError) {
       console.warn("Cache invalidation error in users/[id]/route.ts:", cacheError)
     }

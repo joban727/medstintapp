@@ -19,7 +19,10 @@ export async function GET(request: NextRequest) {
     const authResult = await apiAuthMiddleware(request)
 
     if (!authResult.success) {
-      return createErrorResponse(authResult.error || ERROR_MESSAGES.UNAUTHORIZED, authResult.status || HTTP_STATUS.UNAUTHORIZED)
+      return createErrorResponse(
+        authResult.error || ERROR_MESSAGES.UNAUTHORIZED,
+        authResult.status || HTTP_STATUS.UNAUTHORIZED
+      )
     }
 
     const { user } = authResult
@@ -60,4 +63,3 @@ export async function GET(request: NextRequest) {
     })
   })
 }
-

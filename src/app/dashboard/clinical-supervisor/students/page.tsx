@@ -115,29 +115,30 @@ export default async function SupervisorStudentsPage() {
 
   // Fetch comprehensive student oversight data from database
   const studentDetailsPromises = supervisedStudents.map(async (student) => {
-    if (!student.id) return {
-      ...student,
-      year: 1,
-      school: "Unknown School",
-      gpa: "0.00",
-      attendanceRate: 0,
-      currentWeek: 0,
-      totalWeeks: 12,
-      overallScore: 0,
-      competenciesCompleted: 0,
-      totalCompetencies: 0,
-      clinicalHours: 0,
-      requiredHours: 300,
-      preceptorName: "Unassigned",
-      site: "Unknown Site",
-      specialty: "General",
-      riskLevel: "LOW",
-      lastContact: new Date(),
-      nextReview: new Date(),
-      issues: 0,
-      strengths: "None",
-      concerns: "None"
-    }
+    if (!student.id)
+      return {
+        ...student,
+        year: 1,
+        school: "Unknown School",
+        gpa: "0.00",
+        attendanceRate: 0,
+        currentWeek: 0,
+        totalWeeks: 12,
+        overallScore: 0,
+        competenciesCompleted: 0,
+        totalCompetencies: 0,
+        clinicalHours: 0,
+        requiredHours: 300,
+        preceptorName: "Unassigned",
+        site: "Unknown Site",
+        specialty: "General",
+        riskLevel: "LOW",
+        lastContact: new Date(),
+        nextReview: new Date(),
+        issues: 0,
+        strengths: "None",
+        concerns: "None",
+      }
 
     try {
       const { timeRecords, evaluations, competencyAssignments } = await import("@/database/schema")
@@ -220,7 +221,9 @@ export default async function SupervisorStudentsPage() {
 
       // Calculate year based on enrollment date
       const currentYear = new Date().getFullYear()
-      const enrollmentYear = student.enrollmentDate ? student.enrollmentDate.getFullYear() : currentYear
+      const enrollmentYear = student.enrollmentDate
+        ? student.enrollmentDate.getFullYear()
+        : currentYear
       const year = Math.max(1, Math.min(4, currentYear - enrollmentYear + 1))
 
       return {
@@ -423,7 +426,9 @@ export default async function SupervisorStudentsPage() {
                     <SelectItem value="CT Scan">CT Scan</SelectItem>
                     <SelectItem value="Nuclear Medicine">Nuclear Medicine</SelectItem>
                     <SelectItem value="Mammography">Mammography</SelectItem>
-                    <SelectItem value="Interventional Radiology">Interventional Radiology</SelectItem>
+                    <SelectItem value="Interventional Radiology">
+                      Interventional Radiology
+                    </SelectItem>
                     <SelectItem value="Fluoroscopy">Fluoroscopy</SelectItem>
                     <SelectItem value="Mobile Radiography">Mobile Radiography</SelectItem>
                     <SelectItem value="Surgical Radiography">Surgical Radiography</SelectItem>
@@ -485,7 +490,9 @@ export default async function SupervisorStudentsPage() {
                               <div className="text-muted-foreground text-sm">
                                 Year {student.year} • {student.school}
                               </div>
-                              <div className="text-muted-foreground text-xs">GPA: {student.gpa}</div>
+                              <div className="text-muted-foreground text-xs">
+                                GPA: {student.gpa}
+                              </div>
                             </div>
                           </div>
                         </TableCell>
@@ -546,7 +553,10 @@ export default async function SupervisorStudentsPage() {
                               />
                             </div>
                             {student.issues > 0 && (
-                              <Badge className="mt-1 bg-orange-100 text-orange-800" variant="outline">
+                              <Badge
+                                className="mt-1 bg-orange-100 text-orange-800"
+                                variant="outline"
+                              >
                                 {student.issues} issues
                               </Badge>
                             )}
@@ -745,7 +755,8 @@ export default async function SupervisorStudentsPage() {
                             className={
                               student.nextReview < new Date()
                                 ? "bg-red-100 text-red-800"
-                                : student.nextReview <= new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+                                : student.nextReview <=
+                                    new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
                                   ? "bg-orange-100 text-orange-800"
                                   : "bg-yellow-100 text-yellow-800"
                             }
@@ -813,7 +824,9 @@ export default async function SupervisorStudentsPage() {
                               <div className="flex items-center gap-2">
                                 <span>{student.overallScore}%</span>
                                 <Badge
-                                  className={riskColors[student.riskLevel as keyof typeof riskColors]}
+                                  className={
+                                    riskColors[student.riskLevel as keyof typeof riskColors]
+                                  }
                                   variant="outline"
                                 >
                                   {student.riskLevel}

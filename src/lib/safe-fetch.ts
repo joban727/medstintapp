@@ -1,29 +1,53 @@
 /**
  * Safe fetch utility with proper JSON parsing error handling
- * Prevents "Unexpected end of JSON input" errors
+ * Provides CSRF token handling for state-changing requests
  */
 
 export interface SafeFetchOptions extends RequestInit {
   timeout?: number
+  skipCSRF?: boolean // Skip CSRF token for specific requests (e.g., webhooks)
 }
 
-export interface SafeFetchResponse<T = any> {
+export interface SafeFetchResponse<T = unknown> {
   success: boolean
   data?: T
   error?: string
   message?: string
-  details?: any[]
+  details?: unknown[]
   status: number
 }
 
 /**
- * Safe fetch wrapper that handles JSON parsing errors gracefully
+ * Get CSRF token from cookie
  */
-export async function safeFetch<T = any>(
+function getCSRFToken(): string | null {
+  if (typeof document === "undefined") return null
+  const match = document.cookie.match(/(?:^|; )__csrf=([^;]*)/)
+  return match ? match[1] : null
+}
+
+/**
+ * Safe fetch wrapper that handles JSON parsing errors gracefully
+ * Automatically includes CSRF tokens for state-changing requests (POST, PUT, PATCH, DELETE)
+ */
+export async function safeFetch<T = unknown>(
   url: string,
   options: SafeFetchOptions = {}
 ): Promise<SafeFetchResponse<T>> {
-  const { timeout = 10000, ...fetchOptions } = options
+  const { timeout = 10000, skipCSRF = false, ...fetchOptions } = options
+
+  // Automatically add CSRF token for state-changing methods
+  const method = (options.method || "GET").toUpperCase()
+  const needsCSRF = !skipCSRF && ["POST", "PUT", "PATCH", "DELETE"].includes(method)
+
+  const headers = new Headers(fetchOptions.headers || {})
+
+  if (needsCSRF) {
+    const csrfToken = getCSRFToken()
+    if (csrfToken) {
+      headers.set("x-csrf-token", csrfToken)
+    }
+  }
 
   try {
     // Create abort controller for timeout
@@ -32,6 +56,7 @@ export async function safeFetch<T = any>(
 
     const response = await fetch(url, {
       ...fetchOptions,
+      headers,
       signal: controller.signal,
     })
 
@@ -119,7 +144,7 @@ export async function safeFetch<T = any>(
 /**
  * Safe fetch for API endpoints that return standard response format
  */
-export async function safeFetchApi<T = any>(
+export async function safeFetchApi<T = unknown>(
   url: string,
   options: SafeFetchOptions = {}
 ): Promise<SafeFetchResponse<T>> {
@@ -128,7 +153,7 @@ export async function safeFetchApi<T = any>(
     data?: T
     error?: string
     message?: string
-    details?: any[]
+    details?: unknown[]
   }>(url, options)
 
   if (!result.success) {
@@ -163,7 +188,7 @@ export async function safeFetchApi<T = any>(
 
   return {
     success: true,
-    data: apiResponse.data || (apiResponse as any),
+    data: apiResponse.data || (apiResponse as unknown as T),
     message: apiResponse.message,
     status: result.status,
   }

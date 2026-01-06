@@ -125,13 +125,13 @@ export function CreateRotationModal({ open, onOpenChange, onSuccess }: CreateRot
       const rawSites = sitesResult.data?.clinicalSites ?? []
       const normalizedSites: ClinicalSite[] = Array.isArray(rawSites)
         ? rawSites.map((s: any) => ({
-          id: String(s?.id ?? s?.siteId ?? s?.value ?? ""),
-          name: String(s?.name ?? s?.title ?? s?.label ?? "Unnamed Site"),
-          type: s?.type ?? s?.siteType ?? undefined,
-          specialty: Array.isArray(s?.specialties)
-            ? s.specialties.join(", ")
-            : (s?.specialty ?? undefined),
-        }))
+            id: String(s?.id ?? s?.siteId ?? s?.value ?? ""),
+            name: String(s?.name ?? s?.title ?? s?.label ?? "Unnamed Site"),
+            type: s?.type ?? s?.siteType ?? undefined,
+            specialty: Array.isArray(s?.specialties)
+              ? s.specialties.join(", ")
+              : (s?.specialty ?? undefined),
+          }))
         : []
       setClinicalSites(normalizedSites)
 
@@ -279,11 +279,15 @@ export function CreateRotationModal({ open, onOpenChange, onSuccess }: CreateRot
                       <SelectContent>
                         <SelectItem value="General Radiology">General Radiology</SelectItem>
                         <SelectItem value="MRI">MRI</SelectItem>
-                        <SelectItem value="Ultrasound / Sonography">Ultrasound / Sonography</SelectItem>
+                        <SelectItem value="Ultrasound / Sonography">
+                          Ultrasound / Sonography
+                        </SelectItem>
                         <SelectItem value="CT Scan">CT Scan</SelectItem>
                         <SelectItem value="Nuclear Medicine">Nuclear Medicine</SelectItem>
                         <SelectItem value="Mammography">Mammography</SelectItem>
-                        <SelectItem value="Interventional Radiology">Interventional Radiology</SelectItem>
+                        <SelectItem value="Interventional Radiology">
+                          Interventional Radiology
+                        </SelectItem>
                         <SelectItem value="Fluoroscopy">Fluoroscopy</SelectItem>
                         <SelectItem value="Mobile Radiography">Mobile Radiography</SelectItem>
                         <SelectItem value="Surgical Radiography">Surgical Radiography</SelectItem>

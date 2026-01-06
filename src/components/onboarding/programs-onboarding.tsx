@@ -146,12 +146,9 @@ export function ProgramsOnboarding({ user, clerkUser }: ProgramsOnboardingProps)
           {steps.map((step, index) => (
             <div key={step.label} className="flex items-center">
               <div
-                className={`h-2 w-2 rounded-full ${step.active
-                  ? "bg-primary"
-                  : step.completed
-                    ? "bg-primary/40"
-                    : "bg-muted"
-                  }`}
+                className={`h-2 w-2 rounded-full ${
+                  step.active ? "bg-primary" : step.completed ? "bg-primary/40" : "bg-muted"
+                }`}
               />
               {index < steps.length - 1 && (
                 <div className={`w-8 h-px ${step.completed ? "bg-primary/40" : "bg-muted"}`} />
@@ -163,12 +160,8 @@ export function ProgramsOnboarding({ user, clerkUser }: ProgramsOnboardingProps)
         {/* Header */}
         <div className="text-center mb-8">
           <p className="text-sm font-medium text-primary mb-2">Step 3 of 4</p>
-          <h1 className="text-2xl md:text-3xl font-semibold text-foreground mb-2">
-            Programs
-          </h1>
-          <p className="text-muted-foreground">
-            Add your academic programs
-          </p>
+          <h1 className="text-2xl md:text-3xl font-semibold text-foreground mb-2">Programs</h1>
+          <p className="text-muted-foreground">Add your academic programs</p>
         </div>
 
         {/* Programs List */}

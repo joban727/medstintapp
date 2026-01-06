@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { boolean, decimal, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
+import { boolean, check, decimal, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 
 // User role type
 export type UserRole =
@@ -148,6 +148,53 @@ export const schools = pgTable("schools", {
   accreditation: text("accreditation"),
   isActive: boolean("is_active").default(true).notNull(),
   adminId: text("admin_id").references(() => users.id),
+  // Billing fields
+  billingModel: text("billing_model", { enum: ["STUDENT_PAYS", "SCHOOL_PAYS"] })
+    .default("STUDENT_PAYS")
+    .notNull(),
+  seatsLimit: integer("seats_limit").default(0).notNull(),
+  seatsUsed: integer("seats_used").default(0).notNull(),
+  createdAt: timestamp("created_at")
+    .$defaultFn(() => new Date())
+    .notNull(),
+  updatedAt: timestamp("updated_at")
+    .$defaultFn(() => new Date())
+    .notNull(),
+}, (table) => ({
+  seatsCheck: check("seats_check", sql`${table.seatsUsed} <= ${table.seatsLimit}`),
+}))
+
+export const seatAssignments = pgTable("seat_assignments", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  schoolId: text("school_id")
+    .references(() => schools.id, { onDelete: "cascade" })
+    .notNull(),
+  studentId: text("student_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  status: text("status", { enum: ["ACTIVE", "REVOKED"] })
+    .default("ACTIVE")
+    .notNull(),
+  assignedAt: timestamp("assigned_at")
+    .$defaultFn(() => new Date())
+    .notNull(),
+  revokedAt: timestamp("revoked_at"),
+})
+
+export const plans = pgTable("plans", {
+  id: text("id").primaryKey(), // Stripe Price ID or internal UUID
+  name: text("name").notNull(),
+  description: text("description"),
+  price: integer("price").notNull(), // in cents
+  interval: text("interval", { enum: ["month", "year"] }).notNull(),
+  stripePriceId: text("stripe_price_id").notNull(),
+  type: text("type", { enum: ["STUDENT_SUBSCRIPTION", "SCHOOL_SEAT"] })
+    .default("STUDENT_SUBSCRIPTION")
+    .notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  features: jsonb("features"), // Array of strings
+  limits: jsonb("limits"), // Object with limits (e.g. { tokens: 100 })
+  trialDays: integer("trial_days").default(0).notNull(),
   createdAt: timestamp("created_at")
     .$defaultFn(() => new Date())
     .notNull(),
@@ -375,10 +422,10 @@ export const timeRecords = pgTable("time_records", {
   clockOutIpAddress: text("clock_out_ip_address"),
   clockOutUserAgent: text("clock_out_user_agent"),
   // Location tracking fields
-  clockInLatitude: decimal("clock_in_latitude", { precision: 10, scale: 8 }),
-  clockInLongitude: decimal("clock_in_longitude", { precision: 11, scale: 8 }),
-  clockOutLatitude: decimal("clock_out_latitude", { precision: 10, scale: 8 }),
-  clockOutLongitude: decimal("clock_out_longitude", { precision: 11, scale: 8 }),
+  clockInLatitude: text("clock_in_latitude"),
+  clockInLongitude: text("clock_in_longitude"),
+  clockOutLatitude: text("clock_out_latitude"),
+  clockOutLongitude: text("clock_out_longitude"),
   clockInAccuracy: decimal("clock_in_accuracy", { precision: 8, scale: 2 }),
   clockOutAccuracy: decimal("clock_out_accuracy", { precision: 8, scale: 2 }),
   clockInSource: text("clock_in_source", { enum: ["gps", "network", "manual"] }),
@@ -1198,32 +1245,13 @@ export const locationPermissions = pgTable("location_permissions", {
   respondedAt: timestamp("responded_at", { withTimezone: true }),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`NOW()`).notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`NOW()`).notNull(),
-})
-
-// Location accuracy tracking and analytics
-export const locationAccuracyLogs = pgTable("location_accuracy_logs", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id")
-    .references(() => users.id, { onDelete: "cascade" })
-    .notNull(),
-  sessionId: text("session_id"), // browser session or app session
-  latitude: decimal("latitude", { precision: 10, scale: 8 }).notNull(),
-  longitude: decimal("longitude", { precision: 11, scale: 8 }).notNull(),
-  accuracy: decimal("accuracy", { precision: 8, scale: 2 }), // meters
-  altitude: decimal("altitude", { precision: 8, scale: 2 }), // meters above sea level
-  altitudeAccuracy: decimal("altitude_accuracy", { precision: 8, scale: 2 }), // meters
-  heading: decimal("heading", { precision: 5, scale: 2 }), // degrees
-  speed: decimal("speed", { precision: 8, scale: 2 }), // meters per second
   locationSource: text("location_source", { enum: ["gps", "network", "manual"] }).notNull(),
   timestamp: timestamp("timestamp", { withTimezone: true }).default(sql`NOW()`).notNull(),
   batteryLevel: integer("battery_level"), // percentage if available
   networkType: text("network_type"), // wifi, cellular, etc.
   isBackground: boolean("is_background").default(false), // if location was captured in background
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`NOW()`).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`NOW()`).notNull(),
 })
 
 // Facility Management table for schools to manage their clinical facilities
@@ -1593,6 +1621,19 @@ export const meetings = pgTable("meetings", {
 export type Meeting = typeof meetings.$inferSelect
 export type NewMeeting = typeof meetings.$inferInsert
 
+export const locationAccuracyLogs = pgTable("location_accuracy_logs", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").references(() => users.id),
+  latitude: text("latitude").notNull(),
+  longitude: text("longitude").notNull(),
+  accuracy: text("accuracy").notNull(),
+  locationSource: text("location_source").notNull(),
+  createdAt: timestamp("created_at").default(sql`NOW()`).notNull(),
+})
+
+export type LocationAccuracyLog = typeof locationAccuracyLogs.$inferSelect
+export type NewLocationAccuracyLog = typeof locationAccuracyLogs.$inferInsert
+
 // Rate limiting table for Neon-based rate limiting
 export const rateLimits = pgTable("rate_limits", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -1624,3 +1665,140 @@ export const cacheEntries = pgTable("cache_entries", {
 
 export type CacheEntry = typeof cacheEntries.$inferSelect
 export type NewCacheEntry = typeof cacheEntries.$inferInsert
+
+// Quality Assurance Tables
+export const qualityReviews = pgTable("quality_reviews", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  title: text("title").notNull(),
+  reviewerId: text("reviewer_id")
+    .references(() => users.id, { onDelete: "set null" })
+    .notNull(),
+  schoolId: text("school_id")
+    .references(() => schools.id, { onDelete: "cascade" })
+    .notNull(),
+  type: text("type", {
+    enum: ["Assessment Quality", "Supervision Quality", "Process Audit"]
+  }).notNull(),
+  status: text("status", {
+    enum: ["completed", "in_progress", "pending"]
+  }).default("pending").notNull(),
+  priority: text("priority", {
+    enum: ["high", "medium", "low"]
+  }).default("medium").notNull(),
+  overallScore: decimal("overall_score", { precision: 5, scale: 2 }),
+  findings: jsonb("findings").default([]).notNull(), // Array of Finding objects
+  recommendations: jsonb("recommendations").default([]).notNull(), // Array of strings
+  followUpRequired: boolean("follow_up_required").default(false).notNull(),
+  followUpDate: timestamp("follow_up_date", { withTimezone: true }),
+  reviewDate: timestamp("review_date", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  schoolIdx: index("quality_reviews_school_idx").on(table.schoolId),
+  reviewerIdx: index("quality_reviews_reviewer_idx").on(table.reviewerId),
+  statusIdx: index("quality_reviews_status_idx").on(table.status),
+}))
+
+export type QualityReview = typeof qualityReviews.$inferSelect
+export type NewQualityReview = typeof qualityReviews.$inferInsert
+
+
+// Compliance & Requirement Center Tables
+
+export const complianceRequirements = pgTable("compliance_requirements", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  schoolId: text("school_id")
+    .references(() => schools.id, { onDelete: "cascade" })
+    .notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  type: text("type", { enum: ["DOCUMENT", "DATE", "BOOLEAN"] }).notNull(),
+  frequency: text("frequency", { enum: ["ONCE", "ANNUAL", "BIENNIAL"] }).default("ONCE").notNull(),
+  isRequired: boolean("is_required").default(true).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`NOW()`).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`NOW()`).notNull(),
+}, (table) => ({
+  schoolIdx: index("compliance_req_school_idx").on(table.schoolId),
+}))
+
+export const programComplianceRequirements = pgTable("program_compliance_requirements", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  programId: text("program_id")
+    .references(() => programs.id, { onDelete: "cascade" })
+    .notNull(),
+  requirementId: text("requirement_id")
+    .references(() => complianceRequirements.id, { onDelete: "cascade" })
+    .notNull(),
+  dueDateOffsetDays: integer("due_date_offset_days"), // Days from enrollment
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`NOW()`).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`NOW()`).notNull(),
+}, (table) => ({
+  programReqIdx: uniqueIndex("program_compliance_req_idx").on(table.programId, table.requirementId),
+}))
+
+export const complianceSubmissions = pgTable("compliance_submissions", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  studentId: text("student_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  requirementId: text("requirement_id")
+    .references(() => complianceRequirements.id, { onDelete: "cascade" })
+    .notNull(),
+  status: text("status", { enum: ["PENDING", "APPROVED", "REJECTED", "EXPIRED"] })
+    .default("PENDING")
+    .notNull(),
+  submissionData: jsonb("submission_data"), // Stores dates or other simple values
+  documentId: text("document_id")
+    .references(() => documents.id, { onDelete: "set null" }),
+  notes: text("notes"),
+  reviewedBy: text("reviewed_by")
+    .references(() => users.id, { onDelete: "set null" }),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`NOW()`).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`NOW()`).notNull(),
+}, (table) => ({
+  studentReqIdx: index("compliance_sub_student_req_idx").on(table.studentId, table.requirementId),
+  statusIdx: index("compliance_sub_status_idx").on(table.status),
+}))
+
+export type ComplianceRequirement = typeof complianceRequirements.$inferSelect
+export type NewComplianceRequirement = typeof complianceRequirements.$inferInsert
+export type ProgramComplianceRequirement = typeof programComplianceRequirements.$inferSelect
+export type NewProgramComplianceRequirement = typeof programComplianceRequirements.$inferInsert
+export type ComplianceSubmission = typeof complianceSubmissions.$inferSelect
+export type NewComplianceSubmission = typeof complianceSubmissions.$inferInsert
+
+// Site & Preceptor Evaluations
+
+export const siteEvaluations = pgTable("site_evaluations", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  studentId: text("student_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  rotationId: text("rotation_id")
+    .references(() => rotations.id, { onDelete: "cascade" })
+    .notNull(),
+  clinicalSiteId: text("clinical_site_id")
+    .references(() => clinicalSites.id, { onDelete: "cascade" })
+    .notNull(),
+  preceptorId: text("preceptor_id")
+    .references(() => clinicalPreceptors.id, { onDelete: "set null" }),
+  rating: integer("rating").notNull(), // Overall rating 1-5
+  feedback: text("feedback"),
+  learningOpportunitiesRating: integer("learning_opportunities_rating"),
+  preceptorSupportRating: integer("preceptor_support_rating"),
+  facilityQualityRating: integer("facility_quality_rating"),
+  recommendToOthers: boolean("recommend_to_others").default(true).notNull(),
+  isAnonymous: boolean("is_anonymous").default(false).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`NOW()`).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`NOW()`).notNull(),
+}, (table) => ({
+  studentIdx: index("site_eval_student_idx").on(table.studentId),
+  siteIdx: index("site_eval_site_idx").on(table.clinicalSiteId),
+  rotationIdx: uniqueIndex("site_eval_rotation_idx").on(table.rotationId), // One evaluation per rotation
+}))
+
+export type SiteEvaluation = typeof siteEvaluations.$inferSelect
+export type NewSiteEvaluation = typeof siteEvaluations.$inferInsert

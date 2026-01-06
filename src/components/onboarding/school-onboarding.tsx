@@ -211,7 +211,9 @@ export function SchoolOnboarding({ user, clerkUser, existingSchools }: SchoolOnb
       toast.success("Onboarding completed successfully!")
       try {
         window.location.assign("/dashboard")
-      } catch {}
+      } catch (error) {
+        console.error("Failed to redirect:", error)
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
       console.error("[SchoolOnboarding] Operation failed:", error)

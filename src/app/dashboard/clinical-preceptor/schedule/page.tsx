@@ -98,54 +98,54 @@ export default async function PreceptorSchedulePage() {
 
   // Combine into unified events
   const scheduleEvents = [
-    ...meetingsData.map(m => ({
+    ...meetingsData.map((m) => ({
       id: m.id,
       title: m.title,
       start: m.startTime,
       end: m.endTime,
       date: m.startTime,
-      time: m.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: m.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       duration: (m.endTime.getTime() - m.startTime.getTime()) / (1000 * 60),
-      type: 'meeting',
+      type: "meeting",
       status: m.status.toLowerCase(),
-      location: m.location || 'Virtual',
+      location: m.location || "Virtual",
       studentName: m.studentName,
       studentEmail: m.studentEmail,
-      meetingType: m.type === 'VIRTUAL' ? 'virtual' : 'in-person',
-      priority: 'medium'
+      meetingType: m.type === "VIRTUAL" ? "virtual" : "in-person",
+      priority: "medium",
     })),
-    ...assessmentsData.map(a => ({
+    ...assessmentsData.map((a) => ({
       id: a.id,
       title: `Assessment: ${a.type}`,
       start: a.date,
       end: new Date(a.date.getTime() + 60 * 60 * 1000), // Assume 1 hour
       date: a.date,
-      time: a.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: a.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       duration: 60,
-      type: 'assessment',
-      status: 'confirmed',
-      location: 'Clinical Site',
+      type: "assessment",
+      status: "confirmed",
+      location: "Clinical Site",
       studentName: a.studentName,
       studentEmail: a.studentEmail,
-      meetingType: 'in-person',
-      priority: 'high'
+      meetingType: "in-person",
+      priority: "high",
     })),
-    ...evaluationsData.map(e => ({
+    ...evaluationsData.map((e) => ({
       id: e.id,
-      title: `Evaluation: ${e.type || 'General'}`,
+      title: `Evaluation: ${e.type || "General"}`,
       start: e.date,
       end: new Date(e.date.getTime() + 30 * 60 * 1000), // Assume 30 mins
       date: e.date,
-      time: e.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: e.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       duration: 30,
-      type: 'evaluation',
-      status: 'confirmed',
-      location: 'Clinical Site',
+      type: "evaluation",
+      status: "confirmed",
+      location: "Clinical Site",
       studentName: e.studentName,
       studentEmail: e.studentEmail,
-      meetingType: 'in-person',
-      priority: 'medium'
-    }))
+      meetingType: "in-person",
+      priority: "medium",
+    })),
   ]
 
   const currentDate = new Date()
@@ -155,7 +155,10 @@ export default async function PreceptorSchedulePage() {
     (event) => event.date.toDateString() === currentDate.toDateString()
   )
 
-  const upcomingEvents = scheduleEvents.filter((event) => event.date > currentDate).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 5)
+  const upcomingEvents = scheduleEvents
+    .filter((event) => event.date > currentDate)
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .slice(0, 5)
 
   const typeColors = {
     meeting: "bg-blue-100 text-blue-800",
@@ -219,7 +222,11 @@ export default async function PreceptorSchedulePage() {
           <CardContent>
             <div className="font-bold text-2xl">{todayEvents.length}</div>
             <p className="text-muted-foreground text-xs">
-              {todayEvents.filter((e) => e.status === "confirmed" || e.status === "scheduled").length} confirmed
+              {
+                todayEvents.filter((e) => e.status === "confirmed" || e.status === "scheduled")
+                  .length
+              }{" "}
+              confirmed
             </p>
           </CardContent>
         </Card>
@@ -325,10 +332,11 @@ export default async function PreceptorSchedulePage() {
                         {day.toLocaleDateString("en-US", { weekday: "short" })}
                       </div>
                       <div
-                        className={`font-bold text-lg ${day.toDateString() === currentDate.toDateString()
+                        className={`font-bold text-lg ${
+                          day.toDateString() === currentDate.toDateString()
                             ? "mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600"
                             : ""
-                          }`}
+                        }`}
                       >
                         {day.getDate()}
                       </div>
@@ -397,11 +405,18 @@ export default async function PreceptorSchedulePage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge className={typeColors[event.type as keyof typeof typeColors] || "bg-gray-100"}>
+                          <Badge
+                            className={
+                              typeColors[event.type as keyof typeof typeColors] || "bg-gray-100"
+                            }
+                          >
                             {event.type.toUpperCase()}
                           </Badge>
                           <Badge
-                            className={statusColors[event.status as keyof typeof statusColors] || "bg-gray-100"}
+                            className={
+                              statusColors[event.status as keyof typeof statusColors] ||
+                              "bg-gray-100"
+                            }
                           >
                             {event.status.toUpperCase()}
                           </Badge>
@@ -500,7 +515,9 @@ export default async function PreceptorSchedulePage() {
                         </div>
                         <div className="mt-1 flex items-center gap-2">
                           <Badge
-                            className={typeColors[event.type as keyof typeof typeColors] || "bg-gray-100"}
+                            className={
+                              typeColors[event.type as keyof typeof typeColors] || "bg-gray-100"
+                            }
                             variant="outline"
                           >
                             {event.type}
@@ -515,7 +532,11 @@ export default async function PreceptorSchedulePage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge className={statusColors[event.status as keyof typeof statusColors] || "bg-gray-100"}>
+                      <Badge
+                        className={
+                          statusColors[event.status as keyof typeof statusColors] || "bg-gray-100"
+                        }
+                      >
                         {event.status}
                       </Badge>
                       <Button size="sm" variant="outline">

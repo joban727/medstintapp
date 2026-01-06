@@ -49,7 +49,7 @@ import {
 } from "../../../../components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs"
 import { db } from "@/database/connection-pool"
-import { evaluations, rotations, users } from "../../../../database/schema"
+import { evaluations, rotations, users, clinicalSites, students } from "../../../../database/schema"
 import { requireAnyRole } from "../../../../lib/auth-clerk"
 
 export default async function SupervisorEvaluationsPage() {
@@ -90,23 +90,43 @@ export default async function SupervisorEvaluationsPage() {
         // Get preceptor details
         const preceptor = rotation?.preceptorId
           ? await db
-            .select({
-              name: users.name,
-              department: users.department,
-            })
-            .from(users)
-            .where(eq(users.id, rotation.preceptorId))
-            .limit(1)
-            .then((rows) => rows[0])
+              .select({
+                name: users.name,
+                department: users.department,
+              })
+              .from(users)
+              .where(eq(users.id, rotation.preceptorId))
+              .limit(1)
+              .then((rows) => rows[0])
           : null
 
         // Get site details from rotation
-        const site = "Clinical Site" // TODO: Join with clinical sites table
+        let siteName = "Unknown Site"
+        if (rotation?.clinicalSiteId) {
+          const siteData = await db
+            .select({ name: clinicalSites.name })
+            .from(clinicalSites)
+            .where(eq(clinicalSites.id, rotation.clinicalSiteId))
+            .limit(1)
+            .then((rows) => rows[0])
+          siteName = siteData?.name || "Unknown Site"
+        }
+        const site = siteName
+
+        // Get student year from students table
+        let studentYear = 1
+        if (evaluation.studentId) {
+          const studentData = await db
+            .select({ yearLevel: students.yearLevel })
+            .from(students)
+            .where(eq(students.userId, evaluation.studentId))
+            .limit(1)
+            .then((rows) => rows[0])
+          studentYear = studentData?.yearLevel || 1
+        }
 
         // Calculate quality score based on evaluation data (use real score or default)
-        const qualityScore = evaluation.score
-          ? Math.round(Number(evaluation.score) * 20)
-          : 75 // Default quality score when no rating exists
+        const qualityScore = evaluation.score ? Math.round(Number(evaluation.score) * 20) : 75 // Default quality score when no rating exists
 
         // Determine review status based on actual data
         const reviewStatus = evaluation.createdAt
@@ -136,9 +156,12 @@ export default async function SupervisorEvaluationsPage() {
             | "NEEDS_REVISION",
           qualityScore,
           completeness: evaluation.score ? 100 : 80, // Complete if has score
-          timeliness: evaluation.createdAt && rotationEndDate && evaluation.createdAt <= rotationEndDate ? "ON_TIME" : "ON_TIME",
+          timeliness:
+            evaluation.createdAt && rotationEndDate && evaluation.createdAt <= rotationEndDate
+              ? "ON_TIME"
+              : "ON_TIME",
           feedback: !!evaluation.score, // Has feedback if has score
-          studentYear: 1, // Default year (TODO: get from students table)
+          studentYear, // Now calculated from database
           competencyAreas: 3, // Default competency areas
           criticalIssues,
           followUpRequired: criticalIssues,
@@ -358,7 +381,9 @@ export default async function SupervisorEvaluationsPage() {
                     <SelectItem value="CT Scan">CT Scan</SelectItem>
                     <SelectItem value="Nuclear Medicine">Nuclear Medicine</SelectItem>
                     <SelectItem value="Mammography">Mammography</SelectItem>
-                    <SelectItem value="Interventional Radiology">Interventional Radiology</SelectItem>
+                    <SelectItem value="Interventional Radiology">
+                      Interventional Radiology
+                    </SelectItem>
                     <SelectItem value="Fluoroscopy">Fluoroscopy</SelectItem>
                     <SelectItem value="Mobile Radiography">Mobile Radiography</SelectItem>
                     <SelectItem value="Surgical Radiography">Surgical Radiography</SelectItem>
@@ -435,7 +460,7 @@ export default async function SupervisorEvaluationsPage() {
                         <Badge
                           className={
                             reviewStatusColors[
-                            evaluation.reviewStatus as keyof typeof reviewStatusColors
+                              evaluation.reviewStatus as keyof typeof reviewStatusColors
                             ]
                           }
                         >

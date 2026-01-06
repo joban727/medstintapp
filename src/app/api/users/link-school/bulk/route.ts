@@ -56,7 +56,7 @@ export const PUT = withErrorHandling(async (request: NextRequest) => {
 
   // Invalidate related caches
   try {
-    await cacheIntegrationService.invalidateByTags(['user'])
+    await cacheIntegrationService.invalidateByTags(["user"])
   } catch (cacheError) {
     console.warn("Cache invalidation error in users/link-school/bulk/route.ts:", cacheError)
   }
@@ -66,4 +66,3 @@ export const PUT = withErrorHandling(async (request: NextRequest) => {
     `Successfully linked ${userIds.length} users to school`
   )
 })
-

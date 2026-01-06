@@ -2,15 +2,16 @@
 
 import { SignOutButton } from "@clerk/nextjs"
 import {
-  RiBankCardLine,
-  RiFindReplaceLine,
-  RiHomeLine,
-  RiLockLine,
-  RiLogoutCircleLine,
-  RiMore2Line,
-  RiTimer2Line,
-  RiUserLine,
-} from "@remixicon/react"
+  CreditCard,
+  History,
+  Home,
+  Lock,
+  LogOut,
+  MoreVertical,
+  LayoutDashboard,
+  User,
+  Settings,
+} from "lucide-react"
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -20,19 +21,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  useSidebar,
-} from "@/components/ui/sidebar"
 import type { UserRole } from "@/types"
 
-const validateEmail = (email: string): boolean => {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-}
-
-interface User {
+interface UserType {
   id: string
   email: string
   name: string
@@ -42,12 +33,10 @@ interface User {
 }
 
 interface NavUserProps {
-  user: User
+  user: UserType
 }
 
 export function NavUser({ user }: NavUserProps) {
-  const { isMobile } = useSidebar()
-
   // Get user's display name with fallbacks
   const displayName = user.name || user.email
 
@@ -62,85 +51,71 @@ export function NavUser({ user }: NavUserProps) {
     : user.email.slice(0, 2).toUpperCase()
 
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:active:bg-transparent group-data-[collapsible=icon]:hover:bg-transparent transition-color duration-200s duration-200"
-            >
-              <div className="flex w-full items-center">
-                <Avatar className="in-data-[state=expanded]:size-6 transition-[width,height] duration-200 ease-in-out group-data-[collapsible=icon]:size-8">
-                  <AvatarImage src="" alt={displayName} />
-                  <AvatarFallback>{initials}</AvatarFallback>
-                </Avatar>
-                <div className="ms-1 grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="truncate font-medium">{displayName}</span>
-                  <span className="truncate text-muted-foreground text-xs">{user.email}</span>
-                </div>
-                <div className="flex size-8 items-center justify-center rounded-lg bg-sidebar-accent/50 in-[[data-slot=dropdown-menu-trigger]:hover]:bg-transparent group-data-[collapsible=icon]:hidden">
-                  <RiMore2Line className="size-5 opacity-40" size={20} />
-                </div>
-              </div>
-            </SidebarMenuButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-            side={isMobile ? "bottom" : "right"}
-            align="end"
-            sideOffset={4}
-          >
-            <Link href="/dashboard">
-              <DropdownMenuItem className="gap-3 px-1">
-                <RiTimer2Line size={20} className="text-muted-foreground/70" aria-hidden="true" />
-                <span>Dashboard</span>
-              </DropdownMenuItem>
-            </Link>
-            <Link href="/dashboard/settings">
-              <DropdownMenuItem className="gap-3 px-1">
-                <RiUserLine size={20} className="text-muted-foreground/70" aria-hidden="true" />
-                <span>Account</span>
-              </DropdownMenuItem>
-            </Link>
-            <Link href="/dashboard/billing">
-              <DropdownMenuItem className="gap-3 px-1">
-                <RiBankCardLine size={20} className="text-muted-foreground/70" aria-hidden="true" />
-                <span>Billing</span>
-              </DropdownMenuItem>
-            </Link>
-            <DropdownMenuItem className="gap-3 px-1">
-              <RiLockLine size={20} className="text-muted-foreground/70" aria-hidden="true" />
-              <span>Security</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="gap-3 px-1">
-              <RiFindReplaceLine
-                size={20}
-                className="text-muted-foreground/70"
-                aria-hidden="true"
-              />
-              <span>History</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <Link href="/">
-              <DropdownMenuItem className="gap-3 px-1">
-                <RiHomeLine size={20} className="text-muted-foreground/70" aria-hidden="true" />
-                <span>Homepage</span>
-              </DropdownMenuItem>
-            </Link>
-            <SignOutButton signOutOptions={{ redirectUrl: "/" }}>
-              <DropdownMenuItem className="cursor-pointer gap-3 px-1">
-                <RiLogoutCircleLine
-                  size={20}
-                  className="text-muted-foreground/70"
-                  aria-hidden="true"
-                />
-                <span>Log out</span>
-              </DropdownMenuItem>
-            </SignOutButton>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarMenuItem>
-    </SidebarMenu>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-2 outline-none group">
+          <Avatar className="h-8 w-8 border-2 border-[rgba(255,255,255,var(--glass-border-opacity))] group-hover:border-[rgba(255,255,255,var(--ui-opacity-20))] transition-colors">
+            <AvatarImage src="" alt={displayName} />
+            <AvatarFallback>{initials}</AvatarFallback>
+          </Avatar>
+          <div className="hidden md:flex flex-col items-start text-sm">
+            <span className="font-medium truncate max-w-[100px]">{displayName}</span>
+          </div>
+          <MoreVertical className="h-4 w-4 text-muted-foreground hidden md:block" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        className="w-56 glass-dropdown border-[rgba(255,255,255,var(--glass-border-opacity))]"
+        align="end"
+        sideOffset={8}
+      >
+        <div className="flex items-center justify-start gap-2 p-2">
+          <div className="flex flex-col space-y-1 leading-none">
+            <p className="font-medium">{displayName}</p>
+            <p className="w-[200px] truncate text-xs text-muted-foreground">{user.email}</p>
+          </div>
+        </div>
+        <DropdownMenuSeparator className="bg-[rgba(255,255,255,var(--ui-opacity-10))]" />
+        <Link href="/dashboard">
+          <DropdownMenuItem className="cursor-pointer gap-2">
+            <LayoutDashboard className="h-4 w-4" />
+            <span>Dashboard</span>
+          </DropdownMenuItem>
+        </Link>
+        <Link href="/dashboard/settings">
+          <DropdownMenuItem className="cursor-pointer gap-2">
+            <User className="h-4 w-4" />
+            <span>Account</span>
+          </DropdownMenuItem>
+        </Link>
+        <Link href="/dashboard/billing">
+          <DropdownMenuItem className="cursor-pointer gap-2">
+            <CreditCard className="h-4 w-4" />
+            <span>Billing</span>
+          </DropdownMenuItem>
+        </Link>
+        <DropdownMenuItem className="cursor-pointer gap-2">
+          <Lock className="h-4 w-4" />
+          <span>Security</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem className="cursor-pointer gap-2">
+          <History className="h-4 w-4" />
+          <span>History</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator className="bg-[rgba(255,255,255,var(--ui-opacity-10))]" />
+        <Link href="/">
+          <DropdownMenuItem className="cursor-pointer gap-2">
+            <Home className="h-4 w-4" />
+            <span>Homepage</span>
+          </DropdownMenuItem>
+        </Link>
+        <SignOutButton signOutOptions={{ redirectUrl: "/" }}>
+          <DropdownMenuItem className="cursor-pointer gap-2 text-red-500 focus:text-red-500">
+            <LogOut className="h-4 w-4" />
+            <span>Log out</span>
+          </DropdownMenuItem>
+        </SignOutButton>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

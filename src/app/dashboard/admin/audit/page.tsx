@@ -1,5 +1,4 @@
 import { AlertTriangle, Download, Eye, Filter, Search, Shield, User } from "lucide-react"
-import { headers } from "next/headers"
 import { Badge } from "../../../../components/ui/badge"
 import { Button } from "../../../../components/ui/button"
 import {
@@ -26,6 +25,9 @@ import {
   TableRow,
 } from "../../../../components/ui/table"
 import { requireAnyRole } from "../../../../lib/auth-clerk"
+import { db } from "../../../../database/connection-pool"
+import { auditLogs, users } from "../../../../database/schema"
+import { desc, eq } from "drizzle-orm"
 
 interface AuditLog {
   id: string
@@ -49,22 +51,40 @@ interface AuditLog {
 
 async function getAuditLogs(): Promise<{ logs: AuditLog[]; total: number }> {
   try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"}/api/audit-logs?limit=50`,
-      {
-        headers: {
-          Cookie: (await headers()).get("cookie") || "",
-        },
-      }
-    )
+    const logs = await db
+      .select({
+        id: auditLogs.id,
+        userId: auditLogs.userId,
+        action: auditLogs.action,
+        resource: auditLogs.resource,
+        resourceId: auditLogs.resourceId,
+        details: auditLogs.details,
+        ipAddress: auditLogs.ipAddress,
+        userAgent: auditLogs.userAgent,
+        sessionId: auditLogs.sessionId,
+        severity: auditLogs.severity,
+        status: auditLogs.status,
+        createdAt: auditLogs.createdAt,
+        userName: users.name,
+        userEmail: users.email,
+        userRole: users.role,
+        schoolId: users.schoolId,
+      })
+      .from(auditLogs)
+      .leftJoin(users, eq(auditLogs.userId, users.id))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(50)
 
-    if (!response.ok) {
-      console.error("Failed to fetch audit logs:", response.statusText)
-      return { logs: [], total: 0 }
+    return {
+      logs: logs.map((log) => ({
+        ...log,
+        severity: (log.severity || "LOW") as AuditLog["severity"],
+        status: (log.status || "SUCCESS") as AuditLog["status"],
+        createdAt: log.createdAt?.toISOString() || new Date().toISOString(),
+        schoolName: null, // Not joining schools table for simplicity
+      })),
+      total: logs.length,
     }
-
-    const data = await response.json()
-    return { logs: data.logs || [], total: data.pagination?.total || 0 }
   } catch (error) {
     console.error("Error fetching audit logs:", error)
     return { logs: [], total: 0 }

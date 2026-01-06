@@ -112,4 +112,3 @@ export const POST = withErrorHandling(async (req: Request) => {
 
   return NextResponse.json({ activeSessions }, { status: HTTP_STATUS.OK })
 })
-

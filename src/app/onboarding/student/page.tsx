@@ -119,7 +119,6 @@ export default async function StudentOnboardingPage() {
         </div>
       </div>
     )
-
   } catch (error) {
     console.error("Error in student onboarding page:", error)
 

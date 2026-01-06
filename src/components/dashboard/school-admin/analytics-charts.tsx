@@ -31,51 +31,52 @@ interface CompetencyOverviewProps {
 }
 
 export function EnrollmentTrendChart({ data }: EnrollmentTrendProps) {
-  const { theme } = useTheme()
-  const isDark = theme === "dark"
-
   return (
-    <Card className="col-span-4 lg:col-span-2">
+    <Card className="col-span-4 lg:col-span-2 bg-white/5 backdrop-blur-md border border-white/10 shadow-sm">
       <CardHeader>
-        <CardTitle>Enrollment Trends</CardTitle>
-        <CardDescription>Student enrollment over the last 7 months</CardDescription>
+        <CardTitle className="text-white">Enrollment Trends</CardTitle>
+        <CardDescription className="text-[var(--text-tertiary)]">
+          Student enrollment over the last 7 months
+        </CardDescription>
       </CardHeader>
       <CardContent className="pl-2">
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={data}>
             <defs>
               <linearGradient id="colorStudents" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(var(--medical-primary))" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="hsl(var(--medical-primary))" stopOpacity={0} />
+                <stop offset="5%" stopColor="rgb(var(--theme-primary-rgb))" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="rgb(var(--theme-primary-rgb))" stopOpacity={0} />
               </linearGradient>
             </defs>
             <XAxis
               dataKey="month"
-              stroke="#888888"
+              stroke="rgba(255,255,255,0.4)"
               fontSize={12}
               tickLine={false}
               axisLine={false}
             />
             <YAxis
-              stroke="#888888"
+              stroke="rgba(255,255,255,0.4)"
               fontSize={12}
               tickLine={false}
               axisLine={false}
               tickFormatter={(value) => `${value}`}
             />
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#333" : "#eee"} />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
             <Tooltip
               contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                borderColor: "hsl(var(--border))",
+                backgroundColor: "rgba(20, 20, 20, 0.8)",
+                borderColor: "rgba(255,255,255,0.1)",
                 borderRadius: "0.5rem",
+                backdropFilter: "blur(12px)",
+                color: "white",
               }}
-              itemStyle={{ color: "hsl(var(--foreground))" }}
+              itemStyle={{ color: "white" }}
             />
             <Area
               type="monotone"
               dataKey="students"
-              stroke="hsl(var(--medical-primary))"
+              stroke="rgb(var(--theme-primary-rgb))"
               strokeWidth={2}
               fillOpacity={1}
               fill="url(#colorStudents)"
@@ -89,10 +90,12 @@ export function EnrollmentTrendChart({ data }: EnrollmentTrendProps) {
 
 export function SiteCapacityChart({ data }: SiteCapacityProps) {
   return (
-    <Card className="col-span-4 lg:col-span-2">
+    <Card className="col-span-4 lg:col-span-2 glass-card border-0">
       <CardHeader>
-        <CardTitle>Clinical Site Capacity</CardTitle>
-        <CardDescription>Utilization vs Total Capacity</CardDescription>
+        <CardTitle className="text-white">Clinical Site Capacity</CardTitle>
+        <CardDescription className="text-[var(--text-tertiary)]">
+          Utilization vs Total Capacity
+        </CardDescription>
       </CardHeader>
       <CardContent className="pl-2">
         <ResponsiveContainer width="100%" height={300}>
@@ -101,23 +104,37 @@ export function SiteCapacityChart({ data }: SiteCapacityProps) {
             <YAxis
               dataKey="name"
               type="category"
-              stroke="#888888"
+              stroke="rgba(255,255,255,0.4)"
               fontSize={12}
               tickLine={false}
               axisLine={false}
               width={100}
             />
             <Tooltip
-              cursor={{ fill: "transparent" }}
+              cursor={{ fill: "rgba(255,255,255,0.05)" }}
               contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                borderColor: "hsl(var(--border))",
+                backgroundColor: "rgba(20, 20, 20, 0.8)",
+                borderColor: "rgba(255,255,255,0.1)",
                 borderRadius: "0.5rem",
+                backdropFilter: "blur(12px)",
+                color: "white",
               }}
-              itemStyle={{ color: "hsl(var(--foreground))" }}
+              itemStyle={{ color: "white" }}
             />
-            <Bar dataKey="used" stackId="a" fill="hsl(var(--medical-teal))" radius={[0, 0, 0, 0]} barSize={20} />
-            <Bar dataKey="capacity" stackId="a" fill="hsl(var(--muted))" radius={[0, 4, 4, 0]} barSize={20} />
+            <Bar
+              dataKey="used"
+              stackId="a"
+              fill="rgb(var(--theme-primary-rgb))"
+              radius={[0, 0, 0, 0]}
+              barSize={20}
+            />
+            <Bar
+              dataKey="capacity"
+              stackId="a"
+              fill="rgba(255,255,255,0.1)"
+              radius={[0, 4, 4, 0]}
+              barSize={20}
+            />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
@@ -127,30 +144,37 @@ export function SiteCapacityChart({ data }: SiteCapacityProps) {
 
 export function CompetencyRadarChart({ data }: CompetencyOverviewProps) {
   return (
-    <Card className="col-span-4 lg:col-span-2">
+    <Card className="col-span-4 lg:col-span-2 glass-card border-0">
       <CardHeader>
-        <CardTitle>Competency Overview</CardTitle>
-        <CardDescription>Average student performance by domain</CardDescription>
+        <CardTitle className="text-white">Competency Overview</CardTitle>
+        <CardDescription className="text-[var(--text-tertiary)]">
+          Average student performance by domain
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
           <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
-            <PolarGrid stroke="hsl(var(--border))" />
-            <PolarAngleAxis dataKey="subject" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+            <PolarGrid stroke="rgba(255,255,255,0.1)" />
+            <PolarAngleAxis
+              dataKey="subject"
+              tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 12 }}
+            />
             <Radar
               name="Students"
               dataKey="A"
-              stroke="hsl(var(--healthcare-green))"
-              fill="hsl(var(--healthcare-green))"
+              stroke="rgb(var(--theme-primary-rgb))"
+              fill="rgb(var(--theme-primary-rgb))"
               fillOpacity={0.3}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                borderColor: "hsl(var(--border))",
+                backgroundColor: "rgba(20, 20, 20, 0.8)",
+                borderColor: "rgba(255,255,255,0.1)",
                 borderRadius: "0.5rem",
+                backdropFilter: "blur(12px)",
+                color: "white",
               }}
-              itemStyle={{ color: "hsl(var(--foreground))" }}
+              itemStyle={{ color: "white" }}
             />
           </RadarChart>
         </ResponsiveContainer>

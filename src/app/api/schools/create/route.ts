@@ -5,6 +5,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { db } from "../../../../database/connection-pool"
 import { programs, schools, users } from "../../../../database/schema"
 import { cacheIntegrationService } from "@/lib/cache-integration"
+import { withCSRF } from "@/lib/csrf-middleware"
 import {
   createSuccessResponse,
   createErrorResponse,
@@ -14,7 +15,7 @@ import {
   ERROR_MESSAGES,
 } from "@/lib/api-response"
 
-export async function POST(request: NextRequest) {
+export const POST = withCSRF(async (request: NextRequest) => {
   return withErrorHandlingAsync(async () => {
     const clerkUser = await currentUser()
 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
       })
       .returning()
 
-    const school = (schoolResults as typeof schools.$inferSelect[])[0]
+    const school = (schoolResults as (typeof schools.$inferSelect)[])[0]
 
     // Create programs if provided
     const createdPrograms = []
@@ -104,5 +105,4 @@ export async function POST(request: NextRequest) {
       HTTP_STATUS.CREATED
     )
   })
-}
-
+})

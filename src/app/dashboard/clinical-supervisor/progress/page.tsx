@@ -54,16 +54,16 @@ export default async function StudentProgressPage() {
 
   const students = userSchoolId
     ? await db
-      .select({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        image: users.image,
-        createdAt: users.createdAt,
-        programId: users.programId,
-      })
-      .from(users)
-      .where(and(eq(users.schoolId, userSchoolId), eq(users.role, "STUDENT")))
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          image: users.image,
+          createdAt: users.createdAt,
+          programId: users.programId,
+        })
+        .from(users)
+        .where(and(eq(users.schoolId, userSchoolId), eq(users.role, "STUDENT")))
     : []
 
   // Fetch progress data for each student

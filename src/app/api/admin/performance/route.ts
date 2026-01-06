@@ -15,6 +15,8 @@ import { adminApiLimiter } from "@/lib/rate-limiter"
 import { z } from "zod"
 import { createHash } from "node:crypto"
 import { validateAdminSelectQuery } from "@/lib/admin-query-validation"
+import { withCSRF } from "@/lib/csrf-middleware"
+import { logger } from "@/lib/logger"
 
 // Performance metrics interface
 interface DatabaseHealth {
@@ -132,7 +134,7 @@ export async function GET(request: NextRequest) {
       return cached
     }
   } catch (cacheError) {
-    console.warn("Cache error in admin/performance/route.ts:", cacheError)
+    logger.warn({ cacheError }, "Cache error in admin/performance/route.ts")
   }
 
   async function executeOriginalLogic() {
@@ -240,7 +242,7 @@ export async function GET(request: NextRequest) {
             effectiveness: indexEffectiveness.rows as unknown as IndexEffectiveness[],
           }
         } catch (error) {
-          console.error("Error fetching index statistics:", error)
+          logger.error({ error }, "Error fetching index statistics")
         }
       }
 
@@ -292,7 +294,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json(response)
     } catch (error) {
-      console.error("Error fetching performance metrics:", error)
+      logger.error({ error }, "Error fetching performance metrics")
       return NextResponse.json(
         {
           error: "Failed to fetch performance metrics",
@@ -305,7 +307,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST endpoint for manual performance analysis
-export async function POST(request: NextRequest) {
+export const POST = withCSRF(async (request: NextRequest) => {
   // Authorization: restrict to SUPER_ADMIN
   const auth = await apiAuthMiddleware(request, { requiredRoles: ["SUPER_ADMIN"] })
   if (!auth.success) {
@@ -445,12 +447,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid action" }, { status: 400 })
     }
   } catch (error) {
-    console.error("Error processing performance action:", error)
+    logger.error({ error }, "Error processing performance action")
 
     try {
       await cacheIntegrationService.clear()
     } catch (cacheError) {
-      console.warn("Cache invalidation error in admin/performance/route.ts:", cacheError)
+      logger.warn({ cacheError }, "Cache invalidation error in admin/performance/route.ts")
     }
 
     return NextResponse.json(
@@ -461,5 +463,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
-
+})

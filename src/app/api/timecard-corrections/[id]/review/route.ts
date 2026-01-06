@@ -49,7 +49,10 @@ export const POST = withErrorHandling(
     })
 
     if (!authResult.success) {
-      return createErrorResponse(authResult.error || ERROR_MESSAGES.UNAUTHORIZED, authResult.status || HTTP_STATUS.UNAUTHORIZED)
+      return createErrorResponse(
+        authResult.error || ERROR_MESSAGES.UNAUTHORIZED,
+        authResult.status || HTTP_STATUS.UNAUTHORIZED
+      )
     }
 
     const { user } = authResult
@@ -298,7 +301,10 @@ export const GET = withErrorHandling(
         })
 
         if (!authResult.success) {
-          return createErrorResponse(authResult.error || ERROR_MESSAGES.UNAUTHORIZED, authResult.status || HTTP_STATUS.UNAUTHORIZED)
+          return createErrorResponse(
+            authResult.error || ERROR_MESSAGES.UNAUTHORIZED,
+            authResult.status || HTTP_STATUS.UNAUTHORIZED
+          )
         }
 
         const { user } = authResult
@@ -379,6 +385,9 @@ export const GET = withErrorHandling(
     )
 
     // Return the cached or fresh response, fallback to error if null
-    return cached || createErrorResponse("Failed to fetch review details", HTTP_STATUS.INTERNAL_SERVER_ERROR)
+    return (
+      cached ||
+      createErrorResponse("Failed to fetch review details", HTTP_STATUS.INTERNAL_SERVER_ERROR)
+    )
   }
 )

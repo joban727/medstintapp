@@ -1,90 +1,60 @@
-import { cn } from "@/lib/utils"
-import { Clock, MapPin, Wifi, WifiOff, CheckCircle, AlertCircle, XCircle } from "lucide-react"
+"use client"
 
-interface StatusIndicatorProps {
-  type: "clock" | "location" | "connection" | "success" | "warning" | "error"
-  status: "active" | "inactive" | "loading" | "error"
-  text?: string
-  className?: string
+import * as React from "react"
+import { cn } from "@/lib/utils"
+
+export type StatusVariant =
+  | "default"
+  | "success"
+  | "warning"
+  | "error"
+  | "info"
+  | "neutral"
+  | "active"
+  | "inactive"
+  | "pending"
+
+interface StatusIndicatorProps extends React.HTMLAttributes<HTMLDivElement> {
+  variant?: StatusVariant
   size?: "sm" | "md" | "lg"
+  pulse?: boolean
+}
+
+const variantStyles: Record<StatusVariant, string> = {
+  default: "bg-primary",
+  success: "bg-green-500",
+  warning: "bg-yellow-500",
+  error: "bg-red-500",
+  info: "bg-blue-500",
+  neutral: "bg-gray-500",
+  active: "bg-green-500",
+  inactive: "bg-gray-400",
+  pending: "bg-yellow-500",
+}
+
+const sizeStyles = {
+  sm: "h-2 w-2",
+  md: "h-2.5 w-2.5",
+  lg: "h-3 w-3",
 }
 
 export function StatusIndicator({
-  type,
-  status,
-  text,
-  className,
+  variant = "default",
   size = "md",
+  pulse = false,
+  className,
+  ...props
 }: StatusIndicatorProps) {
-  const sizeClasses = {
-    sm: "w-4 h-4",
-    md: "w-5 h-5",
-    lg: "w-6 h-6",
-  }
-
-  const getIcon = () => {
-    switch (type) {
-      case "clock":
-        return <Clock className={sizeClasses[size]} />
-      case "location":
-        return <MapPin className={sizeClasses[size]} />
-      case "connection":
-        return status === "active" ? (
-          <Wifi className={sizeClasses[size]} />
-        ) : (
-          <WifiOff className={sizeClasses[size]} />
-        )
-      case "success":
-        return <CheckCircle className={sizeClasses[size]} />
-      case "warning":
-        return <AlertCircle className={sizeClasses[size]} />
-      case "error":
-        return <XCircle className={sizeClasses[size]} />
-      default:
-        return <Clock className={sizeClasses[size]} />
-    }
-  }
-
-  const getStatusColor = () => {
-    if (status === "loading") return "text-blue-500 animate-pulse"
-
-    switch (type) {
-      case "success":
-        return "text-green-500"
-      case "warning":
-        return "text-warning"
-      case "error":
-        return "text-red-500"
-      case "connection":
-        return status === "active" ? "text-green-500" : "text-red-500"
-      default:
-        switch (status) {
-          case "active":
-            return "text-green-500"
-          case "inactive":
-            return "text-gray-400"
-          case "error":
-            return "text-red-500"
-          default:
-            return "text-gray-400"
-        }
-    }
-  }
-
   return (
-    <div className={cn("flex items-center gap-2", className)}>
-      <div className={cn("flex-shrink-0", getStatusColor())}>{getIcon()}</div>
-      {text && (
-        <span
-          className={cn(
-            "text-sm font-medium",
-            status === "loading" ? "animate-pulse" : "",
-            getStatusColor()
-          )}
-        >
-          {text}
-        </span>
+    <div
+      className={cn(
+        "rounded-full shrink-0",
+        variantStyles[variant],
+        sizeStyles[size],
+        pulse && "animate-pulse",
+        className
       )}
-    </div>
+      {...props}
+    />
   )
 }

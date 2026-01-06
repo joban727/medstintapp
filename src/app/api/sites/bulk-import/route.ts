@@ -9,12 +9,16 @@ import {
   withErrorHandling,
   HTTP_STATUS,
 } from "@/lib/api-response"
+import { logger } from "@/lib/logger"
 
 const siteImportSchema = z.array(
   z.object({
     name: z.string().min(1),
     address: z.string().optional(),
-    type: z.enum(["HOSPITAL", "CLINIC", "NURSING_HOME", "OUTPATIENT", "OTHER"]).optional().default("CLINIC"),
+    type: z
+      .enum(["HOSPITAL", "CLINIC", "NURSING_HOME", "OUTPATIENT", "OTHER"])
+      .optional()
+      .default("CLINIC"),
     capacity: z.number().optional().default(10),
   })
 )
@@ -56,7 +60,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
         return { status: "created", name: site.name }
       } catch (error) {
-        console.error(`Failed to import site ${site.name}:`, error)
+        logger.error(`Failed to import site ${site.name}:`, String(error))
         return { status: "error", name: site.name, reason: "Database error" }
       }
     })
@@ -74,4 +78,3 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     `Imported ${created} sites. ${failed} failed.`
   )
 })
-

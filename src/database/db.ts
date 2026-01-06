@@ -28,6 +28,33 @@ process.on('uncaughtException', (error) => {
 
 // Create a single pool instance for the entire application with optimized settings
 const connectionString = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL || "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+
+// SSL configuration based on environment
+// In production, verify certificates unless explicitly disabled
+// In development/test, allow self-signed certificates for local testing
+const getSSLConfig = () => {
+  const isProduction = process.env.NODE_ENV === "production"
+  const customCA = process.env.DATABASE_SSL_CA
+  const forceNoVerify = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "false"
+
+  if (isProduction) {
+    if (forceNoVerify) {
+      console.warn("[SECURITY WARNING] SSL certificate verification is disabled in production!")
+      return { rejectUnauthorized: false }
+    }
+    // In production, verify certificates with optional custom CA
+    return {
+      rejectUnauthorized: true,
+      ca: customCA || undefined,
+    }
+  }
+
+  // Development/test: allow self-signed certificates
+  return { rejectUnauthorized: false }
+}
+
+const sslConfig = getSSLConfig()
+
 const pool = new Pool({
   connectionString,
   max: 3, // Reduced from 10 to stay within Neon limits
@@ -36,8 +63,7 @@ const pool = new Pool({
   connectionTimeoutMillis: 3000, // Keep at 3s for fast timeout
   maxUses: 1000, // Reduced from 7500 to recycle connections more frequently
   allowExitOnIdle: true,
-  // Always enable SSL for Neon/Postgres; avoid CA verification issues in test environments
-  ssl: { rejectUnauthorized: false },
+  ssl: sslConfig,
 })
 
 // Add pool error handling
@@ -62,7 +88,7 @@ if (readConnectionString) {
     connectionTimeoutMillis: 3000,
     maxUses: 1000,
     allowExitOnIdle: true,
-    ssl: { rejectUnauthorized: false },
+    ssl: sslConfig, // Use same SSL config as primary pool
   })
 
   readPool.on('error', (err: Error) => {

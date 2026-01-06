@@ -215,7 +215,10 @@ export function OnboardingAnalyticsDashboard() {
                 <YAxis />
                 <Tooltip
                   labelFormatter={(value) => new Date(value).toLocaleDateString()}
-                  formatter={(value: number) => [`${value.toFixed(1)}%`, "Completion Rate"]}
+                  formatter={(value: number | undefined) => [
+                    `${(value || 0).toFixed(1)}%`,
+                    "Completion Rate",
+                  ]}
                 />
                 <Bar dataKey="completion_rate" fill="#0088FE" />
               </BarChart>

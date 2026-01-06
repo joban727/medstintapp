@@ -13,6 +13,9 @@ import {
   ERROR_MESSAGES,
   withErrorHandling,
 } from "@/lib/api-response"
+import { withCSRF } from "@/lib/csrf-middleware"
+import { logger } from "@/lib/logger"
+import { apiAuthMiddleware } from "@/lib/rbac-middleware"
 
 /**
  * GET /api/admin/db-health
@@ -20,10 +23,13 @@ import {
  */
 export const GET = withErrorHandling(async (request: NextRequest) => {
   async function executeOriginalLogic() {
-    // Check if user has admin privileges (you may want to add proper auth here)
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
+    // Check if user has admin privileges
+    const auth = await apiAuthMiddleware(request, { requiredRoles: ["SUPER_ADMIN"] })
+    if (!auth.success) {
+      return createErrorResponse(
+        auth.error || ERROR_MESSAGES.UNAUTHORIZED,
+        (auth.status as any) || HTTP_STATUS.UNAUTHORIZED
+      )
     }
 
     // Get query parameters
@@ -58,19 +64,19 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       },
       ...(includeMetrics &&
         performanceMetrics && {
-        performance: {
-          queryMetrics: performanceMetrics,
-          monitoring: {
-            totalQueries: monitorSummary.totalQueries,
-            averageUtilization: monitorSummary.averageUtilization,
-            averageQueryTime: monitorSummary.averageQueryTime,
-            errorRate: monitorSummary.errorRate,
-            slowQueryCount: monitorSummary.slowQueryCount,
-            peakUtilization: monitorSummary.peakUtilization,
-            alertCount: monitorSummary.alertCount,
+          performance: {
+            queryMetrics: performanceMetrics,
+            monitoring: {
+              totalQueries: monitorSummary.totalQueries,
+              averageUtilization: monitorSummary.averageUtilization,
+              averageQueryTime: monitorSummary.averageQueryTime,
+              errorRate: monitorSummary.errorRate,
+              slowQueryCount: monitorSummary.slowQueryCount,
+              peakUtilization: monitorSummary.peakUtilization,
+              alertCount: monitorSummary.alertCount,
+            },
           },
-        },
-      }),
+        }),
       ...(includeRecommendations && {
         healthReport: connectionMonitor.generateHealthReport(),
       }),
@@ -80,16 +86,20 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   }
 
   // Try to get cached response
-  const cached = await cacheIntegrationService.cachedApiResponse(
-    "api:admin/db-health/route.ts",
-    async () => {
-      return await executeOriginalLogic()
-    },
-    300 // 5 minutes TTL
-  )
+  try {
+    const cached = await cacheIntegrationService.cachedApiResponse(
+      "api:admin/db-health/route.ts",
+      async () => {
+        return await executeOriginalLogic()
+      },
+      300 // 5 minutes TTL
+    )
 
-  if (cached) {
-    return cached
+    if (cached) {
+      return cached
+    }
+  } catch (cacheError) {
+    logger.warn({ cacheError }, "Cache error in admin/db-health/route.ts")
   }
 
   // If cache returned null/undefined, execute original logic
@@ -100,53 +110,57 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
  * POST /api/admin/db-health/refresh
  * Refreshes materialized views and clears connection pool metrics
  */
-export const POST = withErrorHandling(async (request: NextRequest) => {
-  // Check authorization
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED)
-  }
-
-  const body = await request.json()
-  const { action } = body
-
-  switch (action) {
-    case "refresh_views": {
-      // Import the refresh function
-      const { db } = await import("../../../../database/db")
-      await db.execute("SELECT refresh_all_materialized_views()")
-
-      return createSuccessResponse({
-        success: true,
-        message: "Materialized views refreshed successfully",
-        timestamp: new Date().toISOString(),
-      })
-    }
-
-    case "reset_metrics":
-      connectionMonitor.resetMetrics()
-
-      return createSuccessResponse({
-        success: true,
-        message: "Connection metrics reset successfully",
-        timestamp: new Date().toISOString(),
-      })
-
-    case "pool_health_check": {
-      const healthCheck = await checkDatabaseConnection()
-
-      return createSuccessResponse({
-        success: true,
-        data: healthCheck,
-        timestamp: new Date().toISOString(),
-      })
-    }
-
-    default:
+export const POST = withCSRF(
+  withErrorHandling(async (request: NextRequest) => {
+    // Check authorization
+    const auth = await apiAuthMiddleware(request, { requiredRoles: ["SUPER_ADMIN"] })
+    if (!auth.success) {
       return createErrorResponse(
-        "Invalid action. Supported actions: refresh_views, reset_metrics, pool_health_check",
-        HTTP_STATUS.BAD_REQUEST
+        auth.error || ERROR_MESSAGES.UNAUTHORIZED,
+        (auth.status as any) || HTTP_STATUS.UNAUTHORIZED
       )
-  }
-})
+    }
 
+    const body = await request.json()
+    const { action } = body
+
+    switch (action) {
+      case "refresh_views": {
+        // Import the refresh function
+        const { db } = await import("../../../../database/db")
+        await db.execute("SELECT refresh_all_materialized_views()")
+
+        return createSuccessResponse({
+          success: true,
+          message: "Materialized views refreshed successfully",
+          timestamp: new Date().toISOString(),
+        })
+      }
+
+      case "reset_metrics":
+        connectionMonitor.resetMetrics()
+
+        return createSuccessResponse({
+          success: true,
+          message: "Connection metrics reset successfully",
+          timestamp: new Date().toISOString(),
+        })
+
+      case "pool_health_check": {
+        const healthCheck = await checkDatabaseConnection()
+
+        return createSuccessResponse({
+          success: true,
+          data: healthCheck,
+          timestamp: new Date().toISOString(),
+        })
+      }
+
+      default:
+        return createErrorResponse(
+          "Invalid action. Supported actions: refresh_views, reset_metrics, pool_health_check",
+          HTTP_STATUS.BAD_REQUEST
+        )
+    }
+  })
+)

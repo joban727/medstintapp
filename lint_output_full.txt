@@ -1,0 +1,82 @@
+﻿
+> medstint2@0.0.1 lint
+> biome lint
+
+node.exe : src\app\api\compliance\requirements\route.ts:57:5 lint/style/useConst  FIXABLE  ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (src\app\api\com...ΓöüΓöüΓöüΓöüΓöü:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+  ! This let declares a variable that is only assigned once.
+  
+    56 Γöé     // Build query
+  > 57 Γöé     let query = db
+       Γöé     ^^^
+    58 Γöé         .select()
+    59 Γöé         .from(complianceRequirements)
+  
+  i 'query' is never reassigned.
+  
+    56 Γöé     // Build query
+  > 57 Γöé     let query = db
+       Γöé         ^^^^^
+    58 Γöé         .select()
+    59 Γöé         .from(complianceRequirements)
+  
+  i Safe fix: Use const instead.
+  
+     55  55 Γöé   ΓÉì
+     56  56 Γöé       // Build queryΓÉì
+     57     Γöé - ┬╖┬╖┬╖┬╖let┬╖query┬╖=┬╖dbΓÉì
+         57 Γöé + ┬╖┬╖┬╖┬╖const┬╖query┬╖=┬╖dbΓÉì
+     58  58 Γöé           .select()ΓÉì
+     59  59 Γöé           .from(complianceRequirements)ΓÉì
+  
+
+src\app\dashboard\school-admin\time-records\time-records-client.tsx:229:5 parse ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+
+  ├ù expected `)` but instead found `{`
+  
+    227 Γöé     </div >
+    228 Γöé 
+  > 229 Γöé     {/* Filters */ }
+        Γöé     ^
+    230 Γöé   < div className="glass-card p-4" >
+    231 Γöé     <TimeRecordsFilterForm
+  
+  i Remove {
+  
+
+src\app\dashboard\school-admin\time-records\time-records-client.tsx:518:5 parse ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+
+  ├ù Expected an expression but instead found '<'.
+  
+    516 Γöé     </CardContent>
+    517 Γöé   </Card >
+  > 518 Γöé     </div >
+        Γöé     ^
+    519 Γöé   )
+    520 Γöé }
+  
+  i Expected an expression here.
+  
+    516 Γöé     </CardContent>
+    517 Γöé   </Card >
+  > 518 Γöé     </div >
+        Γöé     ^
+    519 Γöé   )
+    520 Γöé }
+  
+
+Checked 485 files in 645ms. No fixes applied.
+Found 2 errors.
+Found 1 warning.
+lint ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓö
+üΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü
+
+  ├ù Some errors were emitted while running checks.
+  
+

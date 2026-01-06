@@ -93,13 +93,13 @@ export default async function SchoolOnboardingPage() {
             user={
               user
                 ? {
-                  id: user.id,
-                  email: user.email,
-                  name: user.name,
-                  role: user.role,
-                  schoolId: user.schoolId,
-                  onboardingCompleted: user.onboardingCompleted,
-                }
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    role: user.role,
+                    schoolId: user.schoolId,
+                    onboardingCompleted: user.onboardingCompleted,
+                  }
                 : null
             }
             clerkUser={{

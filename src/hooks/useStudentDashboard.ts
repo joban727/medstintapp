@@ -149,25 +149,39 @@ export function useStudentDashboard(): UseStudentDashboardReturn {
         },
         currentRotation: payload.currentRotation
           ? {
-              ...payload.currentRotation,
-              startDate: new Date(payload.currentRotation.startDate),
-              endDate: new Date(payload.currentRotation.endDate),
-            }
+            ...payload.currentRotation,
+            startDate: new Date(payload.currentRotation.startDate),
+            endDate: new Date(payload.currentRotation.endDate),
+          }
           : null,
         assignedSites: Array.isArray(payload.assignedSites) ? payload.assignedSites : [],
         recentTimeRecords: Array.isArray(payload.recentTimeRecords)
-          ? payload.recentTimeRecords.map((record: any) => ({
+          ? payload.recentTimeRecords.map(
+            (record: {
+              id: string
+              date: string
+              clockIn: string
+              clockOut: string | null
+              totalHours: number | null
+              activities: string[]
+              notes: string | null
+              status: string
+              clinicalSiteId: string | null
+              siteName: string | null
+              specialty: string | null
+            }) => ({
               ...record,
               date: new Date(record.date),
               clockIn: new Date(record.clockIn),
               clockOut: record.clockOut ? new Date(record.clockOut) : null,
-            }))
+            })
+          )
           : [],
         clockStatus: payload.clockStatus
           ? {
-              ...payload.clockStatus,
-              clockIn: new Date(payload.clockStatus.clockIn),
-            }
+            ...payload.clockStatus,
+            clockIn: new Date(payload.clockStatus.clockIn),
+          }
           : null,
         statistics: payload.statistics ?? {
           weeklyHours: 0,
@@ -210,7 +224,7 @@ export function useStudentDashboard(): UseStudentDashboardReturn {
 
     const interval = setInterval(() => {
       fetchData(true)
-    }, 30000) // Refresh every 30 seconds when clocked in
+    }, 60000) // Refresh every 60 seconds when clocked in (was 30s)
 
     return () => clearInterval(interval)
   }, [data?.clockStatus, fetchData])

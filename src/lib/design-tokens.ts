@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger"
+
 // API Response Caching Utility
 // Implements in-memory caching with TTL for better performance
 
@@ -195,7 +197,7 @@ export const warmCache = {
         }
       }
     } catch (error) {
-      console.error("Cache warming failed for user dashboard:", error)
+      logger.error({ error: error as any }, "Cache warming failed for user dashboard")
     }
   },
 
@@ -208,7 +210,7 @@ export const warmCache = {
         }
       }
     } catch (error) {
-      console.error("Cache warming failed for clinical sites:", error)
+      logger.error({ error: error as any }, "Cache warming failed for clinical sites")
     }
   },
 }

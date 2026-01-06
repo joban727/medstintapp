@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server"
-import { and, eq, gte, lte } from "drizzle-orm"
+import { and, eq, gte, lte, type SQL } from "drizzle-orm"
 import { db } from "@/database/connection-pool"
 import { rotations, clinicalSites } from "@/database/schema"
 import {
@@ -11,6 +11,12 @@ import {
 import { apiAuthMiddleware } from "@/lib/rbac-middleware"
 
 export const dynamic = "force-dynamic"
+
+// Type for conflict details
+interface ConflictDetail {
+  with?: string
+  capacity?: number
+}
 
 export async function GET(request: NextRequest) {
   return withErrorHandlingAsync(async () => {
@@ -30,7 +36,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
 
-    const conditions: any[] = []
+    const conditions: SQL<unknown>[] = []
     if (studentId) conditions.push(eq(rotations.studentId, studentId))
     if (siteId) conditions.push(eq(rotations.clinicalSiteId, siteId))
     if (startDate) conditions.push(gte(rotations.startDate, new Date(startDate)))
@@ -51,7 +57,7 @@ export async function GET(request: NextRequest) {
       .where(conditions.length ? and(...conditions) : undefined)
 
     // Simple overlap + capacity checks (placeholder)
-    const conflicts: Array<{ type: string; rotationId: string; details: any }> = []
+    const conflicts: Array<{ type: string; rotationId: string; details: ConflictDetail }> = []
     const byStudent: Record<string, typeof schedule> = {}
     for (const r of schedule) {
       const key = r.studentId || "unknown"
@@ -80,4 +86,3 @@ export async function GET(request: NextRequest) {
     return createSuccessResponse({ conflicts })
   })
 }
-

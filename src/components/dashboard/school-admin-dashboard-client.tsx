@@ -8,8 +8,12 @@ import { MetricsOverview } from "./school-admin/metrics-overview"
 import { QuickNav } from "./school-admin/quick-nav"
 import { RecentActivityFeed } from "./school-admin/recent-activity-feed"
 import { FloatingActionCenter } from "./school-admin/floating-action-center"
-import { EnrollmentTrendChart, SiteCapacityChart, CompetencyRadarChart } from "./school-admin/analytics-charts"
-import { DashboardSkeleton } from "@/components/ui/dashboard-skeleton"
+import {
+  EnrollmentTrendChart,
+  SiteCapacityChart,
+  CompetencyRadarChart,
+} from "./school-admin/analytics-charts"
+
 import { toast } from "sonner"
 import type { UserRole } from "@/types"
 
@@ -74,48 +78,42 @@ const quickActions = [
     description: "View and manage student enrollment",
     icon: Users,
     href: "/dashboard/school-admin/students",
-    color: "text-medical-primary",
-    gradient: "bg-gradient-to-br from-medical-primary to-medical-cyan",
+    color: "text-foreground/70",
   },
   {
     title: "Programs",
     description: "Configure curricula and requirements",
     icon: BookOpen,
     href: "/dashboard/school-admin/programs",
-    color: "text-healthcare-green",
-    gradient: "bg-gradient-to-br from-healthcare-green to-medical-teal",
+    color: "text-foreground/70",
   },
   {
     title: "Sites",
     description: "Manage rotation sites and partnerships",
     icon: Calendar,
     href: "/dashboard/school-admin/sites",
-    color: "text-medical-primary",
-    gradient: "bg-gradient-to-br from-medical-primary to-medical-cyan",
+    color: "text-foreground/70",
   },
   {
     title: "Reports",
     description: "View performance metrics and reports",
     icon: BarChart3,
     href: "/dashboard/school-admin/reports",
-    color: "text-info",
-    gradient: "bg-gradient-to-br from-info to-medical-primary",
+    color: "text-foreground/70",
   },
   {
     title: "Faculty",
     description: "Manage preceptors and supervisors",
     icon: GraduationCap,
     href: "/dashboard/school-admin/faculty-staff",
-    color: "text-medical-cyan",
-    gradient: "bg-gradient-to-br from-medical-cyan to-info",
+    color: "text-foreground/70",
   },
   {
     title: "Timecards",
     description: "Monitor student timecards and corrections",
     icon: Clock,
     href: "/dashboard/school-admin/time-records",
-    color: "text-destructive",
-    gradient: "bg-gradient-to-br from-destructive to-warning",
+    color: "text-foreground/70",
   },
 ]
 
@@ -124,8 +122,8 @@ interface ActionItem {
   id: string
   title: string
   description: string
-  type: 'approval' | 'time-approval' | 'evaluation' | 'system'
-  priority: 'high' | 'medium' | 'low'
+  type: "approval" | "time-approval" | "evaluation" | "system"
+  priority: "high" | "medium" | "low"
   date: string
   entityId: string
   entityType: string
@@ -143,13 +141,13 @@ export function SchoolAdminDashboardClient({
   useEffect(() => {
     async function fetchActionItems() {
       try {
-        const response = await fetch('/api/school-admin/action-items')
+        const response = await fetch("/api/school-admin/action-items")
         const data = await response.json()
         if (data.success) {
           setActionItems(data.data || [])
         }
       } catch (error) {
-        console.error('Failed to fetch action items:', error)
+        console.error("Failed to fetch action items:", error)
       } finally {
         setLoading(false)
       }
@@ -162,89 +160,95 @@ export function SchoolAdminDashboardClient({
     totalStudents: schoolStats.totalStudents,
     activePrograms: schoolStats.totalPrograms,
     totalSites: schoolStats.totalSites,
-    placementRate: schoolStats.placementRate
+    placementRate: schoolStats.placementRate,
   }
 
   // Action handlers with real API calls
-  const handleApprove = useCallback(async (taskId: string, entityId: string, entityType: string) => {
-    try {
-      let response: Response
+  const handleApprove = useCallback(
+    async (taskId: string, entityId: string, entityType: string) => {
+      try {
+        let response: Response
 
-      if (entityType === 'user') {
-        // Approve user account
-        response = await fetch('/api/school-admin/approvals', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetUserId: entityId, action: 'APPROVE' })
-        })
-      } else if (entityType === 'timeRecord') {
-        // Approve time record
-        response = await fetch('/api/time-records', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: entityId, status: 'APPROVED' })
-        })
-      } else {
-        toast.info("This action type requires manual review")
-        return
+        if (entityType === "user") {
+          // Approve user account
+          response = await fetch("/api/school-admin/approvals", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ targetUserId: entityId, action: "APPROVE" }),
+          })
+        } else if (entityType === "timeRecord") {
+          // Approve time record
+          response = await fetch("/api/time-records", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: entityId, status: "APPROVED" }),
+          })
+        } else {
+          toast.info("This action type requires manual review")
+          return
+        }
+
+        const data = await response.json()
+        if (data.success) {
+          toast.success("Approved successfully")
+          setActionItems((prev) => prev.filter((item) => item.id !== taskId))
+        } else {
+          toast.error(data.error || "Failed to approve")
+        }
+      } catch (error) {
+        console.error("Approve error:", error)
+        toast.error("An error occurred")
       }
+    },
+    []
+  )
 
-      const data = await response.json()
-      if (data.success) {
-        toast.success("Approved successfully")
-        setActionItems(prev => prev.filter(item => item.id !== taskId))
-      } else {
-        toast.error(data.error || "Failed to approve")
+  const handleDismiss = useCallback(
+    async (taskId: string, entityId: string, entityType: string) => {
+      try {
+        let response: Response
+
+        if (entityType === "user") {
+          // Reject user account
+          response = await fetch("/api/school-admin/approvals", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ targetUserId: entityId, action: "REJECT" }),
+          })
+        } else if (entityType === "timeRecord") {
+          // Reject time record
+          response = await fetch("/api/time-records", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: entityId, status: "REJECTED" }),
+          })
+        } else {
+          // Just remove from UI for system notifications
+          setActionItems((prev) => prev.filter((item) => item.id !== taskId))
+          toast.info("Dismissed")
+          return
+        }
+
+        const data = await response.json()
+        if (data.success) {
+          toast.success("Action completed")
+          setActionItems((prev) => prev.filter((item) => item.id !== taskId))
+        } else {
+          toast.error(data.error || "Failed to process")
+        }
+      } catch (error) {
+        console.error("Dismiss error:", error)
+        toast.error("An error occurred")
       }
-    } catch (error) {
-      console.error('Approve error:', error)
-      toast.error("An error occurred")
-    }
-  }, [])
-
-  const handleDismiss = useCallback(async (taskId: string, entityId: string, entityType: string) => {
-    try {
-      let response: Response
-
-      if (entityType === 'user') {
-        // Reject user account
-        response = await fetch('/api/school-admin/approvals', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetUserId: entityId, action: 'REJECT' })
-        })
-      } else if (entityType === 'timeRecord') {
-        // Reject time record
-        response = await fetch('/api/time-records', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: entityId, status: 'REJECTED' })
-        })
-      } else {
-        // Just remove from UI for system notifications
-        setActionItems(prev => prev.filter(item => item.id !== taskId))
-        toast.info("Dismissed")
-        return
-      }
-
-      const data = await response.json()
-      if (data.success) {
-        toast.success("Action completed")
-        setActionItems(prev => prev.filter(item => item.id !== taskId))
-      } else {
-        toast.error(data.error || "Failed to process")
-      }
-    } catch (error) {
-      console.error('Dismiss error:', error)
-      toast.error("An error occurred")
-    }
-  }, [])
+    },
+    []
+  )
 
   const handleView = useCallback((taskId: string, entityId: string, entityType: string) => {
     // Navigate based on entity type
-    if (entityType === 'evaluation') {
+    if (entityType === "evaluation") {
       window.location.href = `/dashboard/school-admin/students?highlight=${entityId}`
-    } else if (entityType === 'timeRecord') {
+    } else if (entityType === "timeRecord") {
       window.location.href = `/dashboard/school-admin/time-records?highlight=${entityId}`
     } else {
       window.location.href = `/dashboard/school-admin/approvals?highlight=${entityId}`
@@ -292,7 +296,9 @@ export function SchoolAdminDashboardClient({
         >
           <div className="flex items-center gap-2 mb-4">
             <div className="h-5 w-1 rounded-full bg-medical-primary" />
-            <h2 className="text-sm font-semibold text-foreground/80 uppercase tracking-wider">Quick Access</h2>
+            <h2 className="text-sm font-semibold text-foreground/80 uppercase tracking-wider">
+              Quick Access
+            </h2>
           </div>
           <QuickNav actions={quickActions} />
         </motion.section>
@@ -306,7 +312,9 @@ export function SchoolAdminDashboardClient({
         >
           <div className="flex items-center gap-2 mb-4">
             <Activity className="h-4 w-4 text-info" />
-            <h2 className="text-sm font-semibold text-foreground/80 uppercase tracking-wider">Recent Activity</h2>
+            <h2 className="text-sm font-semibold text-foreground/80 uppercase tracking-wider">
+              Recent Activity
+            </h2>
           </div>
           <RecentActivityFeed activities={recentActivities} />
         </motion.section>
@@ -344,5 +352,3 @@ export function DashboardError({ error }: { error: string }) {
     </div>
   )
 }
-
-export { DashboardSkeleton }

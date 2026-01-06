@@ -65,10 +65,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       if (this.props.fallback) {
         const FallbackComponent = this.props.fallback
         return (
-          <FallbackComponent
-            error={error || new Error("Unknown error")}
-            retry={this.handleRetry}
-          />
+          <FallbackComponent error={error || new Error("Unknown error")} retry={this.handleRetry} />
         )
       }
 
@@ -132,10 +129,7 @@ export default ErrorBoundary
 export const useChunkErrorHandler = () => {
   React.useEffect(() => {
     const handleChunkError = (event: ErrorEvent) => {
-      if (
-        event.error?.name === "ChunkLoadError" ||
-        event.message?.includes("Loading chunk")
-      ) {
+      if (event.error?.name === "ChunkLoadError" || event.message?.includes("Loading chunk")) {
         console.error("Chunk loading error detected, reloading page...")
         window.location.reload()
       }

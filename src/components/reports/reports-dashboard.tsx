@@ -76,27 +76,24 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
 
       if (studentsResponse.success) {
         // Handle standardized API response: { success: true, data: { students: [] } }
-        const students = studentsResponse.data?.students || studentsResponse.data || []
+        const data = studentsResponse.data as { students: any[] }
+        const students = data?.students || (studentsResponse.data as any[]) || []
         setAvailableStudents(students)
       }
 
       if (competenciesResponse.success) {
         // Handle standardized API response
-        const competencies =
-          competenciesResponse.data?.competencies ||
-          competenciesResponse.data ||
-          competenciesResponse ||
-          []
+
+        const data = competenciesResponse.data as { competencies: any[] }
+        const competencies = data?.competencies || (competenciesResponse.data as any[]) || []
         setAvailableCompetencies(Array.isArray(competencies) ? competencies : [])
       }
 
       if (rotationsResponse.success) {
         // Handle standardized API response: { success: true, data: { items: [], pagination: {} } }
-        const rotations =
-          rotationsResponse.data?.items ||
-          rotationsResponse.data?.data ||
-          rotationsResponse.data ||
-          []
+
+        const data = rotationsResponse.data as { items: any[]; data: any[] }
+        const rotations = data?.items || data?.data || (rotationsResponse.data as any[]) || []
         setAvailableRotations(Array.isArray(rotations) ? rotations : [])
       }
     } catch (_error) {
@@ -143,7 +140,7 @@ export function ReportsDashboard({ userId, userRole }: ReportsDashboardProps) {
 
       if (response.success) {
         // Handle standardized API response
-        const data = response.data
+        const data = response.data as ReportData
         setReportData(data)
         toast.success("Report generated successfully")
       } else {

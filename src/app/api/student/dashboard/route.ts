@@ -22,6 +22,13 @@ import {
 } from "@/lib/api-response"
 import { apiAuthMiddleware } from "@/lib/rbac-middleware"
 
+// Type for cached dashboard response
+type CachedDashboardResponse = {
+  __errorStatus?: number
+  timings?: Record<string, number>
+  [key: string]: unknown
+}
+
 export async function GET(request: NextRequest) {
   return withErrorHandlingAsync(async () => {
     const authResult = await apiAuthMiddleware(request)
@@ -240,7 +247,7 @@ export async function GET(request: NextRequest) {
             .where(eq(timeRecords.studentId, userId))
             .groupBy(sql`DATE(${timeRecords.date})`)
             .orderBy(desc(sql`DATE(${timeRecords.date})`))
-            .limit(30),
+            .limit(7), // Reduced from 30 for performance
         ])
         timings.parallelQueriesMs = Date.now() - tParallelStart
 
@@ -331,8 +338,9 @@ export async function GET(request: NextRequest) {
     )
 
     // Handle sentinel errors from cached builder
-    if ((data as any).__errorStatus) {
-      const status = (data as any).__errorStatus as number
+    const typedData = data as CachedDashboardResponse
+    if (typedData.__errorStatus) {
+      const status = typedData.__errorStatus
       if (status === 404) {
         return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
       }
@@ -345,12 +353,11 @@ export async function GET(request: NextRequest) {
     const totalMs = Date.now() - routeStart
     if (debug && typeof data === "object") {
       return createSuccessResponse({
-        ...(data as any),
-        timings: { ...((data as any).timings || {}), routeTotalMs: totalMs },
+        ...typedData,
+        timings: { ...(typedData.timings || {}), routeTotalMs: totalMs },
       })
     }
 
     return createSuccessResponse(data)
   })
 }
-

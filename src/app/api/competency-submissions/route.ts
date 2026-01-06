@@ -705,7 +705,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     if (error instanceof z.ZodError) {
       // Invalidate related caches
       try {
-        await cacheIntegrationService.invalidateByTags(['competency'])
+        await cacheIntegrationService.invalidateByTags(["competency"])
       } catch (cacheError) {
         console.warn("Cache invalidation error in competency-submissions/route.ts:", cacheError)
       }
@@ -726,4 +726,3 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     return addSecurityHeaders(errorResponse)
   }
 })
-

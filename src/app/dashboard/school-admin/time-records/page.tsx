@@ -379,9 +379,9 @@ export default async function AdminTimecardMonitoringPage({
         },
         site: site
           ? {
-            id: site.id,
-            name: site.name || "Unknown Site",
-          }
+              id: site.id,
+              name: site.name || "Unknown Site",
+            }
           : null,
         corrections: correctionsByRecord[record.id] || [],
       }

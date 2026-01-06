@@ -70,12 +70,12 @@ export const studentPlan: Plan = {
     "Competency tracking",
     "Mobile-friendly interface",
   ],
-  price: 2.00,
+  price: 2.0,
   trialDays: 0,
 }
 
 // Helper to get plan by name
 export function getPlanByName(name: string): Plan | undefined {
   if (name === "student") return studentPlan
-  return plans.find(p => p.name.toLowerCase() === name.toLowerCase())
+  return plans.find((p) => p.name.toLowerCase() === name.toLowerCase())
 }

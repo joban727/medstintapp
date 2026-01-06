@@ -169,7 +169,12 @@ export default function SetupWizardPage() {
     }
   }
 
-  const handleStaffInvite = async (emails: string[], role: string, programId: string, cohortId: string) => {
+  const handleStaffInvite = async (
+    emails: string[],
+    role: string,
+    programId: string,
+    cohortId: string
+  ) => {
     setIsSubmitting(true)
     try {
       const response = await fetch("/api/invitations", {
@@ -394,7 +399,9 @@ export default function SetupWizardPage() {
                   id="schoolName"
                   placeholder="e.g., Northern Medical College"
                   value={quickSetupForm.schoolName}
-                  onChange={(e) => setQuickSetupForm({ ...quickSetupForm, schoolName: e.target.value })}
+                  onChange={(e) =>
+                    setQuickSetupForm({ ...quickSetupForm, schoolName: e.target.value })
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -403,12 +410,15 @@ export default function SetupWizardPage() {
                   id="programName"
                   placeholder="e.g., Radiology Technology Program"
                   value={quickSetupForm.programName}
-                  onChange={(e) => setQuickSetupForm({ ...quickSetupForm, programName: e.target.value })}
+                  onChange={(e) =>
+                    setQuickSetupForm({ ...quickSetupForm, programName: e.target.value })
+                  }
                 />
               </div>
             </div>
             <p className="text-sm text-muted-foreground">
-              This will create your school, a default program, and a first cohort. You can customize these later from the Programs page.
+              This will create your school, a default program, and a first cohort. You can customize
+              these later from the Programs page.
             </p>
             <Button
               onClick={handleQuickSetup}
@@ -484,7 +494,7 @@ export default function SetupWizardPage() {
 
         <div className="space-y-6">
           {currentStep === "students" && (
-            <Card className="glass-card card-hover-lift">
+            <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm card-hover-lift">
               <CardHeader>
                 <CardTitle>Import Students</CardTitle>
                 <CardDescription>Upload a CSV file containing your student roster.</CardDescription>
@@ -503,10 +513,12 @@ export default function SetupWizardPage() {
           )}
 
           {currentStep === "staff" && (
-            <Card className="glass-card card-hover-lift">
+            <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm card-hover-lift">
               <CardHeader>
                 <CardTitle>Invite Clinical Staff</CardTitle>
-                <CardDescription>Invite Clinical Preceptors and Supervisors to join.</CardDescription>
+                <CardDescription>
+                  Invite Clinical Preceptors and Supervisors to join.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <StaffInviteForm
@@ -521,7 +533,7 @@ export default function SetupWizardPage() {
           )}
 
           {currentStep === "sites" && (
-            <Card className="glass-card card-hover-lift">
+            <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm card-hover-lift">
               <CardHeader>
                 <CardTitle>Import Clinical Sites</CardTitle>
                 <CardDescription>Upload a CSV file containing your clinical sites.</CardDescription>
@@ -570,7 +582,7 @@ export default function SetupWizardPage() {
           )}
 
           {currentStep === "rotations" && (
-            <Card className="glass-card card-hover-lift">
+            <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm card-hover-lift">
               <CardHeader>
                 <CardTitle>Create Initial Rotations</CardTitle>
                 <CardDescription>

@@ -1,6 +1,7 @@
 "use client"
 
 import { Calendar, Clock, Filter, MapPin } from "lucide-react"
+import { logger } from "@/lib/client-logger"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -80,7 +81,9 @@ export default function TimeRecordsHistory({ studentId }: TimeRecordsHistoryProp
         const sitesPayload = data?.data?.sites ?? []
         setSites(sitesPayload.map((s: any) => ({ id: String(s.id), name: s.name })))
       }
-    } catch {}
+    } catch (error) {
+      logger.error(error, "Failed to fetch sites")
+    }
   }
 
   const createTimeRecord = async () => {

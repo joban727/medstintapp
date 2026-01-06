@@ -47,20 +47,26 @@ export async function GET(request: NextRequest) {
 
       // Only allow students to check clock status
       if (user.role !== ("STUDENT" as UserRole as UserRole as UserRole)) {
-        logger.warn({
-          requestId,
-          role: user.role,
-        }, "Non-student clock-status attempt")
+        logger.warn(
+          {
+            requestId,
+            role: user.role,
+          },
+          "Non-student clock-status attempt"
+        )
         return createErrorResponse(ERROR_MESSAGES.ACCESS_DENIED, HTTP_STATUS.FORBIDDEN)
       }
 
       // Get current clock status
       const status = await ClockService.getClockStatus(user.id)
 
-      logger.info({
-        requestId,
-        clockedIn: status.clockedIn,
-      }, "Clock-status API request completed successfully")
+      logger.info(
+        {
+          requestId,
+          clockedIn: status.clockedIn,
+        },
+        "Clock-status API request completed successfully"
+      )
 
       // Return clock status
       return createSuccessResponse(status, "Clock status retrieved successfully")
@@ -70,10 +76,13 @@ export async function GET(request: NextRequest) {
       customErrorHandler: (error) => {
         const requestId = Math.random().toString(36).substring(2)
 
-        logger.error({
-          requestId,
-          error: error instanceof Error ? error.message : "Unknown error",
-        }, "Clock-status API request failed")
+        logger.error(
+          {
+            requestId,
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+          "Clock-status API request failed"
+        )
 
         // Handle ClockError instances with proper error formatting
         if (error instanceof ClockError) {
@@ -95,4 +104,3 @@ export async function GET(request: NextRequest) {
     }
   )
 }
-

@@ -1,6 +1,6 @@
 /**
  * Onboarding Verification Utilities
- * 
+ *
  * NOTE: Most onboarding redirect logic is now handled by middleware.
  * This file contains utility functions still needed by onboarding pages.
  */

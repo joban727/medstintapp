@@ -1,12 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
-import {
-  ThemeAwareCard,
-  ThemeAwareCardContent,
-  ThemeAwareCardHeader,
-  ThemeAwareCardTitle,
-} from "@/components/ui/theme-aware-card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -33,7 +28,7 @@ import {
   type LocationState,
   type LocationData,
 } from "@/services/unified-location-service"
-import { formatDistance, getAccuracyDescription } from "@/utils/location-validation"
+import { getAccuracyDescription } from "@/utils/location-validation"
 import { cn } from "@/lib/utils"
 import { useEnhancedTheme } from "@/contexts/theme-context"
 
@@ -411,8 +406,8 @@ export function EnhancedLocationDisplay({
   // Enhanced loading state with better UX
   if (!locationState && isRefreshing) {
     return (
-      <ThemeAwareCard className={className} variant="default">
-        <ThemeAwareCardContent className="p-6">
+      <Card className={cn(className, "glass-card border-0")}>
+        <CardContent className="p-6">
           <div className="flex items-center justify-center gap-3 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
             <span className="text-sm font-medium">Capturing your location...</span>
@@ -426,8 +421,8 @@ export function EnhancedLocationDisplay({
               <span>Requesting permission...</span>
             </div>
           </div>
-        </ThemeAwareCardContent>
-      </ThemeAwareCard>
+        </CardContent>
+      </Card>
     )
   }
 
@@ -440,16 +435,16 @@ export function EnhancedLocationDisplay({
       return AlertTriangle
     }
 
-    const getErrorVariant = () => {
-      if (permissionStatus === "denied") return "warning"
-      return "error"
+    const getErrorVariantClass = () => {
+      if (permissionStatus === "denied") return "border-yellow-500/20 bg-yellow-500/5"
+      return "border-red-500/20 bg-red-500/5"
     }
 
     const ErrorIcon = getErrorIcon()
 
     return (
-      <ThemeAwareCard className={className} variant={getErrorVariant()}>
-        <ThemeAwareCardContent className="p-6">
+      <Card className={cn(className, "glass-card", getErrorVariantClass())}>
+        <CardContent className="p-6">
           <Alert className="border-0 bg-transparent p-0">
             <ErrorIcon className="h-4 w-4" />
             <AlertDescription>
@@ -485,16 +480,16 @@ export function EnhancedLocationDisplay({
               </div>
             </AlertDescription>
           </Alert>
-        </ThemeAwareCardContent>
-      </ThemeAwareCard>
+        </CardContent>
+      </Card>
     )
   }
 
   // No location available state
   if (!locationState || !locationState.coordinates) {
     return (
-      <ThemeAwareCard className={className} variant="default">
-        <ThemeAwareCardContent className="p-6">
+      <Card className={cn(className, "glass-card border-0")}>
+        <CardContent className="p-6">
           <div className="flex items-center gap-2 text-muted-foreground">
             <XCircle className="h-4 w-4" />
             <span className="text-sm">Location not available</span>
@@ -512,8 +507,8 @@ export function EnhancedLocationDisplay({
             <RefreshCw className={cn("h-3 w-3 mr-1", isRefreshing && "animate-spin")} />
             Request Location
           </Button>
-        </ThemeAwareCardContent>
-      </ThemeAwareCard>
+        </CardContent>
+      </Card>
     )
   }
 
@@ -544,13 +539,16 @@ export function EnhancedLocationDisplay({
   const isLocationFresh = cacheRef.current && Date.now() - cacheRef.current.timestamp < 60000 // Fresh if less than 1 minute old
 
   return (
-    <ThemeAwareCard
-      className={cn(className, isMapFullscreen && "fixed inset-4 z-50")}
-      variant="default"
+    <Card
+      className={cn(
+        className,
+        "bg-white/5 backdrop-blur-md border border-white/10 shadow-sm",
+        isMapFullscreen && "fixed inset-4 z-50"
+      )}
     >
-      <ThemeAwareCardHeader className="pb-3">
+      <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <ThemeAwareCardTitle className="flex items-center gap-2 text-lg">
+          <CardTitle className="flex items-center gap-2 text-lg">
             <MapPin className="h-5 w-5 text-primary" />
             Current Location
             {/* Status indicator */}
@@ -563,7 +561,7 @@ export function EnhancedLocationDisplay({
                 {isLocationFresh ? "Live" : "Cached"}
               </Badge>
             </div>
-          </ThemeAwareCardTitle>
+          </CardTitle>
           <div className="flex items-center gap-2">
             {lastRefresh && (
               <span className="text-xs text-muted-foreground">
@@ -575,9 +573,9 @@ export function EnhancedLocationDisplay({
             </Button>
           </div>
         </div>
-      </ThemeAwareCardHeader>
+      </CardHeader>
 
-      <ThemeAwareCardContent className="gap-4">
+      <CardContent className="gap-4">
         {/* Map Display */}
         {showMap && (
           <LocationMap
@@ -633,8 +631,8 @@ export function EnhancedLocationDisplay({
             </div>
           </div>
         )}
-      </ThemeAwareCardContent>
-    </ThemeAwareCard>
+      </CardContent>
+    </Card>
   )
 }
 

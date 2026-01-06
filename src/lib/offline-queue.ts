@@ -87,11 +87,14 @@ export class OfflineQueue {
     this.saveToStorage()
     this.notifyListeners("enqueue", queuedOperation)
 
-    logger.info({
-      id: queuedOperation.id,
-      type: queuedOperation.type,
-      priority: queuedOperation.priority,
-    }, "Operation queued for offline processing")
+    logger.info(
+      {
+        id: queuedOperation.id,
+        type: queuedOperation.type,
+        priority: queuedOperation.priority,
+      },
+      "Operation queued for offline processing"
+    )
 
     return queuedOperation.id
   }
@@ -211,10 +214,13 @@ export class OfflineQueue {
           // Remove completed operation
           this.dequeue(operation.id)
 
-          logger.info({
-            id: operation.id,
-            type: operation.type,
-          }, "Offline operation completed")
+          logger.info(
+            {
+              id: operation.id,
+              type: operation.type,
+            },
+            "Offline operation completed"
+          )
         } catch (error) {
           operation.retryCount++
 
@@ -222,22 +228,28 @@ export class OfflineQueue {
             operation.status = "failed"
             this.notifyListeners("failed", operation)
 
-            logger.error({
-              id: operation.id,
-              type: operation.type,
-              retryCount: operation.retryCount,
-              error: error instanceof Error ? error.message : "Unknown error",
-            }, "Offline operation failed permanently")
+            logger.error(
+              {
+                id: operation.id,
+                type: operation.type,
+                retryCount: operation.retryCount,
+                error: error instanceof Error ? error.message : "Unknown error",
+              },
+              "Offline operation failed permanently"
+            )
           } else {
             operation.status = "pending"
             this.notifyListeners("retry", operation)
 
-            logger.warn({
-              id: operation.id,
-              type: operation.type,
-              retryCount: operation.retryCount,
-              maxRetries: operation.maxRetries,
-            }, "Offline operation retry scheduled")
+            logger.warn(
+              {
+                id: operation.id,
+                type: operation.type,
+                retryCount: operation.retryCount,
+                maxRetries: operation.maxRetries,
+              },
+              "Offline operation retry scheduled"
+            )
           }
         }
       }
@@ -367,11 +379,14 @@ export class OfflineQueue {
       try {
         callback(operation)
       } catch (error) {
-        logger.error({
-          event,
-          operationId: operation.id,
-          error: error instanceof Error ? error.message : "Unknown error",
-        }, "Error in offline queue listener")
+        logger.error(
+          {
+            event,
+            operationId: operation.id,
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+          "Error in offline queue listener"
+        )
       }
     }
   }
@@ -385,9 +400,12 @@ export class OfflineQueue {
     try {
       localStorage.setItem(this.config.storageKey, JSON.stringify(this.queue))
     } catch (error) {
-      logger.error({
-        error: error instanceof Error ? error.message : "Unknown error",
-      }, "Failed to save offline queue to storage")
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : "Unknown error",
+        },
+        "Failed to save offline queue to storage"
+      )
     }
   }
 
@@ -401,14 +419,20 @@ export class OfflineQueue {
       const stored = localStorage.getItem(this.config.storageKey)
       if (stored) {
         this.queue = JSON.parse(stored)
-        logger.info({
-          operationCount: this.queue.length,
-        }, "Offline queue loaded from storage")
+        logger.info(
+          {
+            operationCount: this.queue.length,
+          },
+          "Offline queue loaded from storage"
+        )
       }
     } catch (error) {
-      logger.error({
-        error: error instanceof Error ? error.message : "Unknown error",
-      }, "Failed to load offline queue from storage")
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : "Unknown error",
+        },
+        "Failed to load offline queue from storage"
+      )
       this.queue = []
     }
   }

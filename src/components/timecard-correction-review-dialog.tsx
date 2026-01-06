@@ -269,83 +269,79 @@ export function TimecardCorrectionReviewDialog({
               <CardContent className="space-y-3">
                 {(correction.correctionType === "CLOCK_IN_TIME" ||
                   correction.correctionType === "CLOCK_OUT_TIME") && (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{formatDate(correction.originalRecord.date)}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">
-                          {formatTime(
-                            requestedChanges.newClockIn || correction.originalRecord.clockIn
-                          )}{" "}
-                          -{" "}
-                          {formatTime(
-                            requestedChanges.newClockOut || correction.originalRecord.clockOut
-                          )}
-                        </span>
-                      </div>
-                      <div>
-                        <Label className="text-muted-foreground text-xs">Total Hours</Label>
-                        <div className="text-sm">
-                          {requestedChanges.newClockIn && requestedChanges.newClockOut
-                            ? (
-                              (new Date(requestedChanges.newClockOut).getTime() -
-                                new Date(requestedChanges.newClockIn).getTime()) /
-                              (1000 * 60 * 60)
-                            ).toFixed(2)
-                            : correction.originalRecord.totalHours || "Not calculated"}
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                {(correction.correctionType === "ACTIVITIES" ||
-                  correction.correctionType === "MULTIPLE") && (
-                    <div>
-                      <Label className="text-muted-foreground text-xs">Activities</Label>
-                      <div className="text-sm">
-                        {requestedChanges.newActivities ||
-                          correction.originalRecord.activities ||
-                          "No activities recorded"}
-                      </div>
-                    </div>
-                  )}
-
-                {(correction.correctionType === "NOTES" ||
-                  correction.correctionType === "MULTIPLE") && (
-                    <div>
-                      <Label className="text-muted-foreground text-xs">Notes</Label>
-                      <div className="text-sm">
-                        {requestedChanges.newNotes || correction.originalRecord.notes || "No notes"}
-                      </div>
-                    </div>
-                  )}
-
-                {correction.correctionType === "MULTIPLE" && (
                   <>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{formatDate(correction.originalRecord.date)}</span>
+                    </div>
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm">
-                        {formatTime(
-                          requestedChanges.newClockIn || correction.originalRecord.clockIn
-                        )}{" "}
+                        {formatTime(requestedChanges.clockIn || correction.originalRecord.clockIn)}{" "}
                         -{" "}
                         {formatTime(
-                          requestedChanges.newClockOut || correction.originalRecord.clockOut
+                          requestedChanges.clockOut || correction.originalRecord.clockOut
                         )}
                       </span>
                     </div>
                     <div>
                       <Label className="text-muted-foreground text-xs">Total Hours</Label>
                       <div className="text-sm">
-                        {requestedChanges.newClockIn && requestedChanges.newClockOut
+                        {requestedChanges.clockIn && requestedChanges.clockOut
                           ? (
-                            (new Date(requestedChanges.newClockOut).getTime() -
-                              new Date(requestedChanges.newClockIn).getTime()) /
-                            (1000 * 60 * 60)
-                          ).toFixed(2)
+                              (new Date(requestedChanges.clockOut).getTime() -
+                                new Date(requestedChanges.clockIn).getTime()) /
+                              (1000 * 60 * 60)
+                            ).toFixed(2)
+                          : correction.originalRecord.totalHours || "Not calculated"}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {(correction.correctionType === "ACTIVITIES" ||
+                  correction.correctionType === "MULTIPLE") && (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Activities</Label>
+                    <div className="text-sm">
+                      {requestedChanges.activities ||
+                        correction.originalRecord.activities ||
+                        "No activities recorded"}
+                    </div>
+                  </div>
+                )}
+
+                {(correction.correctionType === "NOTES" ||
+                  correction.correctionType === "MULTIPLE") && (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Notes</Label>
+                    <div className="text-sm">
+                      {requestedChanges.notes || correction.originalRecord.notes || "No notes"}
+                    </div>
+                  </div>
+                )}
+
+                {correction.correctionType === "MULTIPLE" && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        {formatTime(requestedChanges.clockIn || correction.originalRecord.clockIn)}{" "}
+                        -{" "}
+                        {formatTime(
+                          requestedChanges.clockOut || correction.originalRecord.clockOut
+                        )}
+                      </span>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground text-xs">Total Hours</Label>
+                      <div className="text-sm">
+                        {requestedChanges.clockIn && requestedChanges.clockOut
+                          ? (
+                              (new Date(requestedChanges.clockOut).getTime() -
+                                new Date(requestedChanges.clockIn).getTime()) /
+                              (1000 * 60 * 60)
+                            ).toFixed(2)
                           : correction.originalRecord.totalHours || "Not calculated"}
                       </div>
                     </div>

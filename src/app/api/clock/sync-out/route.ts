@@ -25,24 +25,23 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   if (!context.userId) {
     logger.warn({ requestId }, "Unauthenticated synchronized clock-out attempt")
-    return createErrorResponse(
-      ERROR_MESSAGES.UNAUTHORIZED,
-      HTTP_STATUS.UNAUTHORIZED,
-      { code: "AUTH_REQUIRED" }
-    )
+    return createErrorResponse(ERROR_MESSAGES.UNAUTHORIZED, HTTP_STATUS.UNAUTHORIZED, {
+      code: "AUTH_REQUIRED",
+    })
   }
 
   // Only allow students to clock out
   if (context.userRole !== ("STUDENT" as UserRole)) {
-    logger.warn({
-      requestId,
-      role: context.userRole,
-    }, "Non-student synchronized clock-out attempt")
-    return createErrorResponse(
-      "Access denied. Students only.",
-      HTTP_STATUS.FORBIDDEN,
-      { code: "INSUFFICIENT_PERMISSIONS" }
+    logger.warn(
+      {
+        requestId,
+        role: context.userRole,
+      },
+      "Non-student synchronized clock-out attempt"
     )
+    return createErrorResponse("Access denied. Students only.", HTTP_STATUS.FORBIDDEN, {
+      code: "INSUFFICIENT_PERMISSIONS",
+    })
   }
 
   // Parse request body with sync data
@@ -79,11 +78,9 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     .limit(1)
 
   if (syncSession.length === 0) {
-    return createErrorResponse(
-      "Invalid sync session",
-      HTTP_STATUS.BAD_REQUEST,
-      { code: "INVALID_SYNC_SESSION" }
-    )
+    return createErrorResponse("Invalid sync session", HTTP_STATUS.BAD_REQUEST, {
+      code: "INVALID_SYNC_SESSION",
+    })
   }
 
   // Calculate server-corrected timestamp
@@ -153,18 +150,25 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
         },
       })
 
-      logger.info({
-        requestId,
-        timeRecordId: result.recordId,
-        driftMs,
-        syncAccuracy: Math.abs(driftMs) < 100 ? "high" : Math.abs(driftMs) < 500 ? "medium" : "low",
-      }, "Synchronized clock-out completed successfully")
+      logger.info(
+        {
+          requestId,
+          timeRecordId: result.recordId,
+          driftMs,
+          syncAccuracy:
+            Math.abs(driftMs) < 100 ? "high" : Math.abs(driftMs) < 500 ? "medium" : "low",
+        },
+        "Synchronized clock-out completed successfully"
+      )
     } catch (syncError: unknown) {
-      logger.error({
-        requestId,
-        error: syncError instanceof Error ? syncError.message : String(syncError),
-        timeRecordId: result.recordId,
-      }, "Failed to update synchronized clock record")
+      logger.error(
+        {
+          requestId,
+          error: syncError instanceof Error ? syncError.message : String(syncError),
+          timeRecordId: result.recordId,
+        },
+        "Failed to update synchronized clock record"
+      )
       // Don't fail the clock-out, just log the sync error
     }
   }
@@ -196,4 +200,3 @@ export async function OPTIONS() {
     },
   })
 }
-

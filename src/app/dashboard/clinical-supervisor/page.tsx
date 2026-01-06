@@ -50,12 +50,12 @@ interface User {
   name: string | null
   email: string
   role:
-  | UserRole
-  | "STUDENT"
-  | "SUPER_ADMIN"
-  | "SCHOOL_ADMIN"
-  | "CLINICAL_PRECEPTOR"
-  | "CLINICAL_SUPERVISOR"
+    | UserRole
+    | "STUDENT"
+    | "SUPER_ADMIN"
+    | "SCHOOL_ADMIN"
+    | "CLINICAL_PRECEPTOR"
+    | "CLINICAL_SUPERVISOR"
   department: string | null
   isActive: boolean
   createdAt: Date
@@ -124,7 +124,7 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
       pendingEvaluationsData,
       rawEvaluations,
       rawRotations,
-      pendingTimecards
+      pendingTimecards,
     ] = await Promise.allSettled([
       // Active rotations count
       db
@@ -155,10 +155,7 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
         })
         .from(evaluations)
         .innerJoin(rotations, eq(rotations.id, evaluations.rotationId))
-        .where(and(
-          eq(rotations.supervisorId, user.id),
-          gte(evaluations.createdAt, sixMonthsAgo)
-        )),
+        .where(and(eq(rotations.supervisorId, user.id), gte(evaluations.createdAt, sixMonthsAgo))),
 
       // Raw rotations for charts
       db
@@ -174,10 +171,7 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
         .select({ count: count() })
         .from(timeRecords)
         .innerJoin(rotations, eq(rotations.id, timeRecords.rotationId))
-        .where(and(
-          eq(rotations.supervisorId, user.id),
-          eq(timeRecords.status, "PENDING")
-        ))
+        .where(and(eq(rotations.supervisorId, user.id), eq(timeRecords.status, "PENDING"))),
     ])
 
     // Extract statistics
@@ -200,12 +194,12 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
 
       // Student Progress (Monthly Average)
       const monthlyScores = new Map<string, { total: number; count: number }>()
-      evals.forEach(e => {
-        const month = e.createdAt.toLocaleString('default', { month: 'short' })
+      evals.forEach((e) => {
+        const month = e.createdAt.toLocaleString("default", { month: "short" })
         const current = monthlyScores.get(month) || { total: 0, count: 0 }
         monthlyScores.set(month, {
           total: current.total + Number(e.rating),
-          count: current.count + 1
+          count: current.count + 1,
         })
       })
 
@@ -213,41 +207,48 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
       const last6Months = Array.from({ length: 6 }, (_, i) => {
         const d = new Date()
         d.setMonth(d.getMonth() - i)
-        return d.toLocaleString('default', { month: 'short' })
+        return d.toLocaleString("default", { month: "short" })
       }).reverse()
 
-      studentProgress = last6Months.map(month => {
+      studentProgress = last6Months.map((month) => {
         const data = monthlyScores.get(month)
         return {
           month,
-          averageScore: data ? Math.round((data.total / data.count) * 20) : 0
+          averageScore: data ? Math.round((data.total / data.count) * 20) : 0,
         }
       })
 
       // Rotation Status
-      const statusCounts = rots.reduce((acc, r) => {
-        acc[r.status] = (acc[r.status] || 0) + 1
-        return acc
-      }, {} as Record<string, number>)
+      const statusCounts = rots.reduce(
+        (acc, r) => {
+          acc[r.status] = (acc[r.status] || 0) + 1
+          return acc
+        },
+        {} as Record<string, number>
+      )
 
       rotationStatus = [
         { name: "Active", value: statusCounts["ACTIVE"] || 0, color: "#22c55e" },
         { name: "Scheduled", value: statusCounts["SCHEDULED"] || 0, color: "#3b82f6" },
         { name: "Completed", value: statusCounts["COMPLETED"] || 0, color: "#a855f7" },
         { name: "Cancelled", value: statusCounts["CANCELLED"] || 0, color: "#ef4444" },
-      ].filter(item => item.value > 0)
+      ].filter((item) => item.value > 0)
 
       // Evaluations by Specialty
-      const specialties = Array.from(new Set(rots.map(r => r.specialty)))
-      evaluationsChartData = specialties.map(specialty => {
-        const completed = evals.filter(e => e.specialty === specialty).length
-        const pending = rots.filter(r => r.specialty === specialty && r.status === "ACTIVE").length
-        return {
-          name: specialty,
-          completed,
-          pending
-        }
-      }).slice(0, 5) // Limit to top 5
+      const specialties = Array.from(new Set(rots.map((r) => r.specialty)))
+      evaluationsChartData = specialties
+        .map((specialty) => {
+          const completed = evals.filter((e) => e.specialty === specialty).length
+          const pending = rots.filter(
+            (r) => r.specialty === specialty && r.status === "ACTIVE"
+          ).length
+          return {
+            name: specialty,
+            completed,
+            pending,
+          }
+        })
+        .slice(0, 5) // Limit to top 5
     }
 
     // Fetch recent activities from database
@@ -275,7 +276,8 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
     }))
 
     // Create upcoming tasks based on real data
-    const pendingTimecardsCount = pendingTimecards.status === "fulfilled" ? pendingTimecards.value[0]?.count || 0 : 0
+    const pendingTimecardsCount =
+      pendingTimecards.status === "fulfilled" ? pendingTimecards.value[0]?.count || 0 : 0
 
     upcomingTasks = []
 
@@ -319,7 +321,6 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
         count: 0,
       })
     }
-
   } catch (error) {
     console.error("Error fetching clinical supervisor dashboard data:", error)
     // Fallback to basic data
@@ -393,7 +394,10 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
             Welcome back, {user.name}. Oversee student clinical training and progress.
           </p>
         </div>
-        <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+        <Badge
+          variant="secondary"
+          className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+        >
           Clinical Supervisor
         </Badge>
       </div>
@@ -459,13 +463,13 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
         <TaskList
           title="Upcoming Tasks"
           description="Important items requiring your attention"
-          tasks={upcomingTasks.map(task => ({
+          tasks={upcomingTasks.map((task) => ({
             id: task.id.toString(),
             title: task.title,
             dueDate: task.dueDate,
             priority: task.priority as "high" | "medium" | "low",
             count: task.count,
-            actionLabel: "Review"
+            actionLabel: "Review",
           }))}
         />
 
@@ -473,11 +477,16 @@ async function ClinicalSupervisorDashboardContent({ user }: { user: User }) {
         <ActivityList
           title="Recent Activities"
           description="Latest updates and notifications"
-          activities={recentActivities.map(activity => ({
+          activities={recentActivities.map((activity) => ({
             id: activity.id.toString(),
             message: activity.message,
             time: activity.time,
-            type: activity.type === "alert" ? "warning" : activity.type === "evaluation" ? "info" : "success"
+            type:
+              activity.type === "alert"
+                ? "warning"
+                : activity.type === "evaluation"
+                  ? "info"
+                  : "success",
           }))}
         />
       </div>

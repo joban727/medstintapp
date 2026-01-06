@@ -4,6 +4,7 @@ import { db } from "@/database/connection-pool"
 import { auditLogs, users } from "@/database/schema"
 import { hasPermission, type Permission, ROLE_HIERARCHY } from "@/lib/auth"
 import { getCurrentUser } from "@/lib/auth-clerk"
+import { logger } from "@/lib/logger"
 import type { UserRole } from "@/types"
 
 // Role validation utilities
@@ -464,18 +465,17 @@ export async function getUserById(userId: string, retryCount = 0) {
   const retryDelay = 1000 // 1 second
 
   try {
-    const user = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1)
+    const user = await db.select().from(users).where(eq(users.id, userId)).limit(1)
     return user[0] || null
   } catch (error) {
-    console.error(`Error fetching user (attempt ${retryCount + 1}/${maxRetries + 1}):`, error)
+    logger.error(
+      { error, attempt: retryCount + 1, maxRetries: maxRetries + 1 },
+      "Error fetching user"
+    )
 
     // If we haven't exceeded max retries, try again
     if (retryCount < maxRetries) {
-      console.log(`Retrying getUserById for user ${userId} in ${retryDelay}ms...`)
+      logger.info({ userId, retryDelay }, "Retrying getUserById")
       await new Promise((resolve) => setTimeout(resolve, retryDelay))
       return getUserById(userId, retryCount + 1)
     }
@@ -526,7 +526,7 @@ export async function logAuditEvent({
       createdAt: new Date(),
     })
   } catch (error) {
-    console.error("Error logging audit event:", error)
+    logger.error({ error }, "Error logging audit event")
   }
 }
 
@@ -602,6 +602,27 @@ export async function apiAuthMiddleware(
       }
     }
 
+    // SECURITY: Hardcoded Super Admin Email Check
+    // This ensures that even if the database is compromised, only this specific email can act as SUPER_ADMIN
+    const SUPER_ADMIN_EMAIL = "Joban727@gmail.com"
+    if (user.role === "SUPER_ADMIN" && user.email !== SUPER_ADMIN_EMAIL) {
+      await logAuditEvent({
+        userId: user.id,
+        action: "SECURITY_ALERT",
+        resource: "API_ROUTE",
+        details: {
+          reason: "Unauthorized SUPER_ADMIN email detected",
+          email: user.email,
+          detectedRole: user.role,
+        },
+        severity: "CRITICAL",
+        status: "FAILURE",
+      })
+
+      // Demote to STUDENT for this request to prevent access
+      user.role = "STUDENT" as UserRole
+    }
+
     // Check role-based access if required roles are specified
     if (requiredRoles && requiredRoles.length > 0) {
       if (!requiredRoles.includes(user.role as UserRole)) {
@@ -630,15 +651,15 @@ export async function apiAuthMiddleware(
     if (requiredPermissions && requiredPermissions.length > 0) {
       const hasRequiredPermissions = requireAll
         ? requiredPermissions.every((permission) =>
-          hasPermission(user.role as UserRole, permission)
-        )
+            hasPermission(user.role as UserRole, permission)
+          )
         : requireAny
           ? requiredPermissions.some((permission) =>
-            hasPermission(user.role as UserRole, permission)
-          )
+              hasPermission(user.role as UserRole, permission)
+            )
           : requiredPermissions.some((permission) =>
-            hasPermission(user.role as UserRole, permission)
-          )
+              hasPermission(user.role as UserRole, permission)
+            )
 
       if (!hasRequiredPermissions) {
         await logAuditEvent({
@@ -667,7 +688,7 @@ export async function apiAuthMiddleware(
       user,
     }
   } catch (error) {
-    console.error("API auth middleware error:", error)
+    logger.error({ error }, "API auth middleware error")
     return {
       success: false,
       error: "Internal server error",
@@ -678,10 +699,15 @@ export async function apiAuthMiddleware(
 
 // Role creation validation
 export function canCreateRole(creatorRole: UserRole, targetRole: UserRole): boolean {
+  // CRITICAL: SUPER_ADMIN role cannot be created via API/Application
+  if (targetRole === "SUPER_ADMIN") {
+    return false
+  }
+
   const _creatorLevel = ROLE_HIERARCHY[creatorRole]
   const _targetLevel = ROLE_HIERARCHY[targetRole]
 
-  // SUPER_ADMIN can create any role
+  // SUPER_ADMIN can create any role (except SUPER_ADMIN, blocked above)
   if (creatorRole === "SUPER_ADMIN") {
     return true
   }
@@ -705,6 +731,11 @@ export function canModifyRole(
   currentRole: UserRole,
   newRole: UserRole
 ): boolean {
+  // CRITICAL: Cannot promote anyone to SUPER_ADMIN via API/Application
+  if (newRole === "SUPER_ADMIN") {
+    return false
+  }
+
   // SUPER_ADMIN can modify any role
   if (modifierRole === "SUPER_ADMIN") {
     return true

@@ -163,7 +163,9 @@ export function TimecardAuditDialog({ timeRecordId, children }: TimecardAuditDia
     }
   }
 
-  const formatChangeDetails = (details: Record<string, string | number | boolean | Date | null>) => {
+  const formatChangeDetails = (
+    details: Record<string, string | number | boolean | Date | null>
+  ) => {
     if (!details || typeof details !== "object") return "No details available"
 
     return Object.entries(details)

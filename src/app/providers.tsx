@@ -6,6 +6,7 @@ import NextTopLoader from "nextjs-toploader"
 import type { ReactNode } from "react"
 import { Toaster } from "sonner"
 import { EnhancedThemeProvider } from "@/contexts/theme-context"
+import { GlassThemeProvider } from "@/contexts/glass-theme-context"
 
 export function Providers({ children }: { children: ReactNode }) {
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
@@ -20,25 +21,28 @@ export function Providers({ children }: { children: ReactNode }) {
   const content = (
     <ThemeProvider
       attribute="class"
-      defaultTheme="system"
-      enableSystem
+      defaultTheme="dark"
+      forcedTheme="dark"
+      enableSystem={false}
       disableTransitionOnChange={false}
       storageKey="medstint-theme"
     >
       <EnhancedThemeProvider>
-        <NextTopLoader color="var(--primary)" showSpinner={false} />
-        {children}
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            className: "theme-transition",
-            style: {
-              background: "hsl(var(--card))",
-              color: "hsl(var(--card-foreground))",
-              border: "1px solid hsl(var(--border))",
-            },
-          }}
-        />
+        <GlassThemeProvider>
+          <NextTopLoader color="var(--primary)" showSpinner={false} />
+          {children}
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              className: "theme-transition glass-dropdown",
+              style: {
+                background: "hsl(var(--card))",
+                color: "hsl(var(--card-foreground))",
+                border: "1px solid hsl(var(--border))",
+              },
+            }}
+          />
+        </GlassThemeProvider>
       </EnhancedThemeProvider>
     </ThemeProvider>
   )

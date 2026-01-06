@@ -195,7 +195,6 @@ export const BUSINESS_VALIDATION_RULES: ValidationRule<TimeEntry>[] = [
   },
 ]
 
-
 /**
  * Pre-configured validation engine for time tracking
  */

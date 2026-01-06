@@ -187,84 +187,86 @@ export function WelcomeBanner({ userRole, userName, onDismiss }: WelcomeBannerPr
   if (!isVisible) return null
 
   return (
-    <div className="mb-6 animate-fade-in">
-      <DashboardCard className="border border-blue-200/50 dark:border-blue-800/50 bg-gradient-to-r from-blue-50/80 via-white/90 to-green-50/80 dark:from-blue-950/80 dark:via-slate-900/90 dark:to-green-950/80 shadow-sm backdrop-blur-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-12 bg-blue-500/5 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute bottom-0 left-0 p-12 bg-green-500/5 rounded-full blur-3xl transform -translate-x-1/2 translate-y-1/2" />
+    /* Design Language: Monochrome styling with subtle gradient */
+    <DashboardCard className="border border-foreground/10 bg-gradient-to-r from-foreground/[0.02] via-background to-foreground/[0.02] shadow-sm backdrop-blur-sm relative overflow-hidden hover:border-foreground/20 transition-all duration-300">
+      <div className="absolute top-0 right-0 p-12 bg-foreground/[0.02] rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2" />
+      <div className="absolute bottom-0 left-0 p-12 bg-foreground/[0.02] rounded-full blur-3xl transform -translate-x-1/2 translate-y-1/2" />
 
-        <CardHeader className="relative z-10">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDismiss}
-            className="absolute top-4 right-4 h-8 w-8 p-0 hover:bg-white/50 rounded-full transition-colors"
-          >
-            <X className="h-4 w-4 text-muted-foreground" />
-          </Button>
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-blue-100 dark:border-blue-900">
-              {(() => {
-                const Icon = welcomeSteps[currentStep].icon
-                return <Icon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              })()}
-            </div>
-            <div>
-              <CardTitle className="font-bold text-foreground text-xl tracking-tight">
-                {welcomeSteps[currentStep].title}
-              </CardTitle>
-              <CardDescription className="mt-1 text-muted-foreground text-base">
-                {welcomeSteps[currentStep].description}
-              </CardDescription>
-            </div>
+      <CardHeader className="relative z-10">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleDismiss}
+          className="absolute top-4 right-4 h-8 w-8 p-0 hover:bg-white/50 rounded-full transition-colors"
+        >
+          <X className="h-4 w-4 text-muted-foreground" />
+        </Button>
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-foreground/5 rounded-xl shadow-sm border border-foreground/10">
+            {(() => {
+              const Icon = welcomeSteps[currentStep].icon
+              return <Icon className="h-6 w-6 text-foreground/70" />
+            })()}
           </div>
-        </CardHeader>
-        {currentStep === 2 && (
-          <CardContent className="relative z-10">
-            <div className="gap-6">
-              <h4 className="mb-4 font-semibold text-foreground flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-blue-500 dark:text-blue-400" />
-                Get Started
-              </h4>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {highPriorityActions.map((action) => (
-                  <Button
-                    key={`action-${action.title.replace(/\s+/g, "-").toLowerCase()}`}
-                    variant="outline"
-                    className="h-auto w-full justify-start p-4 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 bg-white/50 dark:bg-slate-800/50 border-blue-100 dark:border-blue-900 transition-all duration-300 group"
-                    onClick={() => router.push(action.href)}
-                  >
-                    <div className="flex items-center gap-3 w-full">
-                      <div className="p-2 rounded-lg bg-blue-100/50 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
-                        <action.icon className="h-5 w-5" />
-                      </div>
-                      <div className="text-left flex-1 min-w-0">
-                        <div className="font-medium text-foreground truncate">{action.title}</div>
-                        <div className="text-muted-foreground text-xs line-clamp-1">{action.description}</div>
-                      </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-blue-500 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
+          <div>
+            <CardTitle className="font-bold text-foreground text-xl tracking-tight">
+              {welcomeSteps[currentStep].title}
+            </CardTitle>
+            <CardDescription className="mt-1 text-muted-foreground text-base">
+              {welcomeSteps[currentStep].description}
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      {currentStep === 2 && (
+        <CardContent className="relative z-10">
+          <div className="gap-6">
+            <h4 className="mb-4 font-semibold text-foreground flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-foreground/60" />
+              Get Started
+            </h4>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {highPriorityActions.map((action) => (
+                <Button
+                  key={`action-${action.title.replace(/\s+/g, "-").toLowerCase()}`}
+                  variant="outline"
+                  className="h-auto w-full justify-start p-4 hover:border-foreground/20 hover:bg-foreground/[0.02] bg-background border-foreground/10 transition-all duration-300 group"
+                  onClick={() => router.push(action.href)}
+                >
+                  <div className="flex items-center gap-3 w-full">
+                    <div className="p-2 rounded-lg bg-foreground/5 text-foreground/70 group-hover:bg-foreground/10 transition-colors duration-300">
+                      <action.icon className="h-5 w-5" />
                     </div>
-                  </Button>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-medium text-foreground truncate">{action.title}</div>
+                      <div className="text-muted-foreground text-xs line-clamp-1">
+                        {action.description}
+                      </div>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-foreground/40 group-hover:text-foreground/70 group-hover:translate-x-1 transition-all" />
+                  </div>
+                </Button>
+              ))}
+            </div>
+            <div className="flex items-center justify-between border-t border-foreground/10 pt-6 mt-6">
+              <div className="flex gap-2">
+                {welcomeSteps.map((step, index) => (
+                  <div
+                    key={`step-${step.title.replace(/\s+/g, "-").toLowerCase()}`}
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      index <= currentStep ? "w-6 bg-foreground/60" : "w-2 bg-foreground/20"
+                    }`}
+                  />
                 ))}
               </div>
-              <div className="flex items-center justify-between border-t border-blue-100 dark:border-blue-900 pt-6 mt-6">
-                <div className="flex gap-2">
-                  {welcomeSteps.map((step, index) => (
-                    <div
-                      key={`step-${step.title.replace(/\s+/g, "-").toLowerCase()}`}
-                      className={`h-2 rounded-full transition-all duration-300 ${index <= currentStep ? "w-6 bg-blue-500" : "w-2 bg-blue-200"
-                        }`}
-                    />
-                  ))}
-                </div>
-                <Button onClick={handleDismiss} className="bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg transition-all">
-                  Get Started
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
+              <Button onClick={handleDismiss}>
+                Get Started
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
-          </CardContent>
-        )}
-      </DashboardCard>
-    </div>
+          </div>
+        </CardContent>
+      )}
+    </DashboardCard>
   )
 }

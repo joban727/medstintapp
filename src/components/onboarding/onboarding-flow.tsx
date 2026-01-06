@@ -31,6 +31,7 @@ import {
   Stethoscope,
   ClipboardCheck,
 } from "lucide-react"
+import { logger } from "@/lib/client-logger"
 import { useRouter } from "next/navigation"
 import { useId, useState, useTransition } from "react"
 import { toast } from "sonner"
@@ -125,7 +126,7 @@ export function OnboardingFlow({
   const getInitialStep = (): OnboardingStep => {
     if (initialStep) return initialStep as OnboardingStep
     if (wasFullyInvited) return "complete"
-    if (user?.role) return "welcome"  // Will be routed based on role
+    if (user?.role) return "welcome" // Will be routed based on role
     return "welcome"
   }
 
@@ -212,11 +213,14 @@ export function OnboardingFlow({
             throw new Error("Invalid response format")
           })
           errorMessage = data?.error || data?.message || errorMessage
-        } catch {
+        } catch (e) {
+          logger.error(e, "Failed to parse error response")
           try {
             const text = await response.text()
             if (text) errorMessage = text
-          } catch { }
+          } catch (e) {
+            logger.error(e, "Failed to read error text")
+          }
         }
         // API Error Response
         throw new Error(errorMessage)
@@ -251,7 +255,9 @@ export function OnboardingFlow({
         try {
           const data = await response.json()
           message = data?.error || data?.message || message
-        } catch { }
+        } catch (e) {
+          logger.error(e, "Failed to parse school creation error")
+        }
         throw new Error(message)
       }
 
@@ -288,7 +294,9 @@ export function OnboardingFlow({
         try {
           const data = await response.json()
           message = data?.error || data?.message || message
-        } catch { }
+        } catch (e) {
+          logger.error(e, "Failed to parse program creation error")
+        }
         throw new Error(message)
       }
 
@@ -326,7 +334,9 @@ export function OnboardingFlow({
         try {
           const data = await response.json()
           message = data?.error || data?.message || message
-        } catch { }
+        } catch (e) {
+          logger.error(e, "Failed to parse site creation error")
+        }
         throw new Error(message)
       }
 
@@ -455,7 +465,7 @@ export function OnboardingFlow({
               try {
                 window.location.href = "/dashboard"
               } catch (error) {
-                console.error("Failed to navigate to dashboard:", error)
+                logger.error(error, "Failed to navigate to dashboard")
               }
             } catch (error) {
               const errorMessage =
@@ -609,16 +619,18 @@ export function OnboardingFlow({
                 <div
                   key={role}
                   onClick={() => setSelectedRole(role)}
-                  className={`group relative flex cursor-pointer items-start gap-4 rounded-2xl border p-5 transition-all hover:shadow-md ${selectedRole === role
-                    ? "border-teal-500 bg-teal-50/50 ring-2 ring-teal-500 dark:bg-teal-900/20"
-                    : "bg-card hover:border-teal-200 dark:hover:border-teal-800"
-                    }`}
+                  className={`group relative flex cursor-pointer items-start gap-4 p-5 transition-all hover:shadow-md ${
+                    selectedRole === role
+                      ? "glass-card border-teal-500 bg-teal-500/10 ring-1 ring-teal-500"
+                      : "glass-card hover:bg-white/10"
+                  }`}
                 >
                   <div
-                    className={`mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors ${selectedRole === role
-                      ? "bg-teal-100 text-teal-600 dark:bg-teal-900/50 dark:text-teal-400"
-                      : "bg-muted text-muted-foreground group-hover:bg-teal-50 group-hover:text-teal-500 dark:group-hover:bg-teal-900/30"
-                      }`}
+                    className={`mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                      selectedRole === role
+                        ? "bg-teal-100 text-teal-600 dark:bg-teal-900/50 dark:text-teal-400"
+                        : "bg-muted text-muted-foreground group-hover:bg-teal-50 group-hover:text-teal-500 dark:group-hover:bg-teal-900/30"
+                    }`}
                   >
                     {getRoleIcon(role)}
                   </div>
@@ -647,7 +659,7 @@ export function OnboardingFlow({
             <div className="space-y-4">
               <Label htmlFor="school">School</Label>
               <Select value={selectedSchool || ""} onValueChange={setSelectedSchool}>
-                <SelectTrigger className="h-11">
+                <SelectTrigger className="h-11 glass-input">
                   <SelectValue placeholder="Select a school" />
                 </SelectTrigger>
                 <SelectContent>
@@ -674,7 +686,7 @@ export function OnboardingFlow({
             <div className="space-y-4">
               <Label htmlFor="program">Program</Label>
               <Select value={selectedProgram || ""} onValueChange={setSelectedProgram}>
-                <SelectTrigger className="h-11">
+                <SelectTrigger className="h-11 glass-input">
                   <SelectValue placeholder="Select a program" />
                 </SelectTrigger>
                 <SelectContent>
@@ -708,7 +720,7 @@ export function OnboardingFlow({
                   value={schoolName}
                   onChange={(e) => setSchoolName(e.target.value)}
                   placeholder="Enter school name"
-                  className="h-11"
+                  className="h-11 glass-input"
                 />
               </div>
               <div className="space-y-2">
@@ -718,7 +730,7 @@ export function OnboardingFlow({
                   value={schoolAddress}
                   onChange={(e) => setSchoolAddress(e.target.value)}
                   placeholder="Enter school address"
-                  className="h-11"
+                  className="h-11 glass-input"
                 />
               </div>
             </div>
@@ -740,13 +752,13 @@ export function OnboardingFlow({
                   value={programName}
                   onChange={(e) => setProgramName(e.target.value)}
                   placeholder="e.g. Doctor of Medicine"
-                  className="h-11"
+                  className="h-11 glass-input"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="programType">Program Type</Label>
                 <Select value={programType} onValueChange={setProgramType}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-11 glass-input">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -772,7 +784,7 @@ export function OnboardingFlow({
                   type="number"
                   value={programDuration}
                   onChange={(e) => setProgramDuration(e.target.value)}
-                  className="h-11"
+                  className="h-11 glass-input"
                 />
               </div>
               <div className="space-y-2">
@@ -782,7 +794,7 @@ export function OnboardingFlow({
                   value={programDescription}
                   onChange={(e) => setProgramDescription(e.target.value)}
                   placeholder="Brief description"
-                  className="h-11"
+                  className="h-11 glass-input"
                 />
               </div>
             </div>
@@ -804,7 +816,7 @@ export function OnboardingFlow({
                   value={siteName}
                   onChange={(e) => setSiteName(e.target.value)}
                   placeholder="e.g. General Hospital"
-                  className="h-11"
+                  className="h-11 glass-input"
                 />
               </div>
               <div className="space-y-2">
@@ -814,14 +826,14 @@ export function OnboardingFlow({
                   value={siteAddress}
                   onChange={(e) => setSiteAddress(e.target.value)}
                   placeholder="Full address"
-                  className="h-11"
+                  className="h-11 glass-input"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="siteType">Type</Label>
                   <Select value={siteType} onValueChange={setSiteType}>
-                    <SelectTrigger className="h-11">
+                    <SelectTrigger className="h-11 glass-input">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
@@ -838,7 +850,7 @@ export function OnboardingFlow({
                     type="number"
                     value={siteCapacity}
                     onChange={(e) => setSiteCapacity(e.target.value)}
-                    className="h-11"
+                    className="h-11 glass-input"
                   />
                 </div>
               </div>
@@ -856,7 +868,7 @@ export function OnboardingFlow({
             <div className="space-y-4">
               <Label htmlFor="affiliation">Affiliated School</Label>
               <Select value={selectedSchool || ""} onValueChange={setSelectedSchool}>
-                <SelectTrigger className="h-11">
+                <SelectTrigger className="h-11 glass-input">
                   <SelectValue placeholder="Select a school" />
                 </SelectTrigger>
                 <SelectContent>
@@ -903,15 +915,19 @@ export function OnboardingFlow({
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      <Card className="shadow-2xl shadow-slate-200/50 dark:shadow-slate-950/50 border-slate-200/80 dark:border-slate-700/50">
-        <CardHeader className="border-b border-slate-200 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/30 pb-6">
+      <Card className="glass-card border-white/10 shadow-2xl">
+        <CardHeader className="border-b border-white/10 pb-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <CardTitle className="text-xl font-semibold text-slate-900 dark:text-white">{currentStepInfo.title}</CardTitle>
-                <CardDescription className="text-slate-500 dark:text-slate-400">{currentStepInfo.description}</CardDescription>
+                <CardTitle className="text-xl font-semibold text-slate-900 dark:text-white">
+                  {currentStepInfo.title}
+                </CardTitle>
+                <CardDescription className="text-slate-500 dark:text-slate-400">
+                  {currentStepInfo.description}
+                </CardDescription>
               </div>
-              <Badge variant="pill" className="px-3 py-1.5">
+              <Badge variant="secondary" className="px-3 py-1.5 rounded-full">
                 Step {Object.keys(steps).indexOf(currentStep) + 1} of {Object.keys(steps).length}
               </Badge>
             </div>
@@ -923,8 +939,13 @@ export function OnboardingFlow({
           <div className="flex-1">{renderStepContent()}</div>
 
           {currentStep !== "welcome" && currentStep !== "complete" && (
-            <div className="flex items-center justify-between pt-8 mt-4 border-t border-slate-200 dark:border-slate-700">
-              <Button variant="ghost" onClick={handleBack} disabled={isPending} className="gap-2 text-slate-600 dark:text-slate-400">
+            <div className="flex items-center justify-between pt-8 mt-4 border-t border-white/10">
+              <Button
+                variant="ghost"
+                onClick={handleBack}
+                disabled={isPending}
+                className="gap-2 text-slate-600 dark:text-slate-400"
+              >
                 <ChevronLeft className="h-4 w-4" /> Back
               </Button>
               <div className="ml-auto">

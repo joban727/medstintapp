@@ -4,192 +4,195 @@ import { PageContainer } from "@/components/ui/page-container"
 import { requireAnyRole } from "@/lib/auth-clerk"
 import { db } from "@/database/connection-pool"
 import {
-    competencies,
-    competencyAssignments,
-    competencySubmissions,
-    rotations,
-    users,
-    students,
+  competencies,
+  competencyAssignments,
+  competencySubmissions,
+  rotations,
+  users,
+  students,
 } from "@/database/schema"
 import { eq, and, desc, sql } from "drizzle-orm"
 import { PreceptorCompetenciesClient } from "@/components/dashboard/preceptor-competencies-client"
 
 export default async function ClinicalPreceptorCompetenciesPage() {
-    const user = await requireAnyRole(["CLINICAL_PRECEPTOR"], "/dashboard")
+  const user = await requireAnyRole(["CLINICAL_PRECEPTOR"], "/dashboard")
 
-    if (!user) {
-        redirect("/auth/sign-in")
-    }
+  if (!user) {
+    redirect("/auth/sign-in")
+  }
 
-    return (
-        <PageContainer>
-            <Suspense fallback={<CompetenciesLoadingSkeleton />}>
-                <CompetenciesDataLoader userId={user.id} />
-            </Suspense>
-        </PageContainer>
-    )
+  return (
+    <PageContainer>
+      <Suspense fallback={<CompetenciesLoadingSkeleton />}>
+        <CompetenciesDataLoader userId={user.id} />
+      </Suspense>
+    </PageContainer>
+  )
 }
 
 function CompetenciesLoadingSkeleton() {
-    return (
-        <div className="space-y-6">
-            <div className="h-8 w-64 bg-muted animate-pulse rounded" />
-            <div className="grid gap-4 md:grid-cols-4">
-                {[...Array(4)].map((_, i) => (
-                    <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
-                ))}
-            </div>
-            <div className="h-96 bg-muted animate-pulse rounded-lg" />
-        </div>
-    )
+  return (
+    <div className="space-y-6">
+      <div className="h-8 w-64 bg-muted animate-pulse rounded" />
+      <div className="grid gap-4 md:grid-cols-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
+        ))}
+      </div>
+      <div className="h-96 bg-muted animate-pulse rounded-lg" />
+    </div>
+  )
 }
 
 async function CompetenciesDataLoader({ userId }: { userId: string }) {
-    // Fetch students assigned to this preceptor via rotations
-    const assignedStudentsData = await db
-        .select({
-            studentId: users.id,
-            studentName: users.name,
-            studentEmail: users.email,
-            programId: students.programId,
-            rotationId: rotations.id,
-            specialty: rotations.specialty,
-            status: rotations.status,
-        })
-        .from(rotations)
-        .innerJoin(users, eq(rotations.studentId, users.id))
-        .leftJoin(students, eq(students.userId, users.id))
-        .where(eq(rotations.preceptorId, userId))
+  // Fetch students assigned to this preceptor via rotations
+  const assignedStudentsData = await db
+    .select({
+      studentId: users.id,
+      studentName: users.name,
+      studentEmail: users.email,
+      programId: students.programId,
+      rotationId: rotations.id,
+      specialty: rotations.specialty,
+      status: rotations.status,
+    })
+    .from(rotations)
+    .innerJoin(users, eq(rotations.studentId, users.id))
+    .leftJoin(students, eq(students.userId, users.id))
+    .where(eq(rotations.preceptorId, userId))
 
-    // Get unique students with their program IDs
-    const studentMap = new Map<string, {
-        studentId: string
-        name: string
-        email: string
-        programId: string | null
-    }>()
-
-    for (const s of assignedStudentsData) {
-        if (!studentMap.has(s.studentId)) {
-            studentMap.set(s.studentId, {
-                studentId: s.studentId,
-                name: s.studentName || "Unknown Student",
-                email: s.studentEmail || "",
-                programId: s.programId,
-            })
-        }
+  // Get unique students with their program IDs
+  const studentMap = new Map<
+    string,
+    {
+      studentId: string
+      name: string
+      email: string
+      programId: string | null
     }
+  >()
 
-    const uniqueStudents = Array.from(studentMap.values())
+  for (const s of assignedStudentsData) {
+    if (!studentMap.has(s.studentId)) {
+      studentMap.set(s.studentId, {
+        studentId: s.studentId,
+        name: s.studentName || "Unknown Student",
+        email: s.studentEmail || "",
+        programId: s.programId,
+      })
+    }
+  }
 
-    // For each student, get their program's competencies and their submission status
-    const studentsWithData = await Promise.all(
-        uniqueStudents.map(async (student) => {
-            // Get program competencies
-            let programCompetencies: Array<{
-                id: string
-                name: string
-                description: string
-                category: string
-                level: string
-                isRequired: boolean
-                criteria: string | null
-            }> = []
+  const uniqueStudents = Array.from(studentMap.values())
 
-            if (student.programId) {
-                programCompetencies = await db
-                    .select({
-                        id: competencies.id,
-                        name: competencies.name,
-                        description: competencies.description,
-                        category: competencies.category,
-                        level: competencies.level,
-                        isRequired: competencies.isRequired,
-                        criteria: competencies.criteria,
-                    })
-                    .from(competencies)
-                    .where(eq(competencies.programId, student.programId))
-                    .orderBy(competencies.category, competencies.name)
-            }
+  // For each student, get their program's competencies and their submission status
+  const studentsWithData = await Promise.all(
+    uniqueStudents.map(async (student) => {
+      // Get program competencies
+      let programCompetencies: Array<{
+        id: string
+        name: string
+        description: string
+        category: string
+        level: string
+        isRequired: boolean
+        criteria: string | null
+      }> = []
 
-            // Get student's assignments
-            const assignments = await db
-                .select({
-                    id: competencyAssignments.id,
-                    competencyId: competencyAssignments.competencyId,
-                    status: competencyAssignments.status,
-                })
-                .from(competencyAssignments)
-                .where(eq(competencyAssignments.userId, student.studentId))
+      if (student.programId) {
+        programCompetencies = await db
+          .select({
+            id: competencies.id,
+            name: competencies.name,
+            description: competencies.description,
+            category: competencies.category,
+            level: competencies.level,
+            isRequired: competencies.isRequired,
+            criteria: competencies.criteria,
+          })
+          .from(competencies)
+          .where(eq(competencies.programId, student.programId))
+          .orderBy(competencies.category, competencies.name)
+      }
 
-            const assignmentMap = new Map(assignments.map(a => [a.competencyId, a]))
-
-            // Get student's completed submissions (legacy/simple)
-            const completedSubmissions = await db
-                .select({
-                    competencyId: competencySubmissions.competencyId,
-                    status: competencySubmissions.status,
-                    submittedAt: competencySubmissions.submittedAt,
-                })
-                .from(competencySubmissions)
-                .where(and(
-                    eq(competencySubmissions.studentId, student.studentId),
-                    eq(competencySubmissions.status, "APPROVED")
-                ))
-
-            const completedIds = new Set(completedSubmissions.map(s => s.competencyId))
-
-            // Filter out already completed competencies for the modal
-            const availableCompetencies = programCompetencies.filter(
-                c => !completedIds.has(c.id)
-            )
-
-            // Build competency display data
-            const competencyData = programCompetencies.map(comp => {
-                const assignment = assignmentMap.get(comp.id)
-                return {
-                    assignmentId: assignment?.id, // Can be undefined if no assignment exists
-                    studentId: student.studentId,
-                    studentName: student.name,
-                    studentEmail: student.email,
-                    competencyId: comp.id,
-                    competencyName: comp.name,
-                    competencyDescription: comp.description,
-                    competencyCategory: comp.category,
-                    competencyLevel: comp.level,
-                    competencyRubric: comp.criteria ? JSON.parse(comp.criteria) : [],
-                    competencyMaxScore: 5, // Default max score as it's not in the table
-                    status: assignment?.status || (completedIds.has(comp.id) ? "COMPLETED" : "ASSIGNED"),
-                    progressPercentage: completedIds.has(comp.id) ? "100" : "0",
-                    dueDate: null,
-                }
-            })
-
-            return {
-                studentId: student.studentId,
-                name: student.name,
-                email: student.email,
-                programId: student.programId,
-                competencies: competencyData,
-                completedCount: completedSubmissions.length,
-                totalCount: programCompetencies.length,
-                availableCompetencies,
-            }
+      // Get student's assignments
+      const assignments = await db
+        .select({
+          id: competencyAssignments.id,
+          competencyId: competencyAssignments.competencyId,
+          status: competencyAssignments.status,
         })
-    )
+        .from(competencyAssignments)
+        .where(eq(competencyAssignments.userId, student.studentId))
 
-    // Calculate stats
-    const totalAssignments = studentsWithData.reduce((sum, s) => sum + s.totalCount, 0)
-    const completedAssignments = studentsWithData.reduce((sum, s) => sum + s.completedCount, 0)
-    const inProgressAssignments = totalAssignments - completedAssignments
+      const assignmentMap = new Map(assignments.map((a) => [a.competencyId, a]))
 
-    return (
-        <PreceptorCompetenciesClient
-            userId={userId}
-            students={studentsWithData}
-            totalAssignments={totalAssignments}
-            completedAssignments={completedAssignments}
-            inProgressAssignments={inProgressAssignments}
-        />
-    )
+      // Get student's completed submissions (legacy/simple)
+      const completedSubmissions = await db
+        .select({
+          competencyId: competencySubmissions.competencyId,
+          status: competencySubmissions.status,
+          submittedAt: competencySubmissions.submittedAt,
+        })
+        .from(competencySubmissions)
+        .where(
+          and(
+            eq(competencySubmissions.studentId, student.studentId),
+            eq(competencySubmissions.status, "APPROVED")
+          )
+        )
+
+      const completedIds = new Set(completedSubmissions.map((s) => s.competencyId))
+
+      // Filter out already completed competencies for the modal
+      const availableCompetencies = programCompetencies.filter((c) => !completedIds.has(c.id))
+
+      // Build competency display data
+      const competencyData = programCompetencies.map((comp) => {
+        const assignment = assignmentMap.get(comp.id)
+        return {
+          assignmentId: assignment?.id, // Can be undefined if no assignment exists
+          studentId: student.studentId,
+          studentName: student.name,
+          studentEmail: student.email,
+          competencyId: comp.id,
+          competencyName: comp.name,
+          competencyDescription: comp.description,
+          competencyCategory: comp.category,
+          competencyLevel: comp.level,
+          competencyRubric: comp.criteria ? JSON.parse(comp.criteria) : [],
+          competencyMaxScore: 5, // Default max score as it's not in the table
+          status: assignment?.status || (completedIds.has(comp.id) ? "COMPLETED" : "ASSIGNED"),
+          progressPercentage: completedIds.has(comp.id) ? "100" : "0",
+          dueDate: null,
+        }
+      })
+
+      return {
+        studentId: student.studentId,
+        name: student.name,
+        email: student.email,
+        programId: student.programId,
+        competencies: competencyData,
+        completedCount: completedSubmissions.length,
+        totalCount: programCompetencies.length,
+        availableCompetencies,
+      }
+    })
+  )
+
+  // Calculate stats
+  const totalAssignments = studentsWithData.reduce((sum, s) => sum + s.totalCount, 0)
+  const completedAssignments = studentsWithData.reduce((sum, s) => sum + s.completedCount, 0)
+  const inProgressAssignments = totalAssignments - completedAssignments
+
+  return (
+    <PreceptorCompetenciesClient
+      userId={userId}
+      students={studentsWithData}
+      totalAssignments={totalAssignments}
+      completedAssignments={completedAssignments}
+      inProgressAssignments={inProgressAssignments}
+    />
+  )
 }

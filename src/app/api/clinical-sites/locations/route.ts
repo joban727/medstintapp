@@ -119,7 +119,15 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         acc[siteId].locations.push(location)
         return acc
       },
-      {} as Record<string, { clinicalSiteId: string; clinicalSiteName: string | null; clinicalSiteAddress: string | null; locations: typeof formattedLocations }>
+      {} as Record<
+        string,
+        {
+          clinicalSiteId: string
+          clinicalSiteName: string | null
+          clinicalSiteAddress: string | null
+          locations: typeof formattedLocations
+        }
+      >
     )
 
     return createSuccessResponse({
@@ -141,4 +149,3 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     },
   })
 })
-

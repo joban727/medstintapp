@@ -451,7 +451,7 @@ export class PerformanceCache {
 
     // Only use unref in Node.js environment to prevent process hanging
     if (typeof process !== "undefined" && process.versions?.node && this.cleanupTimer) {
-      ; (this.cleanupTimer as any).unref?.()
+      ;(this.cleanupTimer as any).unref?.()
     }
   }
 }

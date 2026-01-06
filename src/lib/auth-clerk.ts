@@ -2,6 +2,7 @@ import { currentUser } from "@clerk/nextjs/server"
 import { eq } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { db } from "@/database/connection-pool"
+import { logger } from "./logger"
 import { users } from "@/database/schema"
 import type { UserRole } from "@/types"
 import { invalidateUserCache } from "@/lib/auth-utils"
@@ -22,6 +23,11 @@ const isSchoolAdmin = (userRole: UserRole): boolean => {
     "SUPER_ADMIN" as UserRole,
   ])
 }
+interface UserMetadata {
+  role?: string
+  schoolId?: string
+}
+
 /**
  * Get the current authenticated user from Clerk and database
  * @returns User object with role information or null if not authenticated
@@ -44,11 +50,8 @@ export async function getCurrentUser() {
     }
 
     const clerkUser = await currentUser()
-    console.log('[DEBUG] getCurrentUser clerkUser:', JSON.stringify(clerkUser, null, 2))
-    console.log('[DEBUG] NODE_ENV:', process.env.NODE_ENV)
 
     if (!clerkUser || !clerkUser.id) {
-      console.log('[DEBUG] No clerkUser or id')
       return null
     }
 
@@ -58,8 +61,9 @@ export async function getCurrentUser() {
         return null
       }
 
-      const roleFromMeta = (clerkUser as any)?.publicMetadata?.role as string | undefined
-      const schoolIdFromMeta = (clerkUser as any)?.publicMetadata?.schoolId as string | undefined
+      const metadata = clerkUser.publicMetadata as UserMetadata
+      const roleFromMeta = metadata?.role
+      const schoolIdFromMeta = metadata?.schoolId
       const validRoles: UserRole[] = [
         "SUPER_ADMIN",
         "SCHOOL_ADMIN",
@@ -75,9 +79,7 @@ export async function getCurrentUser() {
       return {
         id: clerkUser.id,
         email: clerkUser.emailAddresses?.[0]?.emailAddress || `user-${clerkUser.id}@example.com`,
-        name:
-          `${(clerkUser as any).firstName || ""} ${(clerkUser as any).lastName || ""}`.trim() ||
-          "User",
+        name: `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || "User",
         role: safeRole,
         schoolId: schoolIdFromMeta || null,
         programId: null,
@@ -88,9 +90,9 @@ export async function getCurrentUser() {
         createdAt: new Date(),
         updatedAt: new Date(),
         emailVerified: true,
-        image: (clerkUser as any).imageUrl || null,
+        image: clerkUser.imageUrl || null,
         avatar: null,
-        avatarUrl: (clerkUser as any).imageUrl || null,
+        avatarUrl: clerkUser.imageUrl || null,
         department: null,
         phone: null,
         address: null,
@@ -142,7 +144,7 @@ export async function getCurrentUser() {
 
       dbUser = userResult?.[0] || null
     } catch (dbError) {
-      console.error("Database error fetching user:", dbError)
+      logger.error({ error: dbError, userId: clerkUser.id }, "Error in getCurrentUser")
       dbUser = null
     }
 
@@ -225,7 +227,7 @@ export async function getCurrentUser() {
     const userRole = dbUser.role || "STUDENT"
 
     if (!validRoles.includes(userRole as UserRole)) {
-      console.error("❌ getCurrentUser: Invalid role detected in database:", userRole)
+      logger.error({ userRole }, "getCurrentUser: Invalid role detected in database")
       console.error("❌ getCurrentUser: User ID:", dbUser.id)
       console.error("❌ getCurrentUser: Valid roles are:", validRoles)
       // Log this security issue for audit
@@ -242,9 +244,8 @@ export async function getCurrentUser() {
             updatedAt: new Date(),
           })
           .where(eq(users.id, dbUser.id))
-        console.log("✅ getCurrentUser: Updated invalid role to STUDENT for user:", dbUser.id)
       } catch (updateError) {
-        console.error("❌ getCurrentUser: Failed to update invalid role:", updateError)
+        logger.error({ error: updateError }, "Failed to update invalid role")
       }
     }
 

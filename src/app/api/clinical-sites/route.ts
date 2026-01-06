@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server"
-import { and, count, desc, eq, ilike, or, sql, inArray } from "drizzle-orm"
+import { and, count, desc, eq, ilike, or, sql, inArray, type SQL } from "drizzle-orm"
 import { type NextRequest } from "next/server"
 import { z } from "zod"
 import { db } from "@/database/connection-pool"
@@ -12,6 +12,13 @@ import {
   ERROR_MESSAGES,
 } from "@/lib/api-response"
 import { getSchoolContext } from "@/lib/school-utils"
+import type { UserRole } from "@/types"
+import { withCSRF } from "@/lib/csrf-middleware"
+
+// Role check helpers
+const ADMIN_ROLES: UserRole[] = ["SUPER_ADMIN", "SCHOOL_ADMIN"]
+const isAdmin = (role: string): boolean => ADMIN_ROLES.includes(role as UserRole)
+const isSuperAdmin = (role: string): boolean => role === "SUPER_ADMIN"
 // Ensure this route is always dynamic (no framework-level static caching)
 export const dynamic = "force-dynamic"
 
@@ -61,13 +68,16 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     const includeStats = searchParams.get("includeStats") === "true"
     const debug = searchParams.get("debug") === "true" || searchParams.get("debug") === "1"
 
-    const conditions: any[] = []
+    const conditions: SQL<unknown>[] = []
     if (search) conditions.push(ilike(clinicalSites.name, `%${search}%`))
-    if (type) conditions.push(eq(clinicalSites.type, type as any))
+    if (type)
+      conditions.push(
+        eq(clinicalSites.type, type as (typeof clinicalSites.type.enumValues)[number])
+      )
     if (isActive !== null) conditions.push(eq(clinicalSites.isActive, isActive === "true"))
     if (specialty) conditions.push(ilike(clinicalSites.specialties, `%${specialty}%`))
 
-    let sites: any[]
+    let sites: (typeof clinicalSites.$inferSelect)[]
     let total = 0
     if (context.userRole !== "SUPER_ADMIN" && context.schoolId) {
       // For SCHOOL_ADMIN: Show only clinical sites belonging to their school
@@ -179,173 +189,178 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 })
 
 // POST /api/clinical-sites - Create new clinical site
-export const POST = withErrorHandling(async (request: NextRequest) => {
-  const context = await getSchoolContext()
-  if (!["SUPER_ADMIN" as any, "SCHOOL_ADMIN" as any].includes(context.userRole)) {
-    return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
-  }
+export const POST = withCSRF(
+  withErrorHandling(async (request: NextRequest) => {
+    const context = await getSchoolContext()
+    if (!isAdmin(context.userRole)) {
+      return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
+    }
 
-  const body = await request.json()
-  try {
-    const validatedData = createClinicalSiteSchema.parse(body)
+    const body = await request.json()
+    try {
+      const validatedData = createClinicalSiteSchema.parse(body)
 
-    // Check for existing site with same name within the same school
-    const [existingSite] = await db
-      .select()
-      .from(clinicalSites)
-      .where(
-        and(
-          eq(clinicalSites.name, validatedData.name),
-          context.schoolId ? eq(clinicalSites.schoolId, context.schoolId) : undefined
+      // Check for existing site with same name within the same school
+      const [existingSite] = await db
+        .select()
+        .from(clinicalSites)
+        .where(
+          and(
+            eq(clinicalSites.name, validatedData.name),
+            context.schoolId ? eq(clinicalSites.schoolId, context.schoolId) : undefined
+          )
         )
-      )
-      .limit(1)
+        .limit(1)
 
-    if (existingSite) {
+      if (existingSite) {
+        return createErrorResponse(
+          "Clinical site with this name already exists",
+          HTTP_STATUS.BAD_REQUEST
+        )
+      }
+
+      const siteId = crypto.randomUUID()
+      const [newSite] = await db
+        .insert(clinicalSites)
+        .values({
+          id: siteId,
+          schoolId: context.schoolId, // Link to school
+          name: validatedData.name,
+          address: validatedData.address,
+          phone: validatedData.phone,
+          email: validatedData.email,
+          type: validatedData.type,
+          capacity: validatedData.capacity,
+          specialties: JSON.stringify(validatedData.specialties || []),
+          contactPersonName: validatedData.contactPersonName,
+          contactPersonTitle: validatedData.contactPersonTitle,
+          contactPersonPhone: validatedData.contactPersonPhone,
+          contactPersonEmail: validatedData.contactPersonEmail,
+          requirements: JSON.stringify(validatedData.requirements || []),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning()
+
+      return createSuccessResponse(
+        { clinicalSite: newSite },
+        "Clinical site created successfully",
+        HTTP_STATUS.CREATED
+      )
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return createErrorResponse(error.message, HTTP_STATUS.BAD_REQUEST)
+      }
+      throw error
+    }
+  })
+)
+
+// PUT /api/clinical-sites - Update clinical site
+export const PUT = withCSRF(
+  withErrorHandling(async (request: NextRequest) => {
+    const context = await getSchoolContext()
+    if (!isAdmin(context.userRole)) {
+      return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
+    }
+
+    const body = await request.json()
+    const { id, ...updateData } = body
+    if (!id) {
+      return createErrorResponse("Clinical site ID is required", HTTP_STATUS.BAD_REQUEST)
+    }
+
+    try {
+      const validatedData = updateClinicalSiteSchema.parse(updateData)
+
+      const [existingSite] = await db
+        .select()
+        .from(clinicalSites)
+        .where(eq(clinicalSites.id, id))
+        .limit(1)
+
+      if (!existingSite) {
+        return createErrorResponse("Clinical site not found", HTTP_STATUS.NOT_FOUND)
+      }
+
+      if (validatedData.name && validatedData.name !== existingSite.name) {
+        const [conflictSite] = await db
+          .select()
+          .from(clinicalSites)
+          .where(eq(clinicalSites.name, validatedData.name))
+          .limit(1)
+        if (conflictSite) {
+          return createErrorResponse(
+            "Another site with this name already exists",
+            HTTP_STATUS.CONFLICT
+          )
+        }
+      }
+
+      const [updatedSite] = await db
+        .update(clinicalSites)
+        .set({
+          ...validatedData,
+          specialties: validatedData.specialties
+            ? JSON.stringify(validatedData.specialties)
+            : existingSite.specialties,
+          requirements: validatedData.requirements
+            ? JSON.stringify(validatedData.requirements)
+            : existingSite.requirements,
+          updatedAt: new Date(),
+        })
+        .where(eq(clinicalSites.id, id))
+        .returning()
+
+      return createSuccessResponse(
+        { clinicalSite: updatedSite },
+        "Clinical site updated successfully"
+      )
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return createErrorResponse(error.message, HTTP_STATUS.BAD_REQUEST)
+      }
+      throw error
+    }
+  })
+)
+
+// DELETE /api/clinical-sites - Delete clinical site
+export const DELETE = withCSRF(
+  withErrorHandling(async (request: NextRequest) => {
+    const context = await getSchoolContext()
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
+    if (!id) {
+      return createErrorResponse("Clinical site ID is required", HTTP_STATUS.BAD_REQUEST)
+    }
+
+    if (!isSuperAdmin(context.userRole)) {
+      return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
+    }
+
+    const [activeRotations] = await db
+      .select({ count: count(rotations.id) })
+      .from(rotations)
+      .where(and(eq(rotations.clinicalSiteId, id), eq(rotations.status, "ACTIVE")))
+
+    if ((activeRotations?.count || 0) > 0) {
       return createErrorResponse(
-        "Clinical site with this name already exists",
+        "Cannot delete clinical site with active rotations",
         HTTP_STATUS.BAD_REQUEST
       )
     }
 
-    const siteId = crypto.randomUUID()
-    const [newSite] = await db
-      .insert(clinicalSites)
-      .values({
-        id: siteId,
-        schoolId: context.schoolId, // Link to school
-        name: validatedData.name,
-        address: validatedData.address,
-        phone: validatedData.phone,
-        email: validatedData.email,
-        type: validatedData.type,
-        capacity: validatedData.capacity,
-        specialties: JSON.stringify(validatedData.specialties || []),
-        contactPersonName: validatedData.contactPersonName,
-        contactPersonTitle: validatedData.contactPersonTitle,
-        contactPersonPhone: validatedData.contactPersonPhone,
-        contactPersonEmail: validatedData.contactPersonEmail,
-        requirements: JSON.stringify(validatedData.requirements || []),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning()
-
-    return createSuccessResponse(
-      { clinicalSite: newSite },
-      "Clinical site created successfully",
-      HTTP_STATUS.CREATED
-    )
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return createErrorResponse(error.message, HTTP_STATUS.BAD_REQUEST)
-    }
-    throw error
-  }
-})
-
-// PUT /api/clinical-sites - Update clinical site
-export const PUT = withErrorHandling(async (request: NextRequest) => {
-  const context = await getSchoolContext()
-  if (!["SUPER_ADMIN" as any, "SCHOOL_ADMIN" as any].includes(context.userRole)) {
-    return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
-  }
-
-  const body = await request.json()
-  const { id, ...updateData } = body
-  if (!id) {
-    return createErrorResponse("Clinical site ID is required", HTTP_STATUS.BAD_REQUEST)
-  }
-
-  try {
-    const validatedData = updateClinicalSiteSchema.parse(updateData)
-
     const [existingSite] = await db
       .select()
       .from(clinicalSites)
       .where(eq(clinicalSites.id, id))
       .limit(1)
-
     if (!existingSite) {
-      return createErrorResponse("Clinical site not found", HTTP_STATUS.NOT_FOUND)
+      return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
     }
 
-    if (validatedData.name && validatedData.name !== existingSite.name) {
-      const [conflictSite] = await db
-        .select()
-        .from(clinicalSites)
-        .where(eq(clinicalSites.name, validatedData.name))
-        .limit(1)
-      if (conflictSite) {
-        return createErrorResponse(
-          "Another site with this name already exists",
-          HTTP_STATUS.CONFLICT
-        )
-      }
-    }
-
-    const [updatedSite] = await db
-      .update(clinicalSites)
-      .set({
-        ...validatedData,
-        specialties: validatedData.specialties
-          ? JSON.stringify(validatedData.specialties)
-          : existingSite.specialties,
-        requirements: validatedData.requirements
-          ? JSON.stringify(validatedData.requirements)
-          : existingSite.requirements,
-        updatedAt: new Date(),
-      })
-      .where(eq(clinicalSites.id, id))
-      .returning()
-
-    return createSuccessResponse(
-      { clinicalSite: updatedSite },
-      "Clinical site updated successfully"
-    )
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return createErrorResponse(error.message, HTTP_STATUS.BAD_REQUEST)
-    }
-    throw error
-  }
-})
-
-// DELETE /api/clinical-sites - Delete clinical site
-export const DELETE = withErrorHandling(async (request: NextRequest) => {
-  const context = await getSchoolContext()
-  const { searchParams } = new URL(request.url)
-  const id = searchParams.get("id")
-  if (!id) {
-    return createErrorResponse("Clinical site ID is required", HTTP_STATUS.BAD_REQUEST)
-  }
-
-  if (context.userRole !== ("SUPER_ADMIN" as any)) {
-    return createErrorResponse(ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS, HTTP_STATUS.FORBIDDEN)
-  }
-
-  const [activeRotations] = await db
-    .select({ count: count(rotations.id) })
-    .from(rotations)
-    .where(and(eq(rotations.clinicalSiteId, id), eq(rotations.status, "ACTIVE")))
-
-  if ((activeRotations?.count || 0) > 0) {
-    return createErrorResponse(
-      "Cannot delete clinical site with active rotations",
-      HTTP_STATUS.BAD_REQUEST
-    )
-  }
-
-  const [existingSite] = await db
-    .select()
-    .from(clinicalSites)
-    .where(eq(clinicalSites.id, id))
-    .limit(1)
-  if (!existingSite) {
-    return createErrorResponse(ERROR_MESSAGES.NOT_FOUND, HTTP_STATUS.NOT_FOUND)
-  }
-
-  await db.delete(clinicalSites).where(eq(clinicalSites.id, id))
-  return createSuccessResponse(null, "Clinical site deleted successfully")
-})
-
+    await db.delete(clinicalSites).where(eq(clinicalSites.id, id))
+    return createSuccessResponse(null, "Clinical site deleted successfully")
+  })
+)

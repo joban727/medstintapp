@@ -14,6 +14,7 @@ import {
   createSuccessResponse,
   HTTP_STATUS,
 } from "@/lib/api-response"
+import { encryptLocationForStorage, decryptLocationFromStorage } from "@/lib/encryption"
 
 interface LocationCaptureRequest {
   timeRecordId: string
@@ -150,9 +151,10 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       return NextResponse.json({ error: "Clock-in location already captured" }, { status: 409 })
     }
 
-    updateData.clockInLatitude = latitude.toString()
-    updateData.clockInLongitude = longitude.toString()
-    updateData.clockInAccuracy = accuracy
+    const encryptedLocation = encryptLocationForStorage(latitude, longitude)
+    updateData.clockInLatitude = encryptedLocation
+    updateData.clockInLongitude = "ENCRYPTED_V1"
+    updateData.clockInAccuracy = accuracy.toString()
     updateData.clockInSource = source
   } else if (captureType === "clock_out") {
     // Check if clock-out location already exists
@@ -160,9 +162,10 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       return NextResponse.json({ error: "Clock-out location already captured" }, { status: 409 })
     }
 
-    updateData.clockOutLatitude = latitude.toString()
-    updateData.clockOutLongitude = longitude.toString()
-    updateData.clockOutAccuracy = accuracy
+    const encryptedLocation = encryptLocationForStorage(latitude, longitude)
+    updateData.clockOutLatitude = encryptedLocation
+    updateData.clockOutLongitude = "ENCRYPTED_V1"
+    updateData.clockOutAccuracy = accuracy.toString()
     updateData.clockOutSource = source
   }
 
@@ -175,11 +178,12 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     })
     .where(eq(timeRecords.id, timeRecordId))
 
-  // Log accuracy data for analytics
+  // Log accuracy data for analytics (encrypted)
+  const encryptedLocation = encryptLocationForStorage(latitude, longitude)
   await db.insert(locationAccuracyLogs).values({
     userId,
-    latitude: latitude.toString(),
-    longitude: longitude.toString(),
+    latitude: encryptedLocation,
+    longitude: "ENCRYPTED_V1",
     accuracy: accuracy.toString(),
     locationSource: source,
   })
@@ -251,28 +255,17 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       timestamp: timeRecord.clockIn,
       location:
         timeRecord.clockInLatitude && timeRecord.clockInLongitude
-          ? {
-            latitude: Number.parseFloat(timeRecord.clockInLatitude),
-            longitude: Number.parseFloat(timeRecord.clockInLongitude),
-            accuracy: timeRecord.clockInAccuracy,
-            source: timeRecord.clockInSource,
-          }
+          ? decryptLocationFromStorage(timeRecord.clockInLatitude)
           : null,
     },
     clockOut: {
       timestamp: timeRecord.clockOut,
       location:
         timeRecord.clockOutLatitude && timeRecord.clockOutLongitude
-          ? {
-            latitude: Number.parseFloat(timeRecord.clockOutLatitude),
-            longitude: Number.parseFloat(timeRecord.clockOutLongitude),
-            accuracy: timeRecord.clockOutAccuracy,
-            source: timeRecord.clockOutSource,
-          }
+          ? decryptLocationFromStorage(timeRecord.clockOutLatitude)
           : null,
     },
   }
 
   return NextResponse.json(response, { status: 200 })
 })
-

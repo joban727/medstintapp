@@ -372,11 +372,14 @@ export class TimeSyncService {
 
     // Log significant drift
     if (drift > this.config.driftTolerance) {
-      logger.warn({
-        drift,
-        protocol: this.status.protocol,
-        accuracy,
-      }, "Significant time drift detected")
+      logger.warn(
+        {
+          drift,
+          protocol: this.status.protocol,
+          accuracy,
+        },
+        "Significant time drift detected"
+      )
     }
   }
 
@@ -661,10 +664,13 @@ export class TimeSyncService {
    */
   public updateConfig(config: Partial<TimeSyncConfig>): void {
     this.config = { ...this.config, ...config }
-    logger.info({
-      syncInterval: this.config.syncInterval,
-      driftTolerance: this.config.driftTolerance,
-    }, "Time sync configuration updated")
+    logger.info(
+      {
+        syncInterval: this.config.syncInterval,
+        driftTolerance: this.config.driftTolerance,
+      },
+      "Time sync configuration updated"
+    )
   }
 
   /**

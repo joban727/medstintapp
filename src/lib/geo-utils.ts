@@ -12,25 +12,20 @@
  * @param lon2 - Longitude of second point in degrees
  * @returns Distance in meters
  */
-export function calculateDistance(
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number
-): number {
-    const R = 6371e3 // Earth's radius in meters
-    const φ1 = (lat1 * Math.PI) / 180
-    const φ2 = (lat2 * Math.PI) / 180
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180
+export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3 // Earth's radius in meters
+  const φ1 = (lat1 * Math.PI) / 180
+  const φ2 = (lat2 * Math.PI) / 180
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180
 
-    const a =
-        Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-        Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
 
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 
-    return R * c // Distance in meters
+  return R * c // Distance in meters
 }
 
 /**
@@ -41,9 +36,9 @@ export function calculateDistance(
  * @returns Formatted string like "40.712776°N, 74.005974°W"
  */
 export function formatCoordinates(lat: number, lon: number, precision = 6): string {
-    const latDir = lat >= 0 ? "N" : "S"
-    const lonDir = lon >= 0 ? "E" : "W"
-    return `${Math.abs(lat).toFixed(precision)}°${latDir}, ${Math.abs(lon).toFixed(precision)}°${lonDir}`
+  const latDir = lat >= 0 ? "N" : "S"
+  const lonDir = lon >= 0 ? "E" : "W"
+  return `${Math.abs(lat).toFixed(precision)}°${latDir}, ${Math.abs(lon).toFixed(precision)}°${lonDir}`
 }
 
 /**
@@ -52,11 +47,11 @@ export function formatCoordinates(lat: number, lon: number, precision = 6): stri
  * @returns Description string
  */
 export function getAccuracyDescription(accuracy: number): string {
-    if (accuracy <= 10) return "Excellent accuracy"
-    if (accuracy <= 25) return "Good accuracy"
-    if (accuracy <= 50) return "Moderate accuracy"
-    if (accuracy <= 100) return "Fair accuracy"
-    return "Poor accuracy"
+  if (accuracy <= 10) return "Excellent accuracy"
+  if (accuracy <= 25) return "Good accuracy"
+  if (accuracy <= 50) return "Moderate accuracy"
+  if (accuracy <= 100) return "Fair accuracy"
+  return "Poor accuracy"
 }
 
 /**
@@ -65,9 +60,9 @@ export function getAccuracyDescription(accuracy: number): string {
  * @returns Accuracy level category
  */
 export function getAccuracyLevel(accuracy: number): "high" | "medium" | "low" {
-    if (accuracy <= 20) return "high"
-    if (accuracy <= 100) return "medium"
-    return "low"
+  if (accuracy <= 20) return "high"
+  if (accuracy <= 100) return "medium"
+  return "low"
 }
 
 /**
@@ -80,14 +75,14 @@ export function getAccuracyLevel(accuracy: number): "high" | "medium" | "low" {
  * @returns True if user is within the geofence
  */
 export function isWithinGeofence(
-    userLat: number,
-    userLon: number,
-    centerLat: number,
-    centerLon: number,
-    radiusMeters: number
+  userLat: number,
+  userLon: number,
+  centerLat: number,
+  centerLon: number,
+  radiusMeters: number
 ): boolean {
-    const distance = calculateDistance(userLat, userLon, centerLat, centerLon)
-    return distance <= radiusMeters
+  const distance = calculateDistance(userLat, userLon, centerLat, centerLon)
+  return distance <= radiusMeters
 }
 
 /**
@@ -96,7 +91,7 @@ export function isWithinGeofence(
  * @returns Angle in radians
  */
 export function degreesToRadians(degrees: number): number {
-    return (degrees * Math.PI) / 180
+  return (degrees * Math.PI) / 180
 }
 
 /**
@@ -105,5 +100,5 @@ export function degreesToRadians(degrees: number): number {
  * @returns Angle in degrees
  */
 export function radiansToDegrees(radians: number): number {
-    return (radians * 180) / Math.PI
+  return (radians * 180) / Math.PI
 }

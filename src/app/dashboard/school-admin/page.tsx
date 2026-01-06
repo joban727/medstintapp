@@ -20,10 +20,8 @@ const isSchoolAdmin = (userRole: UserRole): boolean => {
     "SUPER_ADMIN" as UserRole,
   ])
 }
-import {
-  DashboardSkeleton,
-  SchoolAdminDashboardClient,
-} from "@/components/dashboard/school-admin-dashboard-client"
+import { DashboardLoading } from "@/components/dashboard/dashboard-loading"
+import { SchoolAdminDashboardClient } from "@/components/dashboard/school-admin-dashboard-client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { db } from "@/database/connection-pool"
@@ -201,8 +199,11 @@ export default async function SchoolAdminDashboard() {
     }
 
     return (
-      <Suspense fallback={<DashboardSkeleton />}>
-        <SchoolAdminDashboardClient user={{ ...user, role: user.role }} dashboardData={dashboardData} />
+      <Suspense fallback={<DashboardLoading />}>
+        <SchoolAdminDashboardClient
+          user={{ ...user, role: user.role }}
+          dashboardData={dashboardData}
+        />
       </Suspense>
     )
   } catch (error) {

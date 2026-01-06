@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "../../../../components/ui/card"
+import { AuthLayout } from "@/components/auth/auth-layout"
 
 export const metadata: Metadata = {
   title: "Sign In | MedStint",
@@ -28,48 +29,63 @@ export default function SignInPage() {
     !publishableKey.includes("placeholder")
 
   return (
-    <main className="container mx-auto flex grow flex-col items-center justify-center gap-4 self-center bg-background py-18 sm:py-22">
-      <Link href="/" className="absolute top-6 left-8">
-        <Button
-          variant="outline"
-          className="hover:bg-secondary hover:text-secondary-foreground"
-          size="sm"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-      </Link>
+    <AuthLayout>
+      <div className="flex flex-col gap-4">
+        <Link href="/" className="self-start">
+          <Button variant="glass" className="text-white hover:text-white/80" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </Link>
 
-      <div className="w-full max-w-md">
-        {!hasValidClerkKeys ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Authentication Unavailable</CardTitle>
-              <CardDescription>
-                Authentication is currently being configured. Please check back later.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground text-sm">
-                If you are an administrator, please configure the Clerk authentication keys.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <SignIn
-            routing="path"
-            path="/auth/sign-in"
-            signUpUrl="/auth/sign-up"
-            fallbackRedirectUrl="/dashboard"
-            appearance={{
-              elements: {
-                formButtonPrimary: "bg-primary hover:bg-primary/90",
-                card: "shadow-lg",
-              },
-            }}
-          />
-        )}
+        <div className="w-full">
+          {!hasValidClerkKeys ? (
+            <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-white">Authentication Unavailable</CardTitle>
+                <CardDescription className="text-[var(--text-tertiary)]">
+                  Authentication is currently being configured. Please check back later.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-[var(--text-muted)] text-sm">
+                  If you are an administrator, please configure the Clerk authentication keys.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-sm p-6">
+              <SignIn
+                routing="path"
+                path="/auth/sign-in"
+                signUpUrl="/auth/sign-up"
+                fallbackRedirectUrl="/dashboard"
+                appearance={{
+                  elements: {
+                    rootBox: "w-full",
+                    card: "bg-transparent shadow-none w-full p-0",
+                    headerTitle: "text-white",
+                    headerSubtitle: "text-[var(--text-tertiary)]",
+                    socialButtonsBlockButton:
+                      "bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md transition-all duration-300",
+                    socialButtonsBlockButtonText: "text-white",
+                    dividerLine: "bg-white/10",
+                    dividerText: "text-[var(--text-muted)]",
+                    formFieldLabel: "text-[var(--text-secondary)]",
+                    formFieldInput:
+                      "bg-white/5 border-white/10 text-white placeholder:text-muted-foreground focus:bg-white/10 focus:border-white/20",
+                    formButtonPrimary: "bg-theme-gradient hover:opacity-90 transition-opacity",
+                    footerActionText: "text-[var(--text-muted)]",
+                    footerActionLink: "text-white hover:text-white/80",
+                    identityPreviewText: "text-white",
+                    identityPreviewEditButton: "text-[var(--text-tertiary)] hover:text-white",
+                  },
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
-    </main>
+    </AuthLayout>
   )
 }
