@@ -1,3 +1,5 @@
+import "server-only"
+
 // import pino from 'pino'
 import { db } from "@/database/connection-pool"
 import { auditLogs } from "@/database/schema"
