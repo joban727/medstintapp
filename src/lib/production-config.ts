@@ -311,12 +311,13 @@ export function getSecurityHeaders(config: ProductionConfig): Record<string, str
   if (config.security.enableCSP) {
     headers["Content-Security-Policy"] = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
-      "font-src 'self' data:",
-      "connect-src 'self'",
+      "script-src 'self' 'unsafe-inline' https://clerk.com https://*.clerk.accounts.dev",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "img-src 'self' data: https: blob:",
+      "font-src 'self' data: https://fonts.gstatic.com",
+      "connect-src 'self' https://clerk.com https://*.clerk.accounts.dev https://api.clerk.com",
       "frame-ancestors 'none'",
+      "upgrade-insecure-requests",
     ].join("; ")
   }
 

@@ -58,16 +58,16 @@ export default async function SchoolReportsPage() {
   // Fetch students for this school
   const userSchoolId = "schoolId" in user ? user.schoolId : null
 
-  const students = userSchoolId
-    ? await db
+  // Parallelize initial data fetching
+  const [students, timeRecordsData, evaluationsData, rotationsData] = await Promise.all([
+    userSchoolId
+      ? db
         .select()
         .from(users)
         .where(and(eq(users.schoolId, userSchoolId), eq(users.role, "STUDENT")))
-    : []
-
-  // Fetch time records for analytics
-  const timeRecordsData = userSchoolId
-    ? await db
+      : Promise.resolve([]),
+    userSchoolId
+      ? db
         .select({
           totalHours: sum(timeRecords.totalHours),
           recordCount: count(timeRecords.id),
@@ -75,11 +75,9 @@ export default async function SchoolReportsPage() {
         .from(timeRecords)
         .innerJoin(users, eq(users.id, timeRecords.studentId))
         .where(and(eq(users.schoolId, userSchoolId), gte(timeRecords.date, startOfYear)))
-    : [{ totalHours: 0, recordCount: 0 }]
-
-  // Fetch evaluations data
-  const evaluationsData = userSchoolId
-    ? await db
+      : Promise.resolve([{ totalHours: 0, recordCount: 0 }]),
+    userSchoolId
+      ? db
         .select({
           totalEvaluations: count(evaluations.id),
           avgScore: avg(evaluations.overallRating),
@@ -87,11 +85,9 @@ export default async function SchoolReportsPage() {
         .from(evaluations)
         .innerJoin(users, eq(users.id, evaluations.studentId))
         .where(and(eq(users.schoolId, userSchoolId), gte(evaluations.createdAt, startOfYear)))
-    : [{ totalEvaluations: 0, avgScore: 0 }]
-
-  // Fetch rotations data
-  const rotationsData = userSchoolId
-    ? await db
+      : Promise.resolve([{ totalEvaluations: 0, avgScore: 0 }]),
+    userSchoolId
+      ? db
         .select({
           totalRotations: count(rotations.id),
           activeRotations: count(rotations.id),
@@ -99,7 +95,8 @@ export default async function SchoolReportsPage() {
         .from(rotations)
         .innerJoin(users, eq(users.id, rotations.studentId))
         .where(and(eq(users.schoolId, userSchoolId), gte(rotations.startDate, startOfYear)))
-    : [{ totalRotations: 0, activeRotations: 0 }]
+      : Promise.resolve([{ totalRotations: 0, activeRotations: 0 }]),
+  ])
 
   const reportStats = {
     totalStudents: students.length,
@@ -111,79 +108,96 @@ export default async function SchoolReportsPage() {
   }
 
   // Fetch monthly progress data from database
-  const monthlyProgressData = []
+  // Fetch monthly progress data using aggregation instead of loop
+  let monthlyProgressData: { month: string; hours: number; evaluations: number; students: number }[] = []
+
   if (userSchoolId) {
+    const sixMonthsAgo = new Date(currentYear, currentMonth - 5, 1)
+
+    const [monthlyHours, monthlyEvaluations, monthlyStudents] = await Promise.all([
+      // Aggregated hours by month
+      db.execute(sql`
+        SELECT 
+          TO_CHAR(tr.date, 'Mon') as month_name,
+          EXTRACT(MONTH FROM tr.date) as month_num,
+          SUM(tr.total_hours) as total_hours
+        FROM time_records tr
+        JOIN users u ON tr.student_id = u.id
+        WHERE u.school_id = ${userSchoolId}
+          AND tr.date >= ${sixMonthsAgo}
+        GROUP BY 1, 2
+        ORDER BY 2
+      `),
+
+      // Aggregated evaluations by month
+      db.execute(sql`
+        SELECT 
+          TO_CHAR(e.created_at, 'Mon') as month_name,
+          EXTRACT(MONTH FROM e.created_at) as month_num,
+          COUNT(e.id) as count
+        FROM evaluations e
+        JOIN users u ON e.student_id = u.id
+        WHERE u.school_id = ${userSchoolId}
+          AND e.created_at >= ${sixMonthsAgo}
+        GROUP BY 1, 2
+        ORDER BY 2
+      `),
+
+      // Aggregated new students by month
+      db.execute(sql`
+        SELECT 
+          TO_CHAR(u.created_at, 'Mon') as month_name,
+          EXTRACT(MONTH FROM u.created_at) as month_num,
+          COUNT(u.id) as count
+        FROM users u
+        WHERE u.school_id = ${userSchoolId}
+          AND u.role = 'STUDENT'
+          AND u.created_at >= ${sixMonthsAgo}
+        GROUP BY 1, 2
+        ORDER BY 2
+      `)
+    ])
+
+    // Process and merge the results
+    const months = []
     for (let i = 0; i < 6; i++) {
-      const monthStart = new Date(currentYear, currentMonth - 5 + i, 1)
-      const monthEnd = new Date(currentYear, currentMonth - 4 + i, 0)
-      const monthName = monthStart.toLocaleDateString("en-US", { month: "short" })
-
-      // Get hours for this month
-      const monthlyHours = await db
-        .select({ totalHours: sum(timeRecords.totalHours) })
-        .from(timeRecords)
-        .innerJoin(users, eq(users.id, timeRecords.studentId))
-        .where(
-          and(
-            eq(users.schoolId, userSchoolId),
-            gte(timeRecords.date, monthStart),
-            lte(timeRecords.date, monthEnd)
-          )
-        )
-
-      // Get evaluations for this month
-      const monthlyEvaluations = await db
-        .select({ count: count(evaluations.id) })
-        .from(evaluations)
-        .innerJoin(users, eq(users.id, evaluations.studentId))
-        .where(
-          and(
-            eq(users.schoolId, userSchoolId),
-            gte(evaluations.createdAt, monthStart),
-            lte(evaluations.createdAt, monthEnd)
-          )
-        )
-
-      // Get active students for this month
-      const monthlyStudents = await db
-        .select({ count: count(users.id) })
-        .from(users)
-        .where(
-          and(
-            eq(users.schoolId, userSchoolId),
-            eq(users.role, "STUDENT"),
-            gte(users.createdAt, monthStart)
-          )
-        )
-
-      monthlyProgressData.push({
-        month: monthName,
-        hours: Math.round(Number(monthlyHours[0]?.totalHours || 0)),
-        evaluations: monthlyEvaluations[0]?.count || 0,
-        students: monthlyStudents[0]?.count || 0,
-      })
+      const d = new Date(currentYear, currentMonth - 5 + i, 1)
+      months.push(d.toLocaleDateString("en-US", { month: "short" }))
     }
+
+    monthlyProgressData = months.map(month => {
+      const hoursRow = monthlyHours.find((r: any) => r.month_name === month)
+      const evalsRow = monthlyEvaluations.find((r: any) => r.month_name === month)
+      const studentsRow = monthlyStudents.find((r: any) => r.month_name === month)
+
+      return {
+        month,
+        hours: Math.round(Number(hoursRow?.total_hours || 0)),
+        evaluations: Number(evalsRow?.count || 0),
+        students: Number(studentsRow?.count || 0)
+      }
+    })
   }
 
   // Fetch competency data from database
   const competencyData = userSchoolId
     ? await db
-        .select({
-          name: competencies.name,
-          category: competencies.category,
-          totalAssessments: count(assessments.id),
-          passedAssessments: sql<number>`CAST(SUM(CASE WHEN ${assessments.score} >= 70 THEN 1 ELSE 0 END) AS INTEGER)`,
-        })
-        .from(competencies)
-        .leftJoin(assessments, eq(assessments.competencyId, competencies.id))
-        .leftJoin(users, eq(users.id, assessments.studentId))
-        .where(
-          userSchoolId
-            ? and(eq(users.schoolId, userSchoolId), eq(competencies.isRequired, true))
-            : eq(competencies.isRequired, true)
-        )
-        .groupBy(competencies.id, competencies.name, competencies.category)
-        .limit(10)
+      .select({
+        name: competencies.name,
+        category: competencies.category,
+        totalAssessments: count(assessments.id),
+        passedAssessments: sql<number>`CAST(SUM(CASE WHEN ${assessments.score} >= 70 THEN 1 ELSE 0 END) AS INTEGER)`,
+      })
+      .from(competencies)
+      .leftJoin(assessments, eq(assessments.competencyId, competencies.id))
+      .leftJoin(users, eq(users.id, assessments.studentId))
+      .where(
+        userSchoolId
+          ? and(eq(users.schoolId, userSchoolId), eq(competencies.isRequired, true))
+          : eq(competencies.isRequired, true)
+      )
+      .groupBy(competencies.id, competencies.name, competencies.category)
+      .limit(10)
     : []
 
   // Fetch per-student evaluation stats for the Recent Evaluations section
@@ -213,31 +227,31 @@ export default async function SchoolReportsPage() {
   // Fetch site evaluations data
   const siteEvaluationsData = userSchoolId
     ? await db
-        .select({
-          total: count(siteEvaluations.id),
-          avgRating: avg(siteEvaluations.rating),
-        })
-        .from(siteEvaluations)
-        .innerJoin(users, eq(users.id, siteEvaluations.studentId))
-        .where(and(eq(users.schoolId, userSchoolId), gte(siteEvaluations.createdAt, startOfYear)))
+      .select({
+        total: count(siteEvaluations.id),
+        avgRating: avg(siteEvaluations.rating),
+      })
+      .from(siteEvaluations)
+      .innerJoin(users, eq(users.id, siteEvaluations.studentId))
+      .where(and(eq(users.schoolId, userSchoolId), gte(siteEvaluations.createdAt, startOfYear)))
     : [{ total: 0, avgRating: 0 }]
 
   const recentSiteEvaluations = userSchoolId
     ? await db
-        .select({
-          id: siteEvaluations.id,
-          studentName: users.name,
-          siteName: clinicalSites.name,
-          rating: siteEvaluations.rating,
-          createdAt: siteEvaluations.createdAt,
-          isAnonymous: siteEvaluations.isAnonymous,
-        })
-        .from(siteEvaluations)
-        .innerJoin(users, eq(users.id, siteEvaluations.studentId))
-        .innerJoin(clinicalSites, eq(clinicalSites.id, siteEvaluations.clinicalSiteId))
-        .where(eq(users.schoolId, userSchoolId))
-        .orderBy(sql`${siteEvaluations.createdAt} DESC`)
-        .limit(10)
+      .select({
+        id: siteEvaluations.id,
+        studentName: users.name,
+        siteName: clinicalSites.name,
+        rating: siteEvaluations.rating,
+        createdAt: siteEvaluations.createdAt,
+        isAnonymous: siteEvaluations.isAnonymous,
+      })
+      .from(siteEvaluations)
+      .innerJoin(users, eq(users.id, siteEvaluations.studentId))
+      .innerJoin(clinicalSites, eq(clinicalSites.id, siteEvaluations.clinicalSiteId))
+      .where(eq(users.schoolId, userSchoolId))
+      .orderBy(sql`${siteEvaluations.createdAt} DESC`)
+      .limit(10)
     : []
 
   return (
@@ -508,15 +522,14 @@ export default async function SchoolReportsPage() {
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Status:</span>
                             <span
-                              className={`font-medium ${
-                                student.academicStatus === "ACTIVE"
+                              className={`font-medium ${student.academicStatus === "ACTIVE"
                                   ? "text-green-600 dark:text-green-400"
                                   : student.academicStatus === "PROBATION"
                                     ? "text-yellow-600 dark:text-yellow-400"
                                     : student.academicStatus === "SUSPENDED"
                                       ? "text-red-600 dark:text-red-400"
                                       : "text-muted-foreground"
-                              }`}
+                                }`}
                             >
                               {student.academicStatus || "ACTIVE"}
                             </span>
@@ -581,13 +594,12 @@ export default async function SchoolReportsPage() {
                               <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Status:</span>
                                 <span
-                                  className={`font-medium ${
-                                    percentage >= 80
+                                  className={`font-medium ${percentage >= 80
                                       ? "text-green-600 dark:text-green-400"
                                       : percentage >= 60
                                         ? "text-yellow-600 dark:text-yellow-400"
                                         : "text-red-600 dark:text-red-400"
-                                  }`}
+                                    }`}
                                 >
                                   {percentage >= 80
                                     ? "Excellent"
@@ -785,8 +797,8 @@ export default async function SchoolReportsPage() {
                       <div className="font-bold text-2xl text-foreground animate-stat-value">
                         {reportStats.totalEvaluations > 0 && reportStats.totalRotations > 0
                           ? Math.round(
-                              (reportStats.totalEvaluations / reportStats.totalRotations) * 100
-                            )
+                            (reportStats.totalEvaluations / reportStats.totalRotations) * 100
+                          )
                           : 0}
                         %
                       </div>

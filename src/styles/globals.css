@@ -377,6 +377,20 @@ html {
   color-scheme: dark;
 }
 
+/* Lenis smooth scroll compatibility */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
 body {
   color: hsl(var(--foreground));
   background: var(--theme-bg-color);
@@ -1049,4 +1063,37 @@ body {
   .dashboard-unified-container {
     border-radius: 0.75rem;
   }
+}
+
+/* ============================================
+   Scroll Performance Optimizations
+   ============================================ */
+/* Use contain for isolated animation containers */
+.animation-container {
+  contain: layout style paint;
+  will-change: auto;
+}
+
+/* For active animations - promotes to GPU layer */
+.animation-active {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
+/* Clock container isolation */
+.clock-container {
+  contain: layout style;
+  isolation: isolate;
+}
+
+/* Hero section scroll optimization */
+.hero-section {
+  contain: layout;
+  will-change: transform, opacity;
+}
+
+/* Prevent layout thrashing during scroll */
+.scroll-stable {
+  contain: strict;
+  content-visibility: auto;
 }

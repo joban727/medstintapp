@@ -8,11 +8,20 @@ import { MetricsOverview } from "./school-admin/metrics-overview"
 import { QuickNav } from "./school-admin/quick-nav"
 import { RecentActivityFeed } from "./school-admin/recent-activity-feed"
 import { FloatingActionCenter } from "./school-admin/floating-action-center"
-import {
-  EnrollmentTrendChart,
-  SiteCapacityChart,
-  CompetencyRadarChart,
-} from "./school-admin/analytics-charts"
+import dynamic from "next/dynamic"
+
+const EnrollmentTrendChart = dynamic(
+  () => import("./school-admin/analytics-charts").then((mod) => mod.EnrollmentTrendChart),
+  { ssr: false, loading: () => <div className="h-[300px] w-full animate-pulse bg-muted/20 rounded-lg" /> }
+)
+const SiteCapacityChart = dynamic(
+  () => import("./school-admin/analytics-charts").then((mod) => mod.SiteCapacityChart),
+  { ssr: false, loading: () => <div className="h-[300px] w-full animate-pulse bg-muted/20 rounded-lg" /> }
+)
+const CompetencyRadarChart = dynamic(
+  () => import("./school-admin/analytics-charts").then((mod) => mod.CompetencyRadarChart),
+  { ssr: false, loading: () => <div className="h-[300px] w-full animate-pulse bg-muted/20 rounded-lg" /> }
+)
 
 import { toast } from "sonner"
 import type { UserRole } from "@/types"

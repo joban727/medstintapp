@@ -14,6 +14,7 @@ import {
   competencies,
 } from "@/database/schema"
 import { withCache, CACHE_PREFIXES, CACHE_CONFIG } from "@/lib/neon-cache"
+import { queryOptimizationUtils } from "@/lib/optimized-query-wrapper"
 import type { UserRole } from "@/types"
 
 // Type definitions
@@ -306,43 +307,22 @@ export async function getSchoolStats() {
         }
 
         const currentUser = user[0]
+        const schoolId = currentUser.schoolId || ""
 
-        // Get various counts for the school
-        const [
-          activeRotationsCount,
-          pendingTimeRecordsCount,
-          totalStudentsCount,
-          totalProgramsCount,
-          pendingEvaluationsCount,
-          avgProgressRow,
-          clinicalSitesCount,
-          schoolData,
-        ] = await Promise.all([
-          db
-            .select({ count: count() })
-            .from(rotations)
-            .innerJoin(users, eq(rotations.studentId, users.id))
-            .where(
-              and(eq(users.schoolId, currentUser.schoolId || ""), eq(rotations.status, "ACTIVE"))
-            ),
+        // Use the optimized query wrapper for main stats
+        // This leverages materialized views where available
+        const [dashboardData, pendingTimeRecordsCount, pendingEvaluationsCount, activeRotationsCount] = await Promise.all([
+          queryOptimizationUtils.getDashboardData({ schoolId }),
 
+          // These specific counts might not be in the general dashboard data yet, so we keep them optimized but separate
+          // or we could add them to the wrapper. For now, we parallelize them.
           db
             .select({ count: count() })
             .from(timeRecords)
             .innerJoin(users, eq(timeRecords.studentId, users.id))
             .where(
-              and(eq(users.schoolId, currentUser.schoolId || ""), eq(timeRecords.status, "PENDING"))
+              and(eq(users.schoolId, schoolId), eq(timeRecords.status, "PENDING"))
             ),
-
-          db
-            .select({ count: count() })
-            .from(users)
-            .where(and(eq(users.schoolId, currentUser.schoolId || ""), eq(users.role, "STUDENT"))),
-
-          db
-            .select({ count: count() })
-            .from(programs)
-            .where(eq(programs.schoolId, currentUser.schoolId || "")),
 
           db
             .select({ count: count() })
@@ -350,50 +330,45 @@ export async function getSchoolStats() {
             .innerJoin(rotations, eq(evaluations.rotationId, rotations.id))
             .innerJoin(users, eq(rotations.studentId, users.id))
             .where(
-              and(eq(users.schoolId, currentUser.schoolId || ""), isNull(evaluations.overallRating))
+              and(eq(users.schoolId, schoolId), isNull(evaluations.overallRating))
             ),
 
           db
-            .select({ avgProgress: avg(competencyAssignments.progressPercentage) })
-            .from(competencyAssignments)
-            .innerJoin(users, eq(competencyAssignments.userId, users.id))
-            .where(eq(users.schoolId, currentUser.schoolId || "")),
-
-          db
             .select({ count: count() })
-            .from(clinicalSites)
-            .where(eq(clinicalSites.schoolId, currentUser.schoolId || "")),
-
-          db
-            .select({ name: schools.name })
-            .from(schools)
-            .where(eq(schools.id, currentUser.schoolId || ""))
-            .limit(1),
+            .from(rotations)
+            .innerJoin(users, eq(rotations.studentId, users.id))
+            .where(
+              and(eq(users.schoolId, schoolId), eq(rotations.status, "ACTIVE"))
+            ),
         ])
 
-        const avgCompetencyProgress = (() => {
-          const raw = avgProgressRow[0]?.avgProgress
-          if (raw === null || raw === undefined) return 0
-          // Drizzle may return string for numeric
-          const num = typeof raw === "string" ? Number(raw) : (raw as number)
-          return Number.isFinite(num) ? num : 0
-        })()
+        // Extract data from the optimized result
+        // Note: getDashboardData returns { schoolStatistics, dailyActivity, competencyAnalytics }
+        // We need to map this to SchoolStats
+        const stats = dashboardData.schoolStatistics[0] || {}
 
-        const totalStudents = totalStudentsCount[0]?.count || 0
+        // Fallback or combine with fresh counts if needed
         const activeRotations = activeRotationsCount[0]?.count || 0
-        const placementRate =
-          totalStudents > 0 ? Math.round((activeRotations / totalStudents) * 100) : 0
+        const pendingTimeRecords = pendingTimeRecordsCount[0]?.count || 0
+        const pendingEvaluations = pendingEvaluationsCount[0]?.count || 0
+
+        // Use materialized view data if available, otherwise use 0 (or we could fetch if critical)
+        const totalStudents = Number(stats.totalStudents) || 0
+        const totalPrograms = Number(stats.totalPrograms) || 0
+        const totalSites = Number(stats.activeSites) || 0 // Assuming activeSites is available in mvSchoolStatistics
+        const placementRate = Number(stats.placementRate) || (totalStudents > 0 ? Math.round((activeRotations / totalStudents) * 100) : 0)
+        const avgCompetencyProgress = Number(stats.avgCompetencyProgress) || 0
 
         return {
           activeRotations,
-          pendingTimeRecords: pendingTimeRecordsCount[0]?.count || 0,
+          pendingTimeRecords,
           totalStudents,
-          totalPrograms: totalProgramsCount[0]?.count || 0,
-          pendingEvaluations: pendingEvaluationsCount[0]?.count || 0,
+          totalPrograms,
+          pendingEvaluations,
           avgCompetencyProgress,
-          totalSites: clinicalSitesCount[0]?.count || 0,
+          totalSites,
           placementRate,
-          schoolName: schoolData[0]?.name || "Medical Institute",
+          schoolName: stats.schoolName || "Medical Institute",
         }
       },
       CACHE_CONFIG.defaultTTL

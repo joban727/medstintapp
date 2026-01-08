@@ -7,6 +7,7 @@ import {
   useSpring,
   useMotionValue,
   useMotionTemplate,
+  useInView,
 } from "framer-motion"
 import Link from "next/link"
 import {
@@ -26,6 +27,7 @@ import {
   LogIn,
 } from "lucide-react"
 import React, { useState, useEffect, useRef } from "react"
+import { useLenis } from "@/components/providers/lenis-provider"
 
 // Custom cursor component
 const CustomCursor = () => {
@@ -122,85 +124,116 @@ const NoiseOverlay = React.memo(() => (
   />
 ))
 
-// Enhanced 3D Background - memoized to prevent re-renders
-const DramaticBackground = React.memo(({ theme }: { theme: "orange" | "blue" }) => {
+// Logbook Background - Floating entries and structured grid (OPTIMIZED)
+const LogbookBackground = React.memo(({ theme }: { theme: "orange" | "blue" }) => {
   const { scrollY } = useScroll()
-  const backgroundY = useTransform(scrollY, [0, 1000], [0, 200])
+  const backgroundY = useTransform(scrollY, [0, 1000], [0, 150])
+  const bgRef = useRef<HTMLDivElement>(null)
+  const isInView = useInView(bgRef, { amount: 0.1 })
 
-  const primaryColor =
-    theme === "orange" ? "hsl(var(--medical-primary) / 0.3)" : "hsl(221 83% 53% / 0.3)"
-  const secondaryColor =
-    theme === "orange" ? "hsl(var(--medical-teal) / 0.2)" : "hsl(270 50% 40% / 0.2)"
-  const accentColor =
-    theme === "orange" ? "hsl(var(--healthcare-green) / 0.2)" : "hsl(190 90% 50% / 0.2)"
+  const primaryColor = theme === "orange" ? "255, 107, 53" : "59, 130, 246" // rgb values
+  const secondaryColor = theme === "orange" ? "255, 139, 94" : "99, 102, 241" // rgb values
+
+  // Generate random floating cards - REDUCED from 12 to 6
+  const cards = React.useMemo(() => {
+    return [...Array(6)].map((_, i) => ({
+      id: i,
+      width: 120 + Math.random() * 100,
+      height: 16 + Math.random() * 20,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      delay: Math.random() * 5,
+      duration: 15 + Math.random() * 20,
+      opacity: 0.05 + Math.random() * 0.1,
+    }))
+  }, [])
 
   return (
-    <motion.div className="fixed inset-0 -z-10 overflow-hidden" style={{ y: backgroundY }}>
+    <motion.div
+      ref={bgRef}
+      className="fixed inset-0 -z-10 overflow-hidden pointer-events-none"
+      style={{ y: backgroundY }}
+    >
       {/* Base - matches dashboard bg */}
       <div className="absolute inset-0 bg-[var(--theme-bg-color)]" />
 
-      {/* Main 3D Glowing Orb */}
-      <motion.div
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-[100px]"
-        style={{
-          background: `radial-gradient(circle, ${primaryColor} 0%, transparent 70%)`,
-        }}
-        animate={{
-          scale: [1, 1.2, 1],
-          opacity: [0.5, 0.8, 0.5],
-        }}
-        transition={{
-          duration: 8,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-      />
-
-      {/* Secondary Floating Orbs */}
-      <motion.div
-        className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-[80px]"
-        style={{
-          background: `radial-gradient(circle, ${secondaryColor} 0%, transparent 70%)`,
-        }}
-        animate={{
-          x: [0, 50, 0],
-          y: [0, -50, 0],
-        }}
-        transition={{
-          duration: 15,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-      />
-
-      <motion.div
-        className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full blur-[80px]"
-        style={{
-          background: `radial-gradient(circle, ${accentColor} 0%, transparent 70%)`,
-        }}
-        animate={{
-          x: [0, -30, 0],
-          y: [0, 30, 0],
-        }}
-        transition={{
-          duration: 12,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-      />
-
-      {/* Grid pattern */}
+      {/* Perspective Grid - Represents structure/schedule */}
       <div
-        className="absolute inset-0 opacity-[0.05]"
+        className="absolute inset-0 opacity-[0.08]"
         style={{
           backgroundImage: `
-                        linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)
-                    `,
-          backgroundSize: "80px 80px",
-          maskImage: "radial-gradient(circle at center, black 40%, transparent 100%)",
+              linear-gradient(rgba(${primaryColor}, 0.4) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(${primaryColor}, 0.4) 1px, transparent 1px)
+          `,
+          backgroundSize: "100px 100px",
+          transform: "perspective(1000px) rotateX(60deg) translateY(-100px) scale(2)",
+          maskImage: "linear-gradient(to bottom, transparent, black 40%, black 80%, transparent)",
         }}
       />
+
+      {/* Floating "Log Entries" - Only animate when in view */}
+      <div className="absolute inset-0">
+        {cards.map((card) => (
+          <motion.div
+            key={card.id}
+            className="absolute rounded-md backdrop-blur-sm border border-white/10"
+            style={{
+              left: `${card.x}%`,
+              top: `${card.y}%`,
+              width: card.width,
+              height: card.height,
+              background: `linear-gradient(90deg, rgba(${primaryColor}, ${card.opacity}), rgba(${secondaryColor}, ${card.opacity / 2}))`,
+              willChange: isInView ? "transform, opacity" : "auto",
+            }}
+            animate={isInView ? {
+              y: [0, -100, 0],
+              x: [0, 20, 0],
+              opacity: [card.opacity, card.opacity * 1.5, card.opacity],
+            } : {}}
+            transition={{
+              duration: card.duration,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: card.delay,
+            }}
+          >
+            {/* Fake text lines inside card */}
+            <div className="w-3/4 h-1.5 bg-white/20 rounded-full mt-2 ml-2" />
+            {card.height > 30 && <div className="w-1/2 h-1.5 bg-white/10 rounded-full mt-1.5 ml-2" />}
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Ambient Glows - Use CSS animations for better performance */}
+      <div
+        className="absolute top-0 right-0 w-[800px] h-[800px] rounded-full blur-[120px]"
+        style={{
+          background: `radial-gradient(circle, rgba(${primaryColor}, 0.1) 0%, transparent 70%)`,
+          animation: isInView ? "ambientGlow1 10s ease-in-out infinite" : "none",
+          willChange: isInView ? "transform, opacity" : "auto",
+        }}
+      />
+
+      <div
+        className="absolute bottom-0 left-0 w-[600px] h-[600px] rounded-full blur-[100px]"
+        style={{
+          background: `radial-gradient(circle, rgba(${secondaryColor}, 0.08) 0%, transparent 70%)`,
+          animation: isInView ? "ambientGlow2 12s ease-in-out 2s infinite" : "none",
+          willChange: isInView ? "transform, opacity" : "auto",
+        }}
+      />
+
+      {/* CSS animations for ambient glows */}
+      <style>{`
+        @keyframes ambientGlow1 {
+          0%, 100% { transform: scale(1); opacity: 0.3; }
+          50% { transform: scale(1.2); opacity: 0.5; }
+        }
+        @keyframes ambientGlow2 {
+          0%, 100% { transform: scale(1); opacity: 0.2; }
+          50% { transform: scale(1.1); opacity: 0.4; }
+        }
+      `}</style>
     </motion.div>
   )
 })
@@ -489,50 +522,72 @@ const DashboardPreview = ({ theme }: { theme: "orange" | "blue" }) => {
   )
 }
 
-// Animated Logo Component
+// Animated MS Book Logo Component
 const Logo = ({ theme }: { theme: "orange" | "blue" }) => {
   const primaryColor = theme === "orange" ? "#FF6B35" : "#3B82F6"
   const secondaryColor = theme === "orange" ? "#FF8B5E" : "#6366F1"
 
   return (
-    <div className="relative w-10 h-10 flex items-center justify-center">
+    <div className="relative w-12 h-12 flex items-center justify-center">
       <svg
-        width="40"
-        height="40"
-        viewBox="0 0 40 40"
+        width="48"
+        height="48"
+        viewBox="0 0 100 100"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <motion.path
-          d="M10 20C10 14.4772 14.4772 10 20 10S30 14.4772 30 20"
-          stroke={primaryColor}
-          strokeWidth="3"
-          strokeLinecap="round"
-          initial={{ pathLength: 0, opacity: 0 }}
-          animate={{ pathLength: 1, opacity: 1 }}
-          transition={{ duration: 1.5, ease: "easeInOut" }}
-        />
-        <motion.path
-          d="M10 20C10 25.5228 14.4772 30 20 30S30 25.5228 30 20"
-          stroke={secondaryColor}
-          strokeWidth="3"
-          strokeLinecap="round"
-          initial={{ pathLength: 0, opacity: 0 }}
-          animate={{ pathLength: 1, opacity: 1 }}
-          transition={{ duration: 1.5, delay: 0.5, ease: "easeInOut" }}
-        />
-        <motion.circle
-          cx="20"
-          cy="20"
-          r="4"
-          fill={primaryColor}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.5, delay: 1.5, type: "spring" }}
-        />
+        <g transform="translate(15, 15) scale(0.7)">
+          {/* Left Page / M left leg */}
+          <motion.path
+            d="M10 10 L 50 35 L 50 85 L 10 60 Z"
+            fill="none"
+            stroke={primaryColor}
+            strokeWidth="8"
+            strokeLinejoin="round"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 1, ease: "easeInOut" }}
+          />
+
+          {/* Right Page / M right leg */}
+          <motion.path
+            d="M90 10 L 50 35 L 50 85 L 90 60 Z"
+            fill="none"
+            stroke={secondaryColor}
+            strokeWidth="8"
+            strokeLinejoin="round"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 1, delay: 0.3, ease: "easeInOut" }}
+          />
+
+          {/* S Curve across pages */}
+          <motion.path
+            d="M10 35 L 50 60 L 90 35"
+            fill="none"
+            stroke={primaryColor}
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.8, ease: "easeOut" }}
+          />
+          <motion.path
+            d="M10 50 L 50 75 L 90 50"
+            fill="none"
+            stroke={secondaryColor}
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 1.0, ease: "easeOut" }}
+          />
+        </g>
       </svg>
       <div
-        className={`absolute inset-0 blur-xl opacity-50 bg-${theme === "orange" ? "orange" : "blue"}-500/30 rounded-full`}
+        className={`absolute inset-0 blur-xl opacity-40 bg-${theme === "orange" ? "orange" : "blue"}-500/30 rounded-lg`}
       />
     </div>
   )
@@ -549,6 +604,7 @@ const Navbar = ({
   mobileMenuOpen: boolean
 }) => {
   const { scrollY } = useScroll()
+  const { scrollTo } = useLenis()
   const [isScrolled, setIsScrolled] = useState(false)
 
   useEffect(() => {
@@ -564,20 +620,18 @@ const Navbar = ({
 
   return (
     <motion.nav
-      className={`fixed top-0 left-0 right-0 z-40 transition-all duration-500 ${
-        isScrolled ? "py-3" : "py-4"
-      }`}
+      className={`fixed top-0 left-0 right-0 z-40 transition-all duration-500 ${isScrolled ? "py-3" : "py-4"
+        }`}
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.3 }}
     >
       {/* Navbar Container with Glassmorphism */}
       <div
-        className={`mx-6 md:mx-12 rounded-2xl transition-all duration-500 ${
-          isScrolled
-            ? "bg-black/60 backdrop-blur-2xl border border-white/10 shadow-2xl shadow-black/20"
-            : "bg-transparent"
-        }`}
+        className={`mx-6 md:mx-12 rounded-2xl transition-all duration-500 ${isScrolled
+          ? "bg-black/60 backdrop-blur-2xl border border-white/10 shadow-2xl shadow-black/20"
+          : "bg-transparent"
+          }`}
       >
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           {/* Logo with Glow Effect */}
@@ -606,11 +660,7 @@ const Navbar = ({
             {navItems.map((item, i) => (
               <motion.button
                 key={item}
-                onClick={() =>
-                  document
-                    .getElementById(item.toLowerCase())
-                    ?.scrollIntoView({ behavior: "smooth" })
-                }
+                onClick={() => scrollTo(`#${item.toLowerCase()}`, { offset: -100 })}
                 className="relative px-4 py-2 text-sm text-white/70 hover:text-white transition-all duration-300 rounded-lg hover:bg-white/5 group nav-item-hover"
                 data-hover
                 initial={{ opacity: 0, y: -10 }}
@@ -698,9 +748,12 @@ export const PortalEntry = () => {
   const [mounted, setMounted] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [theme, setTheme] = useState<"orange" | "blue">("orange")
+  const heroRef = useRef<HTMLElement>(null)
   const { scrollY } = useScroll()
   const heroOpacity = useTransform(scrollY, [0, 400], [1, 0])
   const heroScale = useTransform(scrollY, [0, 400], [1, 0.95])
+  // Track hero visibility to pause animations when scrolled away
+  const isHeroInView = useInView(heroRef, { amount: 0.1 })
 
   useEffect(() => {
     setMounted(true)
@@ -753,7 +806,7 @@ export const PortalEntry = () => {
     <div className="relative min-h-screen w-full overflow-x-hidden bg-[var(--theme-bg-color)] selection:bg-[var(--theme-color)]/30 selection:text-white">
       <CustomCursor />
       <NoiseOverlay />
-      <DramaticBackground theme={theme} />
+      <LogbookBackground theme={theme} />
 
       {/* Theme Toggle (Temporary for testing) */}
       <div className="fixed bottom-6 right-6 z-50 flex gap-2 bg-black/50 backdrop-blur-md p-2 rounded-full border border-white/10">
@@ -838,11 +891,10 @@ export const PortalEntry = () => {
             >
               <Link
                 href="/auth/sign-up"
-                className={`mt-2 flex items-center justify-center gap-2 text-white px-6 py-4 rounded-xl text-center font-semibold shadow-lg btn-shimmer ${
-                  theme === "orange"
-                    ? "bg-gradient-to-r from-[#FF6B35] to-[#FF8B5E] shadow-[#FF6B35]/30"
-                    : "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-600/30"
-                }`}
+                className={`mt-2 flex items-center justify-center gap-2 text-white px-6 py-4 rounded-xl text-center font-semibold shadow-lg btn-shimmer ${theme === "orange"
+                  ? "bg-gradient-to-r from-[#FF6B35] to-[#FF8B5E] shadow-[#FF6B35]/30"
+                  : "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-600/30"
+                  }`}
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Get Started Free
@@ -855,44 +907,56 @@ export const PortalEntry = () => {
 
       {/* Hero Section - Wide Landscape Layout */}
       <motion.section
+        ref={heroRef}
         className="relative h-screen flex items-center justify-center px-6 md:px-12 lg:px-24"
         style={{ opacity: heroOpacity, scale: heroScale }}
       >
-        {/* Floating Color Orbs - Spread wider */}
+        {/* Floating Color Orbs - Use CSS animations for performance */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <motion.div
-            className={`absolute w-[500px] h-[500px] md:w-[800px] md:h-[800px] rounded-full blur-[150px] opacity-30 ${
-              theme === "orange" ? "bg-[#FF6B35]" : "bg-blue-500"
-            }`}
-            style={{ top: "10%", left: "10%" }}
-            animate={{
-              x: [0, 80, 0],
-              y: [0, -50, 0],
-              scale: [1, 1.15, 1],
+          <div
+            className={`absolute w-[500px] h-[500px] md:w-[800px] md:h-[800px] rounded-full blur-[150px] opacity-30 ${theme === "orange" ? "bg-[#FF6B35]" : "bg-blue-500"
+              }`}
+            style={{
+              top: "10%",
+              left: "10%",
+              animation: isHeroInView ? "floatOrb1 15s ease-in-out infinite" : "none",
+              willChange: isHeroInView ? "transform" : "auto",
             }}
-            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
           />
-          <motion.div
-            className={`absolute w-[400px] h-[400px] md:w-[600px] md:h-[600px] rounded-full blur-[120px] opacity-25 ${
-              theme === "orange" ? "bg-[#FF8B5E]" : "bg-indigo-500"
-            }`}
-            style={{ top: "30%", right: "5%" }}
-            animate={{
-              x: [0, -60, 0],
-              y: [0, 60, 0],
-              scale: [1, 0.85, 1],
+          <div
+            className={`absolute w-[400px] h-[400px] md:w-[600px] md:h-[600px] rounded-full blur-[120px] opacity-25 ${theme === "orange" ? "bg-[#FF8B5E]" : "bg-indigo-500"
+              }`}
+            style={{
+              top: "30%",
+              right: "5%",
+              animation: isHeroInView ? "floatOrb2 18s ease-in-out 2s infinite" : "none",
+              willChange: isHeroInView ? "transform" : "auto",
             }}
-            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 2 }}
           />
-          <motion.div
+          <div
             className="absolute w-[350px] h-[350px] md:w-[500px] md:h-[500px] rounded-full blur-[100px] opacity-20 bg-purple-500"
-            style={{ bottom: "10%", left: "40%" }}
-            animate={{
-              x: [0, 40, 0],
-              y: [0, -30, 0],
+            style={{
+              bottom: "10%",
+              left: "40%",
+              animation: isHeroInView ? "floatOrb3 12s ease-in-out 1s infinite" : "none",
+              willChange: isHeroInView ? "transform" : "auto",
             }}
-            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 1 }}
           />
+          {/* CSS animations for floating orbs */}
+          <style>{`
+            @keyframes floatOrb1 {
+              0%, 100% { transform: translate(0, 0) scale(1); }
+              50% { transform: translate(80px, -50px) scale(1.15); }
+            }
+            @keyframes floatOrb2 {
+              0%, 100% { transform: translate(0, 0) scale(1); }
+              50% { transform: translate(-60px, 60px) scale(0.85); }
+            }
+            @keyframes floatOrb3 {
+              0%, 100% { transform: translate(0, 0); }
+              50% { transform: translate(40px, -30px); }
+            }
+          `}</style>
         </div>
 
         {/* Centered Clock Layout */}
@@ -907,91 +971,83 @@ export const PortalEntry = () => {
             <Link href="/auth/sign-in" className="group relative" data-hover>
               {/* Multi-layer background glow */}
               <motion.div
-                className={`absolute -inset-32 rounded-full blur-[150px] ${
-                  theme === "orange" ? "bg-[#FF6B35]" : "bg-blue-500"
-                } opacity-10 group-hover:opacity-50 transition-all duration-1000`}
+                className={`absolute -inset-32 rounded-full blur-[150px] ${theme === "orange" ? "bg-[#FF6B35]" : "bg-blue-500"
+                  } opacity-10 group-hover:opacity-50 transition-all duration-1000`}
               />
               <motion.div className="absolute -inset-24 rounded-full blur-[100px] bg-white/5 group-hover:bg-white/20 transition-all duration-700" />
 
-              {/* PARTICLES - Optimized: fewer on mobile, hover-triggered on desktop */}
+              {/* PARTICLES - OPTIMIZED: Reduced count and visibility-aware */}
               <div className="absolute inset-0 pointer-events-none overflow-visible">
-                {/* Primary particles - reduced count for performance */}
-                {[...Array(24)].map((_, i) => {
-                  const angle = i * 15 * (Math.PI / 180)
-                  // Start from just outside the clock edge
+                {/* Primary particles - REDUCED from 24 to 8 for performance */}
+                {[...Array(8)].map((_, i) => {
+                  const angle = i * 45 * (Math.PI / 180) // 360/8 = 45 degrees apart
                   const clockRadius = 160
                   const endRadius = 400 + (i % 4) * 100
-                  // Only render first 12 on mobile for performance
-                  const isMobileOnly = i < 12
                   return (
                     <motion.div
                       key={`space-particle-${i}`}
-                      className={`absolute rounded-full ${
-                        theme === "orange"
-                          ? i % 4 === 0
-                            ? "bg-[#FF6B35] w-2 h-2 md:w-3 md:h-3"
-                            : i % 4 === 1
-                              ? "bg-[#FF8B5E] w-1.5 h-1.5 md:w-2 md:h-2"
-                              : i % 4 === 2
-                                ? "bg-white/70 w-1 h-1 md:w-1.5 md:h-1.5"
-                                : "bg-white/40 w-1 h-1"
-                          : i % 4 === 0
-                            ? "bg-blue-500 w-2 h-2 md:w-3 md:h-3"
-                            : i % 4 === 1
-                              ? "bg-indigo-400 w-1.5 h-1.5 md:w-2 md:h-2"
-                              : i % 4 === 2
-                                ? "bg-white/70 w-1 h-1 md:w-1.5 md:h-1.5"
-                                : "bg-white/40 w-1 h-1"
-                      } ${
-                        isMobileOnly
-                          ? "opacity-80 md:opacity-0 md:group-hover:opacity-100"
-                          : "hidden md:block md:opacity-0 md:group-hover:opacity-100"
-                      } transition-opacity duration-300`}
+                      className={`absolute rounded-full ${theme === "orange"
+                        ? i % 4 === 0
+                          ? "bg-[#FF6B35] w-2 h-2 md:w-3 md:h-3"
+                          : i % 4 === 1
+                            ? "bg-[#FF8B5E] w-1.5 h-1.5 md:w-2 md:h-2"
+                            : i % 4 === 2
+                              ? "bg-white/70 w-1 h-1 md:w-1.5 md:h-1.5"
+                              : "bg-white/40 w-1 h-1"
+                        : i % 4 === 0
+                          ? "bg-blue-500 w-2 h-2 md:w-3 md:h-3"
+                          : i % 4 === 1
+                            ? "bg-indigo-400 w-1.5 h-1.5 md:w-2 md:h-2"
+                            : i % 4 === 2
+                              ? "bg-white/70 w-1 h-1 md:w-1.5 md:h-1.5"
+                              : "bg-white/40 w-1 h-1"
+                        } opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300`}
                       style={{
                         left: "50%",
                         top: "50%",
                         transform: "translate(-50%, -50%)",
+                        willChange: isHeroInView ? "transform" : "auto",
                       }}
-                      animate={{
+                      animate={isHeroInView ? {
                         x: [Math.cos(angle) * clockRadius, Math.cos(angle) * endRadius],
                         y: [Math.sin(angle) * clockRadius, Math.sin(angle) * endRadius],
                         scale: [1, 0.3],
-                      }}
+                      } : {}}
                       transition={{
-                        duration: 5 + (i % 6) * 0.5, // Slightly slower for space feel
+                        duration: 5 + (i % 4) * 0.5,
                         repeat: Infinity,
-                        delay: i * 0.1,
+                        delay: i * 0.2,
                         ease: "linear",
                       }}
                     />
                   )
                 })}
 
-                {/* Larger depth particles - desktop only for performance */}
-                {[...Array(12)].map((_, i) => {
-                  const angle = i * 30 * (Math.PI / 180)
-                  const clockRadius = 220 // Slightly outside 420px md clock (radius ~210)
+                {/* Larger depth particles - REDUCED from 12 to 4 */}
+                {[...Array(4)].map((_, i) => {
+                  const angle = i * 90 * (Math.PI / 180) // 360/4 = 90 degrees apart
+                  const clockRadius = 220
                   const endRadius = 600 + (i % 3) * 180
                   return (
                     <motion.div
                       key={`slow-particle-${i}`}
-                      className={`absolute rounded-full ${
-                        theme === "orange" ? "bg-[#FF6B35]/50" : "bg-blue-500/50"
-                      } w-3 h-3 md:w-4 md:h-4 blur-[1px] hidden md:block md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300`}
+                      className={`absolute rounded-full ${theme === "orange" ? "bg-[#FF6B35]/50" : "bg-blue-500/50"
+                        } w-3 h-3 md:w-4 md:h-4 blur-[1px] hidden md:block md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300`}
                       style={{
                         left: "50%",
                         top: "50%",
                         transform: "translate(-50%, -50%)",
+                        willChange: isHeroInView ? "transform" : "auto",
                       }}
-                      animate={{
+                      animate={isHeroInView ? {
                         x: [Math.cos(angle) * clockRadius, Math.cos(angle) * endRadius],
                         y: [Math.sin(angle) * clockRadius, Math.sin(angle) * endRadius],
                         scale: [1, 0.2],
-                      }}
+                      } : {}}
                       transition={{
                         duration: 7 + (i % 4) * 1,
                         repeat: Infinity,
-                        delay: 0.5 + i * 0.2,
+                        delay: 0.5 + i * 0.3,
                         ease: "linear",
                       }}
                     />
@@ -999,17 +1055,18 @@ export const PortalEntry = () => {
                 })}
               </div>
 
-              {/* Premium Glass Clock Container */}
+              {/* Premium Glass Clock Container - OPTIMIZED with visibility control */}
               <motion.div
                 className="relative w-[300px] h-[300px] md:w-[420px] md:h-[420px] lg:w-[500px] lg:h-[500px] rounded-full border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.01] backdrop-blur-xl flex items-center justify-center shadow-2xl cursor-pointer group-hover:border-white/25 transition-all duration-500"
                 style={{
                   boxShadow: "inset 0 0 60px rgba(255,255,255,0.03), 0 0 80px rgba(0,0,0,0.3)",
+                  willChange: isHeroInView ? "transform" : "auto",
                 }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                animate={{
+                animate={isHeroInView ? {
                   scale: [1, 1.005, 1], // Subtle breathing
-                }}
+                } : {}}
                 transition={{
                   scale: { duration: 4, repeat: Infinity, ease: "easeInOut" },
                 }}
@@ -1017,10 +1074,10 @@ export const PortalEntry = () => {
                 {/* Animated outer glow ring - breathing effect */}
                 <motion.div
                   className={`absolute -inset-2 rounded-full blur-2xl ${theme === "orange" ? "bg-[#FF6B35]" : "bg-blue-500"}`}
-                  animate={{
+                  animate={isHeroInView ? {
                     opacity: [0.05, 0.15, 0.05],
                     scale: [0.98, 1.02, 0.98],
-                  }}
+                  } : { opacity: 0.1, scale: 1 }}
                   transition={{
                     duration: 3,
                     repeat: Infinity,
@@ -1031,9 +1088,9 @@ export const PortalEntry = () => {
                 {/* Inner shimmer effect */}
                 <motion.div
                   className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/[0.02] to-transparent"
-                  animate={{
+                  animate={isHeroInView ? {
                     rotate: [0, 360],
-                  }}
+                  } : {}}
                   transition={{
                     duration: 20,
                     repeat: Infinity,
@@ -1041,27 +1098,11 @@ export const PortalEntry = () => {
                   }}
                 />
 
-                {/* Clock rings - animated breathing effect */}
-                <motion.div
-                  className="absolute inset-4 md:inset-6 rounded-full border border-white/[0.08] group-hover:border-white/[0.03] transition-all duration-700"
-                  animate={{ scale: [1, 1.01, 1] }}
-                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                />
-                <motion.div
-                  className="absolute inset-10 md:inset-14 rounded-full border border-white/[0.06] group-hover:border-white/[0.02] transition-all duration-700"
-                  animate={{ scale: [1, 1.008, 1] }}
-                  transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-                />
-                <motion.div
-                  className="absolute inset-16 md:inset-22 rounded-full border border-white/[0.04] group-hover:border-white/[0.01] transition-all duration-700"
-                  animate={{ scale: [1, 1.006, 1] }}
-                  transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                />
-                <motion.div
-                  className="absolute inset-24 md:inset-32 rounded-full border border-white/[0.03] group-hover:opacity-0 transition-all duration-700"
-                  animate={{ scale: [1, 1.004, 1] }}
-                  transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 1.5 }}
-                />
+                {/* Clock rings - REMOVED breathing animations for performance (very subtle effect) */}
+                <div className="absolute inset-4 md:inset-6 rounded-full border border-white/[0.08] group-hover:border-white/[0.03] transition-all duration-700" />
+                <div className="absolute inset-10 md:inset-14 rounded-full border border-white/[0.06] group-hover:border-white/[0.02] transition-all duration-700" />
+                <div className="absolute inset-16 md:inset-22 rounded-full border border-white/[0.04] group-hover:border-white/[0.01] transition-all duration-700" />
+                <div className="absolute inset-24 md:inset-32 rounded-full border border-white/[0.03] group-hover:opacity-0 transition-all duration-700" />
 
                 {/* Minutes tick marks (60 marks) - fade in sequentially */}
                 {[...Array(60)].map((_, i) => {
@@ -1088,7 +1129,7 @@ export const PortalEntry = () => {
                   )
                 })}
 
-                {/* Hour markers - floating animation with staggered timing */}
+                {/* Hour markers - OPTIMIZED with visibility control */}
                 {[...Array(12)].map((_, i) => {
                   const angle = (i * 30 - 90) * (Math.PI / 180)
                   const radius = 130
@@ -1098,11 +1139,10 @@ export const PortalEntry = () => {
                   return (
                     <motion.div
                       key={i}
-                      className={`absolute rounded-full transition-all duration-500 ${
-                        isMajor
-                          ? `w-3 h-3 md:w-4 md:h-4 ${theme === "orange" ? "bg-[#FF6B35]/50 group-hover:bg-[#FF6B35]/30" : "bg-blue-500/50 group-hover:bg-blue-500/30"}`
-                          : "w-2 h-2 md:w-2.5 md:h-2.5 bg-white/30 group-hover:bg-white/15"
-                      }`}
+                      className={`absolute rounded-full transition-all duration-500 ${isMajor
+                        ? `w-3 h-3 md:w-4 md:h-4 ${theme === "orange" ? "bg-[#FF6B35]/50 group-hover:bg-[#FF6B35]/30" : "bg-blue-500/50 group-hover:bg-blue-500/30"}`
+                        : "w-2 h-2 md:w-2.5 md:h-2.5 bg-white/30 group-hover:bg-white/15"
+                        }`}
                       style={{
                         left: "50%",
                         top: "50%",
@@ -1113,16 +1153,16 @@ export const PortalEntry = () => {
                           ? `0 0 15px ${theme === "orange" ? "rgba(255,107,53,0.4)" : "rgba(59,130,246,0.4)"}`
                           : "none",
                       }}
-                      animate={
+                      animate={isHeroInView ? (
                         isMajor
                           ? {
-                              scale: [1, 1.15, 1],
-                              opacity: [0.5, 0.8, 0.5],
-                            }
+                            scale: [1, 1.15, 1],
+                            opacity: [0.5, 0.8, 0.5],
+                          }
                           : {
-                              y: [0, -2, 0],
-                            }
-                      }
+                            y: [0, -2, 0],
+                          }
+                      ) : {}}
                       transition={{
                         duration: isMajor ? 2.5 : 3,
                         repeat: Infinity,
@@ -1133,66 +1173,63 @@ export const PortalEntry = () => {
                   )
                 })}
 
-                {/* Hour hand - with subtle glow pulse */}
+                {/* Hour hand - OPTIMIZED with visibility control */}
                 <motion.div
-                  className={`absolute left-1/2 top-1/2 w-2 md:w-2.5 h-[70px] md:h-[100px] lg:h-[120px] rounded-full -translate-x-1/2 origin-top ${
-                    theme === "orange"
-                      ? "bg-gradient-to-b from-[#FF6B35] via-[#FF6B35]/60 to-[#FF6B35]/20"
-                      : "bg-gradient-to-b from-blue-500 via-blue-500/60 to-blue-500/20"
-                  } group-hover:opacity-20 shadow-lg transition-all duration-700`}
+                  className={`absolute left-1/2 top-1/2 w-2 md:w-2.5 h-[70px] md:h-[100px] lg:h-[120px] rounded-full -translate-x-1/2 origin-top ${theme === "orange"
+                    ? "bg-gradient-to-b from-[#FF6B35] via-[#FF6B35]/60 to-[#FF6B35]/20"
+                    : "bg-gradient-to-b from-blue-500 via-blue-500/60 to-blue-500/20"
+                    } group-hover:opacity-20 shadow-lg transition-all duration-700`}
                   style={{
                     boxShadow: `0 0 15px ${theme === "orange" ? "rgba(255,107,53,0.4)" : "rgba(59,130,246,0.4)"}`,
                   }}
-                  animate={{ rotate: 360 }}
+                  animate={isHeroInView ? { rotate: 360 } : {}}
                   transition={{ duration: 43200, repeat: Infinity, ease: "linear" }}
                 />
 
-                {/* Minute hand */}
+                {/* Minute hand - OPTIMIZED */}
                 <motion.div
-                  className={`absolute left-1/2 top-1/2 w-1.5 md:w-2 h-[90px] md:h-[140px] lg:h-[170px] rounded-full -translate-x-1/2 origin-top ${
-                    theme === "orange"
-                      ? "bg-gradient-to-b from-[#FF8B5E] via-[#FF8B5E]/40 to-transparent"
-                      : "bg-gradient-to-b from-indigo-400 via-indigo-400/40 to-transparent"
-                  } group-hover:opacity-15 transition-all duration-700`}
-                  animate={{ rotate: 360 }}
+                  className={`absolute left-1/2 top-1/2 w-1.5 md:w-2 h-[90px] md:h-[140px] lg:h-[170px] rounded-full -translate-x-1/2 origin-top ${theme === "orange"
+                    ? "bg-gradient-to-b from-[#FF8B5E] via-[#FF8B5E]/40 to-transparent"
+                    : "bg-gradient-to-b from-indigo-400 via-indigo-400/40 to-transparent"
+                    } group-hover:opacity-15 transition-all duration-700`}
+                  animate={isHeroInView ? { rotate: 360 } : {}}
                   transition={{ duration: 3600, repeat: Infinity, ease: "linear" }}
                 />
 
-                {/* Second hand - smooth sweep */}
+                {/* Second hand - OPTIMIZED */}
                 <motion.div
                   className="absolute left-1/2 top-1/2 w-[2px] md:w-[3px] h-[95px] md:h-[150px] lg:h-[180px] -translate-x-1/2 origin-top group-hover:opacity-10 transition-all duration-700"
                   style={{
                     background:
                       "linear-gradient(to bottom, rgba(255,255,255,0.9), rgba(255,255,255,0.3), transparent)",
                   }}
-                  animate={{ rotate: 360 }}
+                  animate={isHeroInView ? { rotate: 360 } : {}}
                   transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
                 />
 
-                {/* Center dot - pulsing glow */}
+                {/* Center dot - OPTIMIZED */}
                 <motion.div
-                  className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 md:w-6 md:h-6 rounded-full ${
-                    theme === "orange" ? "bg-[#FF6B35]" : "bg-blue-500"
-                  } group-hover:opacity-30 transition-all duration-700 z-10`}
-                  animate={{
+                  className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 md:w-6 md:h-6 rounded-full ${theme === "orange" ? "bg-[#FF6B35]" : "bg-blue-500"
+                    } group-hover:opacity-30 transition-all duration-700 z-10`}
+                  animate={isHeroInView ? {
                     boxShadow: [
                       `0 0 20px ${theme === "orange" ? "rgba(255,107,53,0.5)" : "rgba(59,130,246,0.5)"}, 0 0 40px ${theme === "orange" ? "rgba(255,107,53,0.2)" : "rgba(59,130,246,0.2)"}`,
                       `0 0 30px ${theme === "orange" ? "rgba(255,107,53,0.7)" : "rgba(59,130,246,0.7)"}, 0 0 60px ${theme === "orange" ? "rgba(255,107,53,0.4)" : "rgba(59,130,246,0.4)"}`,
                       `0 0 20px ${theme === "orange" ? "rgba(255,107,53,0.5)" : "rgba(59,130,246,0.5)"}, 0 0 40px ${theme === "orange" ? "rgba(255,107,53,0.2)" : "rgba(59,130,246,0.2)"}`,
                     ],
-                  }}
+                  } : {}}
                   transition={{
                     duration: 2,
                     repeat: Infinity,
                     ease: "easeInOut",
                   }}
                 />
-                {/* Center white dot */}
+                {/* Center white dot - OPTIMIZED */}
                 <motion.div
                   className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 md:w-3 md:h-3 rounded-full bg-white group-hover:opacity-30 transition-all duration-700 z-20"
-                  animate={{
+                  animate={isHeroInView ? {
                     scale: [1, 1.2, 1],
-                  }}
+                  } : {}}
                   transition={{
                     duration: 2,
                     repeat: Infinity,
@@ -1200,7 +1237,7 @@ export const PortalEntry = () => {
                   }}
                 />
 
-                {/* ENHANCED PORTAL - visible on mobile, hover-triggered on desktop */}
+                {/* ENHANCED PORTAL - OPTIMIZED with visibility control */}
                 <motion.div
                   className="absolute w-32 h-32 md:w-48 md:h-48 lg:w-56 lg:h-56 rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center"
                   style={{
@@ -1209,42 +1246,40 @@ export const PortalEntry = () => {
                         ? "radial-gradient(circle, rgba(255,107,53,0.9) 0%, rgba(255,139,94,0.4) 35%, rgba(255,107,53,0.1) 60%, transparent 80%)"
                         : "radial-gradient(circle, rgba(59,130,246,0.9) 0%, rgba(99,102,241,0.4) 35%, rgba(59,130,246,0.1) 60%, transparent 80%)",
                   }}
-                  animate={{
+                  animate={isHeroInView ? {
                     scale: [1, 1.08, 1],
-                  }}
+                  } : {}}
                   transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                 >
                   {/* Multi-layer portal glow */}
                   <motion.div
                     className="absolute w-24 h-24 md:w-36 md:h-36 rounded-full bg-white/10 blur-md"
-                    animate={{
+                    animate={isHeroInView ? {
                       scale: [1, 1.3, 1],
                       opacity: [0.2, 0.4, 0.2],
-                    }}
+                    } : {}}
                     transition={{ duration: 1.5, repeat: Infinity }}
                   />
 
-                  {/* Pulsing rings - using CSS animation for smooth looping */}
+                  {/* Pulsing rings - use CSS animation with visibility control */}
                   <div
-                    className={`absolute w-24 h-24 md:w-36 md:h-36 rounded-full border-2 ${
-                      theme === "orange" ? "border-[#FF6B35]" : "border-blue-400"
-                    }`}
+                    className={`absolute w-24 h-24 md:w-36 md:h-36 rounded-full border-2 ${theme === "orange" ? "border-[#FF6B35]" : "border-blue-400"
+                      }`}
                     style={{
-                      animation: "pulseRing 2.4s ease-out infinite",
+                      animation: isHeroInView ? "pulseRing 2.4s ease-out infinite" : "none",
                     }}
                   />
                   <div
-                    className={`absolute w-20 h-20 md:w-28 md:h-28 rounded-full border ${
-                      theme === "orange" ? "border-[#FF8B5E]" : "border-indigo-400"
-                    }`}
+                    className={`absolute w-20 h-20 md:w-28 md:h-28 rounded-full border ${theme === "orange" ? "border-[#FF8B5E]" : "border-indigo-400"
+                      }`}
                     style={{
-                      animation: "pulseRing 2.4s ease-out infinite 0.8s",
+                      animation: isHeroInView ? "pulseRing 2.4s ease-out infinite 0.8s" : "none",
                     }}
                   />
                   <div
                     className="absolute w-16 h-16 md:w-20 md:h-20 rounded-full border border-white/50"
                     style={{
-                      animation: "pulseRing 2.4s ease-out infinite 1.6s",
+                      animation: isHeroInView ? "pulseRing 2.4s ease-out infinite 1.6s" : "none",
                     }}
                   />
                   <style>{`
@@ -1263,14 +1298,14 @@ export const PortalEntry = () => {
                   {/* Bright pulsing core */}
                   <motion.div
                     className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white flex items-center justify-center shadow-[0_0_40px_rgba(255,255,255,0.5)]"
-                    animate={{
+                    animate={isHeroInView ? {
                       scale: [1, 1.1, 1],
                       boxShadow: [
                         "0 0 40px rgba(255,255,255,0.5)",
                         "0 0 70px rgba(255,255,255,0.8)",
                         "0 0 40px rgba(255,255,255,0.5)",
                       ],
-                    }}
+                    } : {}}
                     transition={{ duration: 0.8, repeat: Infinity }}
                   >
                     <LogIn className="w-5 h-5 md:w-6 md:h-6 text-black" />
@@ -1311,8 +1346,8 @@ export const PortalEntry = () => {
         </motion.div>
       </motion.section>
 
-      {/* Dashboard Preview Section */}
-      <section id="preview" className="relative py-24 px-6 md:px-12">
+      {/* Features Section - Dashboard Preview */}
+      <section id="features" className="relative py-24 px-6 md:px-12">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-light text-white mb-6">
@@ -1327,8 +1362,8 @@ export const PortalEntry = () => {
         </div>
       </section>
 
-      {/* User Roles Section */}
-      <section className="relative py-20 md:py-28 px-6 md:px-12">
+      {/* Solutions Section - User Roles */}
+      <section id="solutions" className="relative py-20 md:py-28 px-6 md:px-12">
         <div className="max-w-5xl mx-auto">
           <motion.p
             className="text-center text-white/40 text-sm uppercase tracking-widest mb-12"
@@ -1358,11 +1393,10 @@ export const PortalEntry = () => {
               }}
             >
               <div
-                className={`w-14 h-14 md:w-16 md:h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${
-                  theme === "orange"
-                    ? "bg-[#FF6B35]/10 border border-[#FF6B35]/20"
-                    : "bg-blue-500/10 border border-blue-500/20"
-                } group-hover:scale-110 transition-transform duration-300`}
+                className={`w-14 h-14 md:w-16 md:h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${theme === "orange"
+                  ? "bg-[#FF6B35]/10 border border-[#FF6B35]/20"
+                  : "bg-blue-500/10 border border-blue-500/20"
+                  } group-hover:scale-110 transition-transform duration-300`}
               >
                 <Layout
                   className={`w-6 h-6 md:w-7 md:h-7 ${theme === "orange" ? "text-[#FF6B35]" : "text-blue-400"}`}
@@ -1381,11 +1415,10 @@ export const PortalEntry = () => {
               }}
             >
               <div
-                className={`w-14 h-14 md:w-16 md:h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${
-                  theme === "orange"
-                    ? "bg-[#FF8B5E]/10 border border-[#FF8B5E]/20"
-                    : "bg-indigo-500/10 border border-indigo-500/20"
-                } group-hover:scale-110 transition-transform duration-300`}
+                className={`w-14 h-14 md:w-16 md:h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${theme === "orange"
+                  ? "bg-[#FF8B5E]/10 border border-[#FF8B5E]/20"
+                  : "bg-indigo-500/10 border border-indigo-500/20"
+                  } group-hover:scale-110 transition-transform duration-300`}
               >
                 <Users
                   className={`w-6 h-6 md:w-7 md:h-7 ${theme === "orange" ? "text-[#FF8B5E]" : "text-indigo-400"}`}
@@ -1404,11 +1437,10 @@ export const PortalEntry = () => {
               }}
             >
               <div
-                className={`w-14 h-14 md:w-16 md:h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${
-                  theme === "orange"
-                    ? "bg-[#FFB088]/10 border border-[#FFB088]/20"
-                    : "bg-purple-500/10 border border-purple-500/20"
-                } group-hover:scale-110 transition-transform duration-300`}
+                className={`w-14 h-14 md:w-16 md:h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${theme === "orange"
+                  ? "bg-[#FFB088]/10 border border-[#FFB088]/20"
+                  : "bg-purple-500/10 border border-purple-500/20"
+                  } group-hover:scale-110 transition-transform duration-300`}
               >
                 <Shield
                   className={`w-6 h-6 md:w-7 md:h-7 ${theme === "orange" ? "text-[#FFB088]" : "text-purple-400"}`}
@@ -1436,8 +1468,8 @@ export const PortalEntry = () => {
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section className="relative py-24 px-6 md:px-12 overflow-hidden">
+      {/* Pricing / CTA Section */}
+      <section id="pricing" className="relative py-24 px-6 md:px-12 overflow-hidden">
         <div
           className={`absolute inset-0 opacity-20 bg-gradient-to-b ${theme === "orange" ? "from-[#FF6B35]/20" : "from-blue-600/20"} to-transparent`}
         />
@@ -1460,8 +1492,8 @@ export const PortalEntry = () => {
         </motion.div>
       </section>
 
-      {/* Footer */}
-      <footer className="relative border-t border-white/10 py-12 px-6 md:px-12 bg-black/20">
+      {/* About / Footer */}
+      <footer id="about" className="relative border-t border-white/10 py-12 px-6 md:px-12 bg-black/20">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
             <div className="col-span-1 md:col-span-1">

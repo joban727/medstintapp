@@ -429,7 +429,7 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
   }
 
   return (
-    <div className="relative min-h-[calc(100vh-10rem)] overflow-hidden pb-8">
+    <div className="relative min-h-[calc(100vh-10rem)] max-h-[calc(100vh-8rem)] overflow-hidden pb-4">
       {/* Animated Background */}
       <DashboardBackground theme={isClockedIn ? "green" : "blue"} />
 
@@ -461,16 +461,16 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
             />
 
             {/* Clock Content */}
-            <div className="relative z-10 flex flex-col items-center justify-center p-8 lg:p-12 h-full">
+            <div className="relative z-10 flex flex-col items-center justify-center p-4 lg:p-6 h-full">
               {/* Greeting */}
               <div className="text-white/50 text-sm font-light mb-2 tracking-wider">
                 {getGreeting()}, ready to track your clinical hours
               </div>
 
-              {/* Giant Clock */}
-              <div className="relative mb-4">
+              {/* Giant Clock - Viewport Optimized */}
+              <div className="relative mb-2">
                 <div
-                  className="text-7xl lg:text-8xl font-bold text-white font-mono tracking-tight"
+                  className="text-5xl md:text-6xl lg:text-7xl font-bold text-white font-mono tracking-tight"
                   style={{ textShadow: "0 0 60px rgba(255,255,255,0.1)" }}
                 >
                   {format(currentTime, "HH")}
@@ -483,12 +483,12 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
               </div>
 
               {/* Date */}
-              <div className="text-white/40 text-sm mb-8">
+              <div className="text-white/40 text-sm mb-4">
                 {format(currentTime, "EEEE, MMMM d, yyyy")}
               </div>
 
               {/* Info Row - Simplified Text */}
-              <div className="flex items-center justify-center gap-6 mb-8 text-sm">
+              <div className="flex items-center justify-center gap-6 mb-4 text-sm">
                 {(data?.currentRotation?.siteName || selectedSite) && (
                   <div className="flex items-center gap-2 text-white/60">
                     <Building2 className="h-4 w-4" />
@@ -584,20 +584,20 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
         </div>
 
         {/* Right: Stats Panel */}
-        <div className="lg:w-80 flex flex-col gap-4">
+        <div className="lg:w-72 flex flex-col gap-3">
           {/* Hours Card */}
-          <SpotlightCard className="rounded-2xl border-white/10 bg-white/5 p-5 hover:-translate-y-1 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)]">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <Clock className="w-6 h-6 text-blue-400" />
+          <SpotlightCard className="rounded-xl border-white/10 bg-white/5 p-4 hover:-translate-y-1 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <Clock className="w-5 h-5 text-blue-400" />
               </div>
               <div>
                 <div className="text-xs text-white/40 font-mono">01</div>
                 <div className="text-sm font-medium text-white">Clinical Hours</div>
               </div>
             </div>
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="text-3xl font-bold text-white">
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className="text-2xl font-bold text-white">
                 {data?.student.totalClinicalHours || 0}
               </span>
               <span className="text-white/40 text-sm">
@@ -612,20 +612,20 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
 
           {/* Rotations Card */}
           <SpotlightCard
-            className="rounded-2xl border-white/10 bg-white/5 p-5 hover:-translate-y-1 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)]"
+            className="rounded-xl border-white/10 bg-white/5 p-4 hover:-translate-y-1 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)]"
             spotlightColor="rgba(34, 197, 94, 0.1)"
           >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <BookOpen className="w-6 h-6 text-green-400" />
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-10 h-10 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <BookOpen className="w-5 h-5 text-green-400" />
               </div>
               <div>
                 <div className="text-xs text-white/40 font-mono">02</div>
                 <div className="text-sm font-medium text-white">Rotations</div>
               </div>
             </div>
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="text-3xl font-bold text-white">
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className="text-2xl font-bold text-white">
                 {data?.student.completedRotations || 0}
               </span>
               <span className="text-white/40 text-sm">
@@ -640,29 +640,29 @@ export default function StudentDashboardClient({ userId }: StudentDashboardClien
 
           {/* Quick Links Card */}
           <SpotlightCard
-            className="rounded-2xl border-white/10 bg-white/5 p-5 hover:-translate-y-1 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)]"
+            className="rounded-xl border-white/10 bg-white/5 p-4 hover:-translate-y-1 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)]"
             spotlightColor="rgba(168, 85, 247, 0.1)"
           >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <FileText className="w-6 h-6 text-purple-400" />
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <FileText className="w-5 h-5 text-purple-400" />
               </div>
               <div>
                 <div className="text-xs text-white/40 font-mono">03</div>
                 <div className="text-sm font-medium text-white">Quick Links</div>
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Link
                 href="/dashboard/student/time-records"
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 transition-all text-sm text-white/70 hover:text-white group/link"
+                className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 border border-transparent hover:border-white/10 transition-all text-sm text-white/70 hover:text-white group/link"
               >
                 <span>View Time Records</span>
                 <ChevronRight className="h-4 w-4 group-hover/link:translate-x-1 transition-transform" />
               </Link>
               <Link
                 href="/dashboard/student/rotations"
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 transition-all text-sm text-white/70 hover:text-white group/link"
+                className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 border border-transparent hover:border-white/10 transition-all text-sm text-white/70 hover:text-white group/link"
               >
                 <span>All Rotations</span>
                 <ChevronRight className="h-4 w-4 group-hover/link:translate-x-1 transition-transform" />
