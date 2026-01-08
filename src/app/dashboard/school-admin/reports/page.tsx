@@ -165,10 +165,15 @@ export default async function SchoolReportsPage() {
       months.push(d.toLocaleDateString("en-US", { month: "short" }))
     }
 
+    // Access .rows from QueryResult objects
+    const hoursRows = (monthlyHours as any).rows || []
+    const evalsRows = (monthlyEvaluations as any).rows || []
+    const studentsRows = (monthlyStudents as any).rows || []
+
     monthlyProgressData = months.map(month => {
-      const hoursRow = monthlyHours.find((r: any) => r.month_name === month)
-      const evalsRow = monthlyEvaluations.find((r: any) => r.month_name === month)
-      const studentsRow = monthlyStudents.find((r: any) => r.month_name === month)
+      const hoursRow = hoursRows.find((r: any) => r.month_name === month)
+      const evalsRow = evalsRows.find((r: any) => r.month_name === month)
+      const studentsRow = studentsRows.find((r: any) => r.month_name === month)
 
       return {
         month,
@@ -523,12 +528,12 @@ export default async function SchoolReportsPage() {
                             <span className="text-muted-foreground">Status:</span>
                             <span
                               className={`font-medium ${student.academicStatus === "ACTIVE"
-                                  ? "text-green-600 dark:text-green-400"
-                                  : student.academicStatus === "PROBATION"
-                                    ? "text-yellow-600 dark:text-yellow-400"
-                                    : student.academicStatus === "SUSPENDED"
-                                      ? "text-red-600 dark:text-red-400"
-                                      : "text-muted-foreground"
+                                ? "text-green-600 dark:text-green-400"
+                                : student.academicStatus === "PROBATION"
+                                  ? "text-yellow-600 dark:text-yellow-400"
+                                  : student.academicStatus === "SUSPENDED"
+                                    ? "text-red-600 dark:text-red-400"
+                                    : "text-muted-foreground"
                                 }`}
                             >
                               {student.academicStatus || "ACTIVE"}
@@ -595,10 +600,10 @@ export default async function SchoolReportsPage() {
                                 <span className="text-muted-foreground">Status:</span>
                                 <span
                                   className={`font-medium ${percentage >= 80
-                                      ? "text-green-600 dark:text-green-400"
-                                      : percentage >= 60
-                                        ? "text-yellow-600 dark:text-yellow-400"
-                                        : "text-red-600 dark:text-red-400"
+                                    ? "text-green-600 dark:text-green-400"
+                                    : percentage >= 60
+                                      ? "text-yellow-600 dark:text-yellow-400"
+                                      : "text-red-600 dark:text-red-400"
                                     }`}
                                 >
                                   {percentage >= 80

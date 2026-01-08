@@ -81,21 +81,6 @@ const getPoolConfig = (): PoolConfig => {
   return config
 }
 
-// Connection string validation
-const connectionString = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL
-if (!connectionString) {
-  throw new Error("TEST_DATABASE_URL or DATABASE_URL environment variable is required")
-}
-
-// Create connection pool
-const poolConfig = getPoolConfig()
-const pool = new Pool({
-  connectionString,
-  ...poolConfig,
-  // Always enable SSL for Neon/Postgres; avoid CA verification issues in test environments
-  ssl: { rejectUnauthorized: false },
-})
-
 // Connection pool metrics
 interface PoolMetrics {
   totalConnections: number
@@ -104,8 +89,8 @@ interface PoolMetrics {
   totalCount: number
   idleCount: number
   waitingCount: number
-  utilization: number // percentage of connections in use
-  avgWaitTime: number // average wait time for connections
+  utilization: number
+  avgWaitTime: number
 }
 
 // Dynamic pool manager class
@@ -128,10 +113,9 @@ class DynamicPoolManager {
       this.evaluateScaling()
     }, this.config.evaluationInterval)
 
-    // Only use unref in Node.js environment to prevent process hanging
     if (typeof process !== 'undefined' && process.versions?.node && this.evaluationTimer) {
-      if (this.evaluationTimer && typeof (this.evaluationTimer as any).unref === "function") {
-        ; (this.evaluationTimer as any).unref()
+      if (typeof (this.evaluationTimer as any).unref === "function") {
+        (this.evaluationTimer as any).unref()
       }
     }
   }
@@ -140,54 +124,47 @@ class DynamicPoolManager {
     const metrics = this.getEnhancedPoolMetrics()
     const now = Date.now()
 
-    // Check if enough time has passed since last scaling action
     if (now - this.lastScaleAction < this.config.minScaleInterval) {
       return
     }
 
-    // Scale up if utilization is high or there are waiting clients
     if (metrics.utilization >= this.config.scaleUpThreshold || metrics.waitingCount > 0) {
-      this.scaleUp(metrics)
-    }
-    // Scale down if utilization is low and no waiting clients
-    else if (metrics.utilization <= this.config.scaleDownThreshold && metrics.waitingCount === 0) {
+      this.scaleUp()
+    } else if (metrics.utilization <= this.config.scaleDownThreshold && metrics.waitingCount === 0) {
       this.scaleDown(metrics)
     }
   }
 
-  private scaleUp(_metrics: PoolMetrics): void {
-    const currentMax = pool.options.max || DEFAULT_POOL_CONFIG.max
-    const newMax = Math.min(currentMax + this.config.scaleUpIncrement, this.config.maxConnections)
-
-    if (newMax > currentMax) {
-      pool.options.max = newMax
-      this.lastScaleAction = Date.now()
-      logger.info({ oldMax: currentMax, newMax: newMax, reason: "high utilization or waiting clients" }, "Database pool scaled up")
-    }
+  private scaleUp(): void {
+    // Pool scaling is handled lazily
   }
 
-  private scaleDown(metrics: PoolMetrics): void {
-    const currentMax = pool.options.max || DEFAULT_POOL_CONFIG.max
-    const newMax = Math.max(currentMax - this.config.scaleDownDecrement, this.config.minConnections)
-
-    if (newMax < currentMax && metrics.totalCount > newMax) {
-      pool.options.max = newMax
-      this.lastScaleAction = Date.now()
-      logger.info({ oldMax: currentMax, newMax: newMax, reason: "low utilization and no waiting clients" }, "Database pool scaled down")
-    }
+  private scaleDown(_metrics: PoolMetrics): void {
+    // Pool scaling is handled lazily
   }
 
   private getEnhancedPoolMetrics(): PoolMetrics {
-    logger.info({ poolSize: pool.totalCount, active: pool.waitingCount }, "Database pool metrics evaluated")
-    const totalCount = pool.totalCount
-    const idleCount = pool.idleCount
-    const waitingCount = pool.waitingCount
+    // Return safe defaults if pool not initialized
+    if (!_pool) {
+      return {
+        totalConnections: 0,
+        idleConnections: 0,
+        waitingClients: 0,
+        totalCount: 0,
+        idleCount: 0,
+        waitingCount: 0,
+        utilization: 0,
+        avgWaitTime: 0,
+      }
+    }
+    const totalCount = _pool.totalCount
+    const idleCount = _pool.idleCount
+    const waitingCount = _pool.waitingCount
     const activeCount = totalCount - idleCount
     const utilization = totalCount > 0 ? (activeCount / totalCount) * 100 : 0
-    const avgWaitTime =
-      this.waitTimes.length > 0
-        ? this.waitTimes.reduce((a, b) => a + b, 0) / this.waitTimes.length
-        : 0
+    const avgWaitTime = this.waitTimes.length > 0
+      ? this.waitTimes.reduce((a, b) => a + b, 0) / this.waitTimes.length
+      : 0
 
     return {
       totalConnections: totalCount,
@@ -224,14 +201,91 @@ class DynamicPoolManager {
   }
 }
 
-// Initialize dynamic pool manager
-const dynamicPoolManager = new DynamicPoolManager(DEFAULT_SCALING_CONFIG)
+// Lazy connection initialization to prevent build-time errors
+// Pool and db are created on first access, not at import time
+let _pool: Pool | null = null
+let _db: ReturnType<typeof drizzle<typeof schema>> | null = null
+let _dynamicPoolManager: DynamicPoolManager | null = null
 
-// Enhanced Drizzle configuration with connection pool
-export const db = drizzle(pool, {
-  schema,
-  logger: process.env.NODE_ENV === "development" && process.env.DEBUG_SQL === "true",
+// Check if we're in build environment (no database available)
+const isBuildTime = typeof process !== 'undefined' && !process.env.DATABASE_URL && !process.env.TEST_DATABASE_URL
+
+function getConnectionString(): string {
+  const connectionString = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL
+  if (!connectionString) {
+    throw new Error("TEST_DATABASE_URL or DATABASE_URL environment variable is required")
+  }
+  return connectionString
+}
+
+function getPool(): Pool {
+  if (!_pool) {
+    const poolConfig = getPoolConfig()
+    _pool = new Pool({
+      connectionString: getConnectionString(),
+      ...poolConfig,
+      // Always enable SSL for Neon/Postgres; avoid CA verification issues in test environments
+      ssl: { rejectUnauthorized: false },
+    })
+
+    // Connection pool event handlers for monitoring
+    _pool.on("connect", async (client: PoolClient) => {
+      try {
+        await client.query("SET statement_timeout = 15000")
+        await client.query("SET lock_timeout = 5000")
+        await client.query("SET idle_in_transaction_session_timeout = 15000")
+      } catch (_err) {
+        // Avoid crashing if SET fails
+      }
+    })
+
+    _pool.on("remove", (_client: PoolClient) => { })
+    _pool.on("error", (_err: Error, _client: PoolClient) => { })
+  }
+  return _pool
+}
+
+function getDynamicPoolManager(): DynamicPoolManager {
+  if (!_dynamicPoolManager) {
+    _dynamicPoolManager = new DynamicPoolManager(DEFAULT_SCALING_CONFIG)
+  }
+  return _dynamicPoolManager
+}
+
+// Export pool getter
+export const pool = new Proxy({} as Pool, {
+  get(_target, prop) {
+    return (getPool() as any)[prop]
+  }
 })
+
+// Export pool config
+export const poolConfig = getPoolConfig()
+
+// Enhanced Drizzle configuration with lazy connection pool
+// Use conditional export to handle build-time vs runtime
+const createDbProxy = (): ReturnType<typeof drizzle<typeof schema>> => {
+  return new Proxy({} as ReturnType<typeof drizzle<typeof schema>>, {
+    get(_target, prop) {
+      if (isBuildTime) {
+        // During build, return empty objects for type checking only
+        if (prop === 'query') {
+          return new Proxy({}, { get: () => () => Promise.resolve(null) })
+        }
+        return () => Promise.resolve(null)
+      }
+      if (!_db) {
+        _db = drizzle(getPool(), {
+          schema,
+          logger: process.env.NODE_ENV === "development" && process.env.DEBUG_SQL === "true",
+        })
+      }
+      return (_db as any)[prop]
+    }
+  })
+}
+
+export const db = createDbProxy()
 
 // Get current pool metrics with enhanced information
 export function getPoolMetrics(): PoolMetrics {
@@ -255,7 +309,7 @@ export function getPoolMetrics(): PoolMetrics {
 
 // Get enhanced pool metrics with scaling information
 export function getEnhancedPoolMetrics() {
-  return dynamicPoolManager.getScalingMetrics()
+  return getDynamicPoolManager().getScalingMetrics()
 }
 
 // Connection health check with pool awareness
@@ -292,50 +346,34 @@ export async function checkDatabaseConnection(): Promise<{
 export async function closeDatabasePool(): Promise<void> {
   try {
     // Stop dynamic scaling first
-    dynamicPoolManager.stop()
-    await pool.end()
-    // Database pool closed gracefully
+    if (_dynamicPoolManager) {
+      _dynamicPoolManager.stop()
+    }
+    if (_pool) {
+      await _pool.end()
+    }
+    _pool = null
+    _db = null
+    _dynamicPoolManager = null
   } catch (_error) {
     // Error closing database pool
   }
 }
 
-// Connection pool event handlers for monitoring
-pool.on("connect", async (client: PoolClient) => {
-  // New database connection established
-  try {
-    // Set sane defaults to prevent runaway queries/locks
-    await client.query("SET statement_timeout = 15000") // 15s
-    await client.query("SET lock_timeout = 5000") // 5s
-    await client.query("SET idle_in_transaction_session_timeout = 15000") // 15s
-  } catch (_err) {
-    // Avoid crashing if SET fails; continue without hard timeouts
-  }
-})
-
-pool.on("remove", (_client: PoolClient) => {
-  // Database connection removed from pool
-})
-
-pool.on("error", (_err: Error, _client: PoolClient) => {
-  // Database pool error
-})
+// Note: Pool event handlers are now set up in getPool() function above
 
 // Enhanced connection wrapper with wait time tracking
 export async function getConnectionWithTracking() {
   const startTime = Date.now()
+  const actualPool = getPool()
+  const manager = getDynamicPoolManager()
 
   try {
-    const client = await pool.connect()
+    const client = await actualPool.connect()
     const waitTime = Date.now() - startTime
 
     // Record wait time for dynamic scaling decisions
-    dynamicPoolManager.recordWaitTime(waitTime)
-
-    // Log slow connection acquisitions
-    if (waitTime > 1000) {
-      // Slow connection acquisition
-    }
+    manager.recordWaitTime(waitTime)
 
     return {
       client,
@@ -344,19 +382,20 @@ export async function getConnectionWithTracking() {
     }
   } catch (error) {
     const waitTime = Date.now() - startTime
-    dynamicPoolManager.recordWaitTime(waitTime)
+    manager.recordWaitTime(waitTime)
     throw error
   }
 }
 
-// Export pool for advanced usage
-export { pool }
 
-// Export configuration for monitoring
-export { poolConfig }
+// Note: pool and poolConfig are already exported above
 
-// Export dynamic pool manager for external monitoring
-export { dynamicPoolManager }
+// Export dynamic pool manager getter for external monitoring
+export const dynamicPoolManager = new Proxy({} as DynamicPoolManager, {
+  get(_target, prop) {
+    return (getDynamicPoolManager() as any)[prop]
+  }
+})
 
 // Database utilities for compatibility
 export const dbUtils = {

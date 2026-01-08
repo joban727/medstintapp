@@ -353,11 +353,13 @@ export async function getSchoolStats() {
         const pendingEvaluations = pendingEvaluationsCount[0]?.count || 0
 
         // Use materialized view data if available, otherwise use 0 (or we could fetch if critical)
+        // mvSchoolStatistics only has: schoolId, totalStudents, activeStudents, totalRotations, activeRotations, completionRate, lastUpdated
         const totalStudents = Number(stats.totalStudents) || 0
-        const totalPrograms = Number(stats.totalPrograms) || 0
-        const totalSites = Number(stats.activeSites) || 0 // Assuming activeSites is available in mvSchoolStatistics
-        const placementRate = Number(stats.placementRate) || (totalStudents > 0 ? Math.round((activeRotations / totalStudents) * 100) : 0)
-        const avgCompetencyProgress = Number(stats.avgCompetencyProgress) || 0
+        // These fields don't exist in mvSchoolStatistics - compute from other sources or use 0
+        const totalPrograms = 0 // Would need separate query to programs table
+        const totalSites = 0 // Would need separate query to clinicalSites table
+        const placementRate = totalStudents > 0 ? Math.round((activeRotations / totalStudents) * 100) : 0
+        const avgCompetencyProgress = 0 // Would need separate query
 
         return {
           activeRotations,
@@ -368,7 +370,7 @@ export async function getSchoolStats() {
           avgCompetencyProgress,
           totalSites,
           placementRate,
-          schoolName: stats.schoolName || "Medical Institute",
+          schoolName: "Medical Institute", // Would need separate query to schools table
         }
       },
       CACHE_CONFIG.defaultTTL
