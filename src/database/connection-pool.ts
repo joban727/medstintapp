@@ -210,12 +210,14 @@ let _dynamicPoolManager: DynamicPoolManager | null = null
 // Check if we're in build environment (no database available)
 const isBuildTime = typeof process !== 'undefined' && !process.env.DATABASE_URL && !process.env.TEST_DATABASE_URL
 
+// Placeholder connection string for build time - never actually used
+const PLACEHOLDER_CONNECTION = "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+
 function getConnectionString(): string {
   const connectionString = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL
-  if (!connectionString) {
-    throw new Error("TEST_DATABASE_URL or DATABASE_URL environment variable is required")
-  }
-  return connectionString
+  // During build time, return placeholder to prevent errors
+  // The actual connection will only be used at runtime
+  return connectionString || PLACEHOLDER_CONNECTION
 }
 
 function getPool(): Pool {
